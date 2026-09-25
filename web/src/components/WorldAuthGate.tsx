@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { proofOfHuman, setDebug } from "@worldcoin/idkit";
 import type { RpContext, IDKitResult, IDKitErrorCodes, IDKitDebugReport } from "@worldcoin/idkit";
@@ -24,6 +24,9 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isVerifyingProof, setIsVerifyingProof] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Synchronous ref to hold real nullifier returned from server verification
+  const verifiedNullifierRef = useRef<string>("");
 
   const appId = (process.env.NEXT_PUBLIC_WORLD_APP_ID || "app_6ad9b6ef952f1c2a9a70a58e05aa9878") as `app_${string}`;
   const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "tokyo-human-verify";
@@ -93,6 +96,18 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
       if (!res.ok || !data.verified) {
         throw new Error(data.error || "World ID Proof of Human verification failed.");
       }
+
+      // Capture exact true nullifier from server verification
+      const realNullifier =
+        data.nullifierHash ||
+        data.nullifier ||
+        (result as any).responses?.[0]?.nullifier ||
+        (result as any).nullifier ||
+        (result as any).nullifier_hash;
+
+      if (realNullifier) {
+        verifiedNullifierRef.current = String(realNullifier);
+      }
     } catch (err: any) {
       console.error("[WorldAuthGate] Verification error:", err);
       setErrorMessage(err.message || "Verification rejected by World ID.");
@@ -104,17 +119,19 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
 
   // Verification success handler
   const handleSuccess = (result: IDKitResult) => {
-    const nullifier =
-      (result as any).nullifier_hash ||
+    const realNullifier =
+      verifiedNullifierRef.current ||
       (result as any).responses?.[0]?.nullifier ||
       (result as any).nullifier ||
-      "0x" + Math.random().toString(16).slice(2, 10);
+      (result as any).nullifier_hash;
 
-    if (onVerified) {
-      onVerified(nullifier);
-    }
-    if (onSignIn) {
-      onSignIn(nullifier);
+    if (realNullifier) {
+      if (onVerified) {
+        onVerified(realNullifier);
+      }
+      if (onSignIn) {
+        onSignIn(realNullifier);
+      }
     }
   };
 
@@ -184,7 +201,7 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
 
         <div className="mt-6 pt-4 border-t border-[#232732] w-full flex items-center justify-center space-x-2 text-[11px] text-[#64748b]">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Action: {action} &bull; Proof of Human</span>
+          <span>World ID Verified &bull; Proof of Human</span>
         </div>
       </div>
 

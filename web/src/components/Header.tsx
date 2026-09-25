@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Rail } from "@/types";
-import { LogOut } from "lucide-react";
+import { LogOut, Copy, Check } from "lucide-react";
 
 interface HeaderProps {
   rail: Rail;
@@ -17,6 +17,22 @@ export const Header: React.FC<HeaderProps> = ({
   nullifierHash,
   onSignOut,
 }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyNullifier = () => {
+    if (nullifierHash) {
+      navigator.clipboard.writeText(nullifierHash);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const formattedNullifier = nullifierHash
+    ? (nullifierHash.length > 14
+        ? nullifierHash.slice(0, 6) + "..." + nullifierHash.slice(-4)
+        : nullifierHash)
+    : "Verified Human";
+
   return (
     <header className="border-b border-[#232732] bg-[#0a0b0e]">
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -54,13 +70,24 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right Info */}
+        {/* Right Info: Actual True World ID Nullifier */}
         <div className="flex items-center space-x-3 text-xs font-mono">
           <div className="flex items-center space-x-2 px-2.5 py-1 rounded bg-[#12141a] border border-[#232732] text-[#94a3b8]">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>World ID:</span>
-            <span className="text-white">
-              {nullifierHash.slice(0, 6)}...{nullifierHash.slice(-4)}
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+            <span className="text-[#64748b]">World ID (Nullifier):</span>
+            <span
+              onClick={handleCopyNullifier}
+              className="text-white hover:text-zinc-200 cursor-pointer flex items-center space-x-1.5"
+              title={nullifierHash ? "App-Scoped ZK Nullifier: " + nullifierHash + "\n(Unique to Float for privacy - click to copy)" : undefined}
+            >
+              <span>{formattedNullifier}</span>
+              {nullifierHash && (
+                copied ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3 text-zinc-500" />
+                )
+              )}
             </span>
           </div>
 

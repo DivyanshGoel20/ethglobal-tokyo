@@ -12,7 +12,8 @@ import { RepayModal } from "@/components/RepayModal";
 
 export default function Home() {
   const [isWorldVerified, setIsWorldVerified] = useState(false);
-  const [nullifierHash, setNullifierHash] = useState("0x7a8f9c12e840a23b9d01245ffbc6e87901a1c94b");
+  const [nullifierHash, setNullifierHash] = useState("");
+  
   const [rail, setRail] = useState<Rail>("base");
 
   // Real, clean states without hardcoded fake data
@@ -31,6 +32,27 @@ export default function Home() {
     document.documentElement.setAttribute("data-rail", rail);
   }, [rail]);
 
+  useEffect(() => {
+    const savedNullifier = localStorage.getItem("world_nullifier");
+    
+
+    if (savedNullifier) {
+      setNullifierHash(savedNullifier);
+      setIsWorldVerified(true);
+    } else {
+      fetch("/api/auth/session")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.authenticated && data?.nullifierHash) {
+            setNullifierHash(data.nullifierHash);
+            
+            setIsWorldVerified(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   const currentDebt = rail === "base" ? baseDebt : suiDebt;
   const currentAgents = rail === "base" ? baseAgents : suiAgents;
   const currentActivities = activities.filter((a) => a.rail === rail);
@@ -39,11 +61,14 @@ export default function Home() {
   const handleSignIn = (verifiedNullifier?: string) => {
     if (verifiedNullifier) {
       setNullifierHash(verifiedNullifier);
+      localStorage.setItem("world_nullifier", verifiedNullifier);
     }
     setIsWorldVerified(true);
   };
 
   const handleSignOut = () => {
+    localStorage.removeItem("world_nullifier");
+    fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
     setIsWorldVerified(false);
   };
 
@@ -168,7 +193,7 @@ export default function Home() {
         rail={rail}
         setRail={setRail}
         nullifierHash={nullifierHash}
-        onSignOut={handleSignOut}
+                onSignOut={handleSignOut}
       />
 
       <main className="max-w-5xl mx-auto px-6 pt-6">

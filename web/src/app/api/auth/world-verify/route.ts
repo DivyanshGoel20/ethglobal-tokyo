@@ -28,8 +28,14 @@ export async function POST(req: NextRequest) {
         v4Data.results?.[0]?.nullifier ||
         payload.responses?.[0]?.nullifier ||
         payload.nullifier ||
-        payload.nullifier_hash ||
-        "0x" + Math.random().toString(16).slice(2, 10);
+        payload.nullifier_hash;
+
+      if (!nullifier) {
+        return NextResponse.json(
+          { verified: false, error: "Missing nullifier in verification response" },
+          { status: 400 }
+        );
+      }
 
       const res = NextResponse.json({
         verified: true,
@@ -58,8 +64,14 @@ export async function POST(req: NextRequest) {
           v4Data.nullifier ||
           payload.responses?.[0]?.nullifier ||
           payload.nullifier ||
-          payload.nullifier_hash ||
-          "0x" + Math.random().toString(16).slice(2, 10);
+          payload.nullifier_hash;
+
+        if (!nullifier) {
+          return NextResponse.json(
+            { verified: false, error: "Missing nullifier in verification result" },
+            { status: 400 }
+          );
+        }
 
         const res = NextResponse.json({
           verified: true,
