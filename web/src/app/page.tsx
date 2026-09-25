@@ -4,194 +4,87 @@ import React, { useState, useEffect } from "react";
 import { Rail, Agent, ActivityItem } from "@/types";
 import { WorldAuthGate } from "@/components/WorldAuthGate";
 import { Header } from "@/components/Header";
-import { CreditTank } from "@/components/CreditTank";
+import { CreditOverview } from "@/components/CreditOverview";
 import { AgentList } from "@/components/AgentList";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { SimulateDrawdownModal } from "@/components/SimulateDrawdownModal";
 import { RepayModal } from "@/components/RepayModal";
 
-const INITIAL_BASE_AGENTS: Agent[] = [
-  {
-    id: "agent-base-1",
-    name: "Alpha-Crawler-01",
-    address: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-    rail: "base",
-    allocatedLimit: 150,
-    spent: 42.5,
-    status: "active",
-    lastActive: "2 mins ago",
-    model: "Claude 3.5 Sonnet (Agentic)",
-  },
-  {
-    id: "agent-base-2",
-    name: "Base-Synthesizer",
-    address: "0x123f681646d4a755815f9cb19e1acc8565a0c2ac",
-    rail: "base",
-    allocatedLimit: 100,
-    spent: 12.0,
-    status: "active",
-    lastActive: "14 mins ago",
-    model: "GPT-4o Autonomous",
-  },
-];
-
-const INITIAL_SUI_AGENTS: Agent[] = [
-  {
-    id: "agent-sui-1",
-    name: "Sui-Stream-Watcher",
-    address: "0x5c42...9f18a203",
-    rail: "sui",
-    allocatedLimit: 200,
-    spent: 65.0,
-    status: "active",
-    lastActive: "Just now",
-    model: "DeepSeek-R1 Agent",
-  },
-  {
-    id: "agent-sui-2",
-    name: "Move-Arbitrage-Bot",
-    address: "0x9e88...a4b1c024",
-    rail: "sui",
-    allocatedLimit: 100,
-    spent: 8.5,
-    status: "active",
-    lastActive: "1 hour ago",
-    model: "Claude 3.5 Sonnet (Agentic)",
-  },
-];
-
-const INITIAL_ACTIVITIES: ActivityItem[] = [
-  {
-    id: "act-1",
-    type: "drawdown",
-    agentName: "Alpha-Crawler-01",
-    amount: 1.5,
-    rail: "base",
-    txHash: "0x4e8a...31bf",
-    timestamp: "3 mins ago",
-    endpoint: "/api/v1/market-intelligence",
-    status: "settled",
-  },
-  {
-    id: "act-2",
-    type: "drawdown",
-    agentName: "Sui-Stream-Watcher",
-    amount: 5.0,
-    rail: "sui",
-    txHash: "0x7c99...80fe",
-    timestamp: "18 mins ago",
-    endpoint: "/api/premium-inference",
-    status: "settled",
-  },
-  {
-    id: "act-3",
-    type: "repayment",
-    amount: 25.0,
-    rail: "base",
-    txHash: "0x1a2b...99c4",
-    timestamp: "1 hour ago",
-    status: "settled",
-  },
-  {
-    id: "act-4",
-    type: "world_verify",
-    rail: "base",
-    txHash: "0x98f1...440a",
-    timestamp: "2 hours ago",
-    status: "settled",
-  },
-];
-
 export default function Home() {
   const [isWorldVerified, setIsWorldVerified] = useState(false);
-  const [nullifierHash, setNullifierHash] = useState(
-    "0x7a8f9c12e840a23b9d01245ffbc6e87901a1c94b"
-  );
+  const [nullifierHash] = useState("0x7a8f9c12e840a23b9d01245ffbc6e87901a1c94b");
   const [rail, setRail] = useState<Rail>("base");
 
-  // Rail specific debt state
-  const [baseDebt, setBaseDebt] = useState(54.5);
-  const [suiDebt, setSuiDebt] = useState(73.5);
-  const [creditLimit] = useState(500.0);
-
-  const [baseAgents, setBaseAgents] = useState<Agent[]>(INITIAL_BASE_AGENTS);
-  const [suiAgents, setSuiAgents] = useState<Agent[]>(INITIAL_SUI_AGENTS);
-  const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
+  // Real, clean states without hardcoded fake data
+  const [creditLimit] = useState(100.0);
+  const [baseDebt, setBaseDebt] = useState(0.0);
+  const [suiDebt, setSuiDebt] = useState(0.0);
+  const [baseAgents, setBaseAgents] = useState<Agent[]>([]);
+  const [suiAgents, setSuiAgents] = useState<Agent[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
   // Modals
   const [isDrawdownOpen, setIsDrawdownOpen] = useState(false);
   const [isRepayOpen, setIsRepayOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
-  // Sync data-rail attribute with DOM for CSS
   useEffect(() => {
     document.documentElement.setAttribute("data-rail", rail);
   }, [rail]);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const currentDebt = rail === "base" ? baseDebt : suiDebt;
   const currentAgents = rail === "base" ? baseAgents : suiAgents;
+  const currentActivities = activities.filter((a) => a.rail === rail);
   const headroom = Math.max(0, creditLimit - currentDebt);
 
-  // Handle mock World sign in
-  const handleSignInWithWorld = () => {
+  const handleSignIn = () => {
     setIsWorldVerified(true);
-    showToast("Human identity verified via World ID.");
   };
 
   const handleSignOut = () => {
     setIsWorldVerified(false);
-    showToast("Session signed out.");
   };
 
   // Add agent
-  const handleAddAgent = (name: string, model: string, limit: number) => {
-    const isBase = rail === "base";
+  const handleAddAgent = (name: string, address: string, limit: number) => {
+    const fallbackAddr =
+      rail === "base"
+        ? `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`
+        : `0x${Math.random().toString(16).slice(2, 8)}...${Math.random().toString(16).slice(2, 6)}`;
+
     const newAgent: Agent = {
       id: `agent-${rail}-${Date.now()}`,
       name,
-      address: isBase
-        ? `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`
-        : `0x${Math.random().toString(16).slice(2, 8)}...${Math.random().toString(16).slice(2, 6)}`,
+      address: address.trim() || fallbackAddr,
       rail,
       allocatedLimit: limit,
       spent: 0,
       status: "active",
-      lastActive: "Just now",
-      model,
     };
 
-    if (isBase) {
-      setBaseAgents([newAgent, ...baseAgents]);
+    if (rail === "base") {
+      setBaseAgents((prev) => [newAgent, ...prev]);
     } else {
-      setSuiAgents([newAgent, ...suiAgents]);
+      setSuiAgents((prev) => [newAgent, ...prev]);
     }
 
-    setActivities([
+    setActivities((prev) => [
       {
         id: `act-${Date.now()}`,
         type: "authorization",
         agentName: name,
         rail,
-        txHash: `0x${Math.random().toString(16).slice(2, 6)}...`,
+        txHash: `0x${Math.random().toString(16).slice(2, 8)}...`,
         timestamp: "Just now",
-        status: "settled",
       },
-      ...activities,
+      ...prev,
     ]);
-
-    showToast(`Agent "${name}" authorized on ${rail.toUpperCase()}.`);
   };
 
   // Toggle agent status
   const handleToggleAgentStatus = (id: string) => {
-    const update = (agents: Agent[]) =>
-      agents.map((a) =>
-        a.id === id ? { ...a, status: a.status === "active" ? "paused" : ("active" as const) } : a
+    const update = (list: Agent[]) =>
+      list.map((a) =>
+        a.id === id ? { ...a, status: a.status === "active" ? ("paused" as const) : ("active" as const) } : a
       );
 
     if (rail === "base") {
@@ -201,38 +94,44 @@ export default function Home() {
     }
   };
 
+  // Remove agent
+  const handleRemoveAgent = (id: string) => {
+    if (rail === "base") {
+      setBaseAgents((prev) => prev.filter((a) => a.id !== id));
+    } else {
+      setSuiAgents((prev) => prev.filter((a) => a.id !== id));
+    }
+  };
+
   // Confirm simulated drawdown
   const handleConfirmDrawdown = (agentId: string, amount: number, endpoint: string) => {
     if (rail === "base") {
       setBaseDebt((prev) => prev + amount);
       setBaseAgents((prev) =>
-        prev.map((a) => (a.id === agentId ? { ...a, spent: a.spent + amount, lastActive: "Just now" } : a))
+        prev.map((a) => (a.id === agentId ? { ...a, spent: a.spent + amount } : a))
       );
     } else {
       setSuiDebt((prev) => prev + amount);
       setSuiAgents((prev) =>
-        prev.map((a) => (a.id === agentId ? { ...a, spent: a.spent + amount, lastActive: "Just now" } : a))
+        prev.map((a) => (a.id === agentId ? { ...a, spent: a.spent + amount } : a))
       );
     }
 
     const agent = currentAgents.find((a) => a.id === agentId);
 
-    setActivities([
+    setActivities((prev) => [
       {
         id: `act-${Date.now()}`,
         type: "drawdown",
-        agentName: agent?.name || "Autonomous Agent",
+        agentName: agent?.name || "Agent",
         amount,
         rail,
         txHash: `0x${Math.random().toString(16).slice(2, 8)}...`,
         timestamp: "Just now",
         endpoint,
-        status: "settled",
       },
-      ...activities,
+      ...prev,
     ]);
-
-    showToast(`Drawdown settled: $${amount.toFixed(2)} on ${rail.toUpperCase()}`);
   };
 
   // Confirm repayment
@@ -243,7 +142,7 @@ export default function Home() {
       setSuiDebt((prev) => Math.max(0, prev - amount));
     }
 
-    setActivities([
+    setActivities((prev) => [
       {
         id: `act-${Date.now()}`,
         type: "repayment",
@@ -251,40 +150,26 @@ export default function Home() {
         rail,
         txHash: `0x${Math.random().toString(16).slice(2, 8)}...`,
         timestamp: "Just now",
-        status: "settled",
       },
-      ...activities,
+      ...prev,
     ]);
-
-    showToast(`Repaid: $${amount.toFixed(2)} USDC on ${rail.toUpperCase()}`);
   };
 
   if (!isWorldVerified) {
-    return <WorldAuthGate onSignIn={handleSignInWithWorld} />;
+    return <WorldAuthGate onSignIn={handleSignIn} />;
   }
 
   return (
-    <div className="min-h-screen pb-16">
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 glass-panel px-4 py-2.5 bg-black/90 border-white/20 text-white text-xs font-mono shadow-2xl flex items-center space-x-2 animate-bounce">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span>{toast}</span>
-        </div>
-      )}
-
-      {/* Header */}
+    <div className="min-h-screen pb-12 bg-[#0a0b0e] text-[#f8fafc]">
       <Header
         rail={rail}
         setRail={setRail}
         nullifierHash={nullifierHash}
         onSignOut={handleSignOut}
-        onRefresh={() => showToast("Ledger telemetry refreshed.")}
       />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6">
-        {/* Credit Tank & Reservoir */}
-        <CreditTank
+      <main className="max-w-5xl mx-auto px-6 pt-6">
+        <CreditOverview
           creditLimit={creditLimit}
           outstandingDebt={currentDebt}
           rail={rail}
@@ -292,19 +177,17 @@ export default function Home() {
           onOpenRepay={() => setIsRepayOpen(true)}
         />
 
-        {/* Authorized AI Agents */}
         <AgentList
           agents={currentAgents}
           rail={rail}
           onAddAgent={handleAddAgent}
           onToggleStatus={handleToggleAgentStatus}
+          onRemoveAgent={handleRemoveAgent}
         />
 
-        {/* Activity Feed */}
-        <ActivityFeed activities={activities} rail={rail} />
+        <ActivityFeed activities={currentActivities} rail={rail} />
       </main>
 
-      {/* Drawdown Simulation Modal */}
       <SimulateDrawdownModal
         isOpen={isDrawdownOpen}
         onClose={() => setIsDrawdownOpen(false)}
@@ -314,7 +197,6 @@ export default function Home() {
         onConfirmDrawdown={handleConfirmDrawdown}
       />
 
-      {/* Repay Modal */}
       <RepayModal
         isOpen={isRepayOpen}
         onClose={() => setIsRepayOpen(false)}

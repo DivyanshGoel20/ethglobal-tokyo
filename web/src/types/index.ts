@@ -8,26 +8,15 @@ export interface Agent {
   allocatedLimit: number;
   spent: number;
   status: "active" | "paused";
-  lastActive: string;
-  model: string;
 }
 
 export interface ActivityItem {
   id: string;
-  type: "drawdown" | "repayment" | "authorization" | "world_verify";
+  type: "drawdown" | "repayment" | "authorization";
   agentName?: string;
   amount?: number;
   rail: Rail;
   txHash: string;
   timestamp: string;
   endpoint?: string;
-  status: "settled" | "pending";
-}
-
-export interface CreditProfile {
-  nullifierHash: string;
-  isVerified: boolean;
-  creditLimit: number;
-  outstandingDebt: number;
-  rail: Rail;
 }
