@@ -1,0 +1,17 @@
+{
+  "name": "ethglobal-tokyo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=web run dev",
+    "build": "npm --workspace=web run build",
+    "start": "npm --workspace=web run start",
+    "lint": "npm --workspace=web run lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
