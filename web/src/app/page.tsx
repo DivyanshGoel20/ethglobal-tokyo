@@ -12,7 +12,7 @@ import { RepayModal } from "@/components/RepayModal";
 
 export default function Home() {
   const [isWorldVerified, setIsWorldVerified] = useState(false);
-  const [nullifierHash] = useState("0x7a8f9c12e840a23b9d01245ffbc6e87901a1c94b");
+  const [nullifierHash, setNullifierHash] = useState("0x7a8f9c12e840a23b9d01245ffbc6e87901a1c94b");
   const [rail, setRail] = useState<Rail>("base");
 
   // Real, clean states without hardcoded fake data
@@ -36,7 +36,10 @@ export default function Home() {
   const currentActivities = activities.filter((a) => a.rail === rail);
   const headroom = Math.max(0, creditLimit - currentDebt);
 
-  const handleSignIn = () => {
+  const handleSignIn = (verifiedNullifier?: string) => {
+    if (verifiedNullifier) {
+      setNullifierHash(verifiedNullifier);
+    }
     setIsWorldVerified(true);
   };
 
@@ -156,7 +159,7 @@ export default function Home() {
   };
 
   if (!isWorldVerified) {
-    return <WorldAuthGate onSignIn={handleSignIn} />;
+    return <WorldAuthGate onVerified={handleSignIn} onSignIn={handleSignIn} />;
   }
 
   return (
