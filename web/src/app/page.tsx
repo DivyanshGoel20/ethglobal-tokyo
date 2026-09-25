@@ -82,7 +82,14 @@ export default function Home() {
     const newAgent: Agent = {
       id: `agent-${rail}-${Date.now()}`,
       name,
-      address: address.trim() || fallbackAddr,
+      address: (address.trim() || fallbackAddr) as `0x${string}`,
+      humanOwner: nullifierHash,
+      creditLimit: limit,
+      outstandingDebt: 0,
+      totalBorrowed: 0,
+      totalRepaid: 0,
+      currentBalance: 0,
+      registeredAt: Date.now(),
       rail,
       allocatedLimit: limit,
       spent: 0,
@@ -136,12 +143,12 @@ export default function Home() {
     if (rail === "base") {
       setBaseDebt((prev) => prev + amount);
       setBaseAgents((prev) =>
-        prev.map((a) => (a.id === agentId ? { ...a, spent: a.spent + amount } : a))
+        prev.map((a) => (a.id === agentId ? { ...a, spent: (a.spent ?? 0) + amount } : a))
       );
     } else {
       setSuiDebt((prev) => prev + amount);
       setSuiAgents((prev) =>
-        prev.map((a) => (a.id === agentId ? { ...a, spent: a.spent + amount } : a))
+        prev.map((a) => (a.id === agentId ? { ...a, spent: (a.spent ?? 0) + amount } : a))
       );
     }
 

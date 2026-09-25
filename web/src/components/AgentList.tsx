@@ -78,8 +78,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                       ? `${agent.address.slice(0, 8)}...${agent.address.slice(-6)}`
                       : agent.address}
                   </td>
-                  <td className="py-3">${agent.allocatedLimit.toFixed(2)}</td>
-                  <td className="py-3 text-[#f59e0b]">${agent.spent.toFixed(2)}</td>
+                  <td className="py-3">${(agent.allocatedLimit ?? agent.creditLimit ?? 0).toFixed(2)}</td>
+                  <td className="py-3 text-[#f59e0b]">${(agent.spent ?? agent.outstandingDebt ?? 0).toFixed(2)}</td>
                   <td className="py-3">
                     <span
                       className={`inline-block px-2 py-0.5 rounded text-[10px] ${
@@ -93,13 +93,13 @@ export const AgentList: React.FC<AgentListProps> = ({
                   </td>
                   <td className="py-3 text-right space-x-2">
                     <button
-                      onClick={() => onToggleStatus(agent.id)}
+                      onClick={() => onToggleStatus(agent.id || agent.agentId || agent.address)}
                       className="text-[11px] text-[#94a3b8] hover:text-white underline cursor-pointer"
                     >
                       {agent.status === "active" ? "Pause" : "Resume"}
                     </button>
                     <button
-                      onClick={() => onRemoveAgent(agent.id)}
+                      onClick={() => onRemoveAgent(agent.id || agent.agentId || agent.address)}
                       className="text-[11px] text-red-400 hover:text-red-300 underline cursor-pointer"
                     >
                       Revoke
