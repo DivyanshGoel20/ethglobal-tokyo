@@ -201,6 +201,19 @@ export const scanMessage = (from: string, typedData: unknown, website: string) =
     { fresh: true } // what is being signed is always read live
   );
 
+/**
+ * Tell Intercepta an address is misclassified: malicious where it saw no
+ * risk, or safe where it flagged one. Goes into their threat data, so only a
+ * signed-in human files one (see /api/risk/report); never cached.
+ */
+export const reportAddress = (address: string, message: string) =>
+  call<{ success?: boolean; message?: string }>(
+    "POST",
+    "/api/public/v2/extension/reports/address",
+    { address, message },
+    { fresh: true }
+  );
+
 /* ------------------------------------------------------------------------ */
 /* Reading the answers                                                      */
 /* ------------------------------------------------------------------------ */

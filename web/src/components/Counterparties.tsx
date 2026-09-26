@@ -209,10 +209,84 @@ export const Counterparties: React.FC<{
                   {shown.overview.firstTxDate && ` · since ${String(shown.overview.firstTxDate).slice(0, 10)}`}
                 </div>
               )}
+              <ReportToIntercepta key={shown.address} address={shown.address} flagged={shown.level !== "clean"} onDone={onChanged} />
             </>
           )}
         </div>
       )}
     </section>
+  );
+};
+
+/**
+ * Tell Intercepta it got an address wrong: malicious where it saw nothing, or
+ * safe where it flagged something. Filed by the signed-in human only.
+ */
+const ReportToIntercepta: React.FC<{ address: string; flagged: boolean; onDone: (m: string) => void }> = ({ address, flagged, onDone }) => {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<"malicious" | "safe">(flagged ? "safe" : "malicious");
+  const [note, setNote] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    setState("sending");
+    setError(null);
+    const res = await fetch("/api/risk/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, kind, note }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.success) {
+      setState("idle");
+      setError(d.error || "Intercepta did not take the report.");
+      return;
+    }
+    setState("sent");
+    onDone(`Reported ${short(address)} to Intercepta as ${kind}`);
+  };
+
+  if (state === "sent") return <p className="mono text-[10.5px]" style={{ color: "var(--steady)" }}>Reported to Intercepta as {kind}. Thank you.</p>;
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="mono text-[10.5px] ink-3 underline underline-offset-2">
+        {flagged ? "Wrongly flagged? Report to Intercepta" : "Know it is malicious? Report to Intercepta"}
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-2 pt-1">
+      <div className="grid grid-cols-2" style={{ border: "1px solid var(--rule)" }}>
+        {(["malicious", "safe"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setKind(k)}
+            className="h-8 mono text-[10px] uppercase tracking-[0.04em]"
+            style={{ background: kind === k ? "var(--solid-bg)" : "transparent", color: kind === k ? "var(--solid-fg)" : "var(--ink-2)" }}
+          >
+            {k === "malicious" ? "It is malicious" : "It is safe"}
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="field text-[12px] min-h-[64px]"
+        placeholder="What happened (optional) - e.g. it took payment and delivered nothing"
+        maxLength={500}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      {error && <p className="mono text-[10.5px]" style={{ color: "var(--alarm)" }}>{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button className="btn btn-quiet" onClick={() => setOpen(false)} disabled={state === "sending"}>
+          Cancel
+        </button>
+        <button className="btn btn-solid" onClick={send} disabled={state === "sending"}>
+          {state === "sending" ? "Reporting…" : "Report"}
+        </button>
+      </div>
+      <p className="mono text-[10px] ink-3">Reports go to Intercepta&apos;s threat data, which other wallets rely on. Report only what you know.</p>
+    </div>
   );
 };
