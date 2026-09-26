@@ -1,0 +1,21 @@
+{
+  "name": "@float/sui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Float's Sui rail: the Move facility client, x402 on Sui, and the parked-repayment payer",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "tsx --test test/*.test.ts",
+    "move:test": "cd float && sui move test",
+    "move:build": "cd float && sui move build"
+  },
+  "dependencies": {
+    "@mysten/sui": "^2.33.1",
+    "express": "^5.2.1",
+    "viem": "^2.56.9"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}

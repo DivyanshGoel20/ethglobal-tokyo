@@ -1,0 +1,3 @@
+data/
+# Localnet is regenesised on every start; its ids mean nothing tomorrow.
+deployments/localnet.json
