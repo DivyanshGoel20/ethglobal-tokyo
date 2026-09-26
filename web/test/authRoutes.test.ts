@@ -60,7 +60,7 @@ test("the RP context refuses to sign without a configured key", async () => {
   delete process.env.WORLD_RP_SIGNING_KEY;
   delete process.env.WORLD_API_KEY;
   try {
-    const res = await rpContextGET();
+    const res = await rpContextGET(new Request("http://float.test/api/auth/world-rp-context"));
     assert.equal(res.status, 500);
   } finally {
     if (saved.a !== undefined) process.env.WORLD_RP_SIGNING_KEY = saved.a;
