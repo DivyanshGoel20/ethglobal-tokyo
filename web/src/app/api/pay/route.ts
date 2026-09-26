@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
 
     invalidateTelemetryCache(auth.spender.human);
 
-    return NextResponse.json(result);
+    // Intercepta stopped it before anything was signed: 403 refused, 202 held
+    // for the human. The verdict and its reasons are in the body either way.
+    return NextResponse.json(result, { status: result.success ? 200 : result.status });
   } catch (error: any) {
     console.error("[POST /api/pay] Error:", error);
     return NextResponse.json(

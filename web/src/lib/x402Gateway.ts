@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
+import { screenIncoming, verdictLine } from "./intercepta";
 
 /**
  * x402 for Next route handlers, settled through Circle Gateway.
@@ -51,7 +52,7 @@ async function arcSupport(): Promise<any> {
 
 export const toUnits = (usd: number) => String(Math.round(usd * 1e6));
 
-async function requirements(priceUsd: number) {
+async function requirements(priceUsd: number, payTo: string = SELLER_WALLET) {
   const kind = await arcSupport();
   const usdc = kind.extra?.assets?.find((a: any) => a.symbol === "USDC")?.address;
   if (!usdc) throw new Error("Circle Gateway lists no USDC on Arc testnet");
@@ -60,7 +61,7 @@ async function requirements(priceUsd: number) {
     network: ARC_NETWORK,
     asset: usdc,
     amount: toUnits(priceUsd),
-    payTo: SELLER_WALLET,
+    payTo,
     maxTimeoutSeconds: MAX_TIMEOUT_SECONDS,
     extra: {
       name: BATCHING_NAME,
@@ -89,11 +90,12 @@ const json402 = (body: object) =>
 export async function requirePayment(
   req: NextRequest,
   priceUsd: number,
-  description: string
+  description: string,
+  opts: { payTo?: string } = {}
 ): Promise<{ response: NextResponse } | { settled: Settled }> {
   let reqs;
   try {
-    reqs = await requirements(priceUsd);
+    reqs = await requirements(priceUsd, opts.payTo);
   } catch (err: any) {
     return {
       response: NextResponse.json(
@@ -134,6 +136,18 @@ export async function requirePayment(
         { status: 400 }
       ),
     };
+  }
+
+  // Who is paying, screened before Circle is asked to verify or settle
+  // anything. Money from a sanctioned or scam-linked wallet is refused here,
+  // with the reason, and never touches the seller's balance.
+  const claimedPayer = String(payload?.payload?.authorization?.from ?? "");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(claimedPayer)) {
+    return { response: NextResponse.json({ error: "Payment names no payer" }, { status: 400 }) };
+  }
+  const screening = await screenIncoming(claimedPayer, priceUsd);
+  if (screening.decision === "refuse") {
+    return { response: json402({ error: "Payer refused", reason: verdictLine(screening), screening }) };
   }
 
   // Verified and settled against the requirements this server quotes, never

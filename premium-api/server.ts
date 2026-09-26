@@ -2,6 +2,7 @@ import express from "express";
 import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
 import { formatUnits } from "viem";
 import { riskCurveSvg, dossierSvg } from "./artifacts";
+import { screenIncoming, verdictLine, DEMO_RISKY_PAYTO } from "../web/src/lib/intercepta";
 
 type PaidRequest = express.Request & {
   payment?: {
@@ -24,17 +25,38 @@ const FACILITATOR_URL =
 // PORT in .env silently pointed both at the same socket.
 const PORT = process.env.PREMIUM_API_PORT || process.env.PORT || 4402;
 
+/**
+ * Every payer is screened with Intercepta before Circle is asked to verify the
+ * payment, let alone settle it. A wallet with sanctions, stolen-funds or scam
+ * exposure is turned away with the reason; the abort becomes a 402.
+ */
+const screenPayer = async ({ paymentPayload, requirements }: any) => {
+  const payer = paymentPayload?.payload?.authorization?.from;
+  if (!payer) return { abort: true as const, reason: "Payment names no payer" };
+  const usd = Number(formatUnits(BigInt(requirements.amount), 6));
+  const verdict = await screenIncoming(payer, usd);
+  console.log(`[intercepta] payer ${payer} -> ${verdict.decision}: ${verdict.reasons[0] ?? ""}`);
+  if (verdict.decision === "refuse") return { abort: true as const, reason: verdictLine(verdict) };
+};
+
 const gateway = createGatewayMiddleware({
   sellerAddress: SELLER_WALLET,
   facilitatorUrl: FACILITATOR_URL,
-});
+}).onBeforeVerify(screenPayer);
+
+// A seller whose quote names a payee with a mainnet record. Buyers that screen
+// what they pay refuse it before signing; it is here so that can be seen.
+const unvetted = createGatewayMiddleware({
+  sellerAddress: DEMO_RISKY_PAYTO,
+  facilitatorUrl: FACILITATOR_URL,
+}).onBeforeVerify(screenPayer);
 
 app.get("/", (_req, res) => {
   res.json({
     service: "Lifeline Premium API",
     rail: "arc",
     settlement: "x402 via Circle Gateway",
-    paid: ["/premium-data", "/risk-curve", "/dossier"],
+    paid: ["/premium-data", "/risk-curve", "/dossier", "/unvetted"],
   });
 });
 
@@ -109,6 +131,10 @@ app.get(
   }
 );
 
+app.get("/unvetted", unvetted.require("$0.01"), (_req: PaidRequest, res) => {
+  res.json({ success: true, message: "This should not have been bought." });
+});
+
 /** What is for sale, and at what price. Unmetered - the catalogue is free. */
 app.get("/catalogue", (_req, res) => {
   res.json({
@@ -116,6 +142,7 @@ app.get("/catalogue", (_req, res) => {
       { path: "/premium-data", price: 0.01, title: "Alpha signal", artifact: "json" },
       { path: "/risk-curve", price: 1.0, title: "Exposure curve \u00b7 30d", artifact: "svg" },
       { path: "/dossier", price: 5.0, title: "Underwriting dossier", artifact: "svg" },
+      { path: "/unvetted", price: 0.01, title: "Unvetted feed", artifact: "json" },
     ],
   });
 });

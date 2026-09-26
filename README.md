@@ -131,6 +131,7 @@ if the mini app is a different Developer Portal app from the World ID one.
 1. An agent requests a metered resource and gets `402` with the requirements in
    `PAYMENT-REQUIRED`: amount, asset, `payTo`, network.
 2. Its own balance is read. Enough, and it pays for itself and owes nothing.
+   **Arc:** either way, nothing is signed until Intercepta has screened it (below).
 3. Short, and Lifeline checks the human's remaining headroom across both rails,
    and any mandate cap. Over it, the request is refused before anything moves.
 4. **Arc:** the drawdown is booked (batched on chain) and Lifeline's Gateway
@@ -140,6 +141,60 @@ if the mini app is a different Developer Portal app from the World ID one.
    agent's own coins, and pays the seller. The seller simulates it, checks it
    pays the quoted amount, submits it, and only then serves the resource.
 5. The payment is on the trail; the debt is on the human's line.
+
+## Screening with Intercepta (Arc)
+
+Every Arc payment is screened by [Intercepta](https://intercepta.io) before it
+is signed, and every payer is screened before a seller settles. Arc is not a
+chain Intercepta scores, but an EVM address is the same address on every
+chain, so payees and payers are screened against its mainnet data. Arc only;
+Sui addresses are not EVM addresses.
+
+**Paying agent** - before the agent (or Lifeline, lending to it) signs:
+
+| check | Intercepta call | where |
+|---|---|---|
+| the payee (`payTo`) | Deep Scan Address `GET /api/public/v2/extension/account/{address}/toxic-score` | [`web/src/lib/intercepta.ts`](web/src/lib/intercepta.ts) `screenOutgoing` |
+| the asset: Arc's USDC, not a lookalike | allowlist; anything else refused, with Scan Token `GET .../token-intelligence/token/{address}/risks` saying what it is | `screenToken` |
+| the authorisation itself | Scan Message `POST /api/public/v2/extension/analysis/signature`, sent the exact EIP-712 `TransferWithAuthorization` about to be signed | `screenAuthorization` |
+
+The authorisation is built, screened and signed in one place,
+[`web/src/lib/lifelineSigner.ts`](web/src/lib/lifelineSigner.ts)
+(`screenAndSign`), so what Intercepta reads is byte for byte what gets signed.
+The verdict decides what happens:
+
+| verdict | when | what happens |
+|---|---|---|
+| **pay** | no known risk, amount within `INTERCEPTA_AUTO_APPROVE_USD` ($2) | signed and settled |
+| **cap** | warning signs (mixer or sanctioned-counterparty exposure, a middling score) | paid only up to `INTERCEPTA_ELEVATED_CAP_USD` ($0.25) a payment |
+| **hold** | over the cap, or Intercepta did not answer | nothing signed; the human approves or declines ([`api/pay/holds`](web/src/app/api/pay/holds/[holdId]/route.ts)). Approving screens again, and a refusal still refuses |
+| **refuse** | sanctions, known scammer, stolen funds, phishing, a lookalike asset, a drainer authorisation | nothing signed, reason shown |
+
+No key, or no answer, is never a pass. Refusals and holds go on the payment
+trail with their reasons; the verdict is on every receipt
+([`Verdict.tsx`](web/src/components/Verdict.tsx)).
+
+**Paid service** - before settling, the payer named in the authorisation gets
+Quick Scan Address (`GET .../account/{address}/quick-scan`, the low-latency
+one). A flagged payer is refused with the reason, before Circle is asked to
+verify anything:
+[`web/src/lib/x402Gateway.ts`](web/src/lib/x402Gateway.ts) `requirePayment`
+for the app's sellers, and an `onBeforeVerify` hook in
+[`premium-api/server.ts`](premium-api/server.ts) for the Express one.
+
+**Counterparty profiles** - the dashboard's Counterparties panel
+([`Counterparties.tsx`](web/src/components/Counterparties.tsx)) lists every
+payee with its last verdict, and any payment held for you. Open one, or paste
+any address, for the full profile from
+[`api/risk/profile`](web/src/app/api/risk/profile/route.ts): deep and quick
+scores, each trait with its description, and Summarize Address
+(`GET /api/public/v1/extension/security/{address}/overview`) for who it is.
+
+**Seeing it** - `npm run e2e:intercepta`, live against the API and Arc
+testnet: a clean seller cleared and paid; the "Unvetted feed" seller, whose
+payee is the Ronin bridge exploiter's wallet (OFAC-listed), refused before
+signing; a $5 dossier held and declined; and both sellers turning away a
+flagged payer. In the dashboard, buy the Alpha signal, then the Unvetted feed.
 
 ## Layout
 
@@ -207,6 +262,7 @@ npm run lint
 npm run e2e:arc               # the Arc rail through the app, on Arc testnet
 npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
 npm run e2e:sui               # the Sui rail through the app
+npm run e2e:intercepta        # screening, live: cleared, refused, held
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
 
@@ -214,7 +270,7 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (27) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking |
+| web tests (40) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |

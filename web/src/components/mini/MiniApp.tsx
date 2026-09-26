@@ -11,6 +11,7 @@ import { AuthorizeSheet, type LeadData } from "../Monitor";
 import { EventTape } from "../EventTape";
 import { Underwriting } from "../Underwriting";
 import { FacilityRecord } from "../FacilityRecord";
+import { Counterparties } from "../Counterparties";
 import { PurchaseModal } from "../PurchaseModal";
 import { RepayModal } from "../RepayModal";
 import { Sheet } from "../Sheet";
@@ -127,7 +128,10 @@ export default function MiniApp() {
             <div className="space-y-8">
               <Underwriting humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} onTier={L.setCreditLimit} />
               {L.rail === "arc" ? (
-                <FacilityRecord humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} />
+                <>
+                  <FacilityRecord humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} />
+                  <Counterparties payments={L.payments} refreshTrigger={L.refreshTrigger} agentName={L.nameOf} onChanged={L.done} />
+                </>
               ) : (
                 <SuiFacility />
               )}

@@ -26,6 +26,8 @@ export type Payment = {
   transactionId?: string;
   rail?: Rail;
   network?: string;
+  sellerAddress?: string;
+  screening?: { decision: string; reasons: string[]; capUsd: number; holdId?: string };
 };
 
 type Obligation = { obligationId: string; agentAddress: string; status: string; dueMs: number | null };
@@ -314,6 +316,7 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
     activities,
     beats24h,
     obligations,
+    payments,
     nameOf,
     refreshTrigger,
     refresh,

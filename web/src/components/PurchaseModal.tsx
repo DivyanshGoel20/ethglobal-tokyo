@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Agent, Rail } from "@/types";
 import { Sheet, Field, ErrorNote } from "./Sheet";
+import { Verdict } from "./Verdict";
 
 type Resource = { path: string; price: number; title: string; artifact?: string };
 
@@ -91,6 +92,16 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
         onSessionExpired();
         throw new Error("Your World session expired. Verify again to keep spending.");
       }
+      // Intercepta stopped it before signing. Not an error: a verdict to show.
+      if (!data.success && data.screening) {
+        setResult(data);
+        onDone(
+          data.hold
+            ? `${agent?.name ?? "Agent"}'s payment is held for you - ${data.screening.reasons[0] ?? ""}`
+            : `Refused before signing - ${data.screening.reasons[0] ?? ""}`
+        );
+        return;
+      }
       if (!res.ok || !data.success) throw new Error(data.error || "That did not settle.");
 
       setResult(data);
@@ -109,6 +120,39 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
     }
   };
 
+  const answerHold = async (action: "approve" | "decline") => {
+    if (!result?.hold) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/pay/holds/${result.hold.holdId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        onSessionExpired();
+        throw new Error("Your World session expired. Verify again to answer.");
+      }
+      if (action === "decline") {
+        if (!res.ok) throw new Error(data.error || "Could not decline.");
+        onDone("Declined. Nothing was signed.");
+        return onClose();
+      }
+      if (!data.success) {
+        if (data.screening) return setResult(data);
+        throw new Error(data.error || "That did not settle.");
+      }
+      setResult(data);
+      onDone(`Approved - ${agent?.name ?? "Agent"} bought ${selected?.title ?? "it"}`);
+    } catch (err: any) {
+      setError(err.message || "Failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const link = result?.explorer ?? result?.arcTxLink ?? null;
   const tx = result?.digest ?? result?.arcTxHash ?? result?.txHash ?? result?.circleSettlementId ?? result?.transactionId;
   const onCredit = result && (result.fundingSource === "LIFELINE_CREDIT" || result.fundingSource === "LIFELINE_FACILITY" || choice === "direct");
@@ -117,6 +161,38 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
     <Sheet open={isOpen} onClose={onClose} kicker={rail === "arc" ? "Arc · Circle Gateway" : "Sui · parked repayment"} title="x402 purchase">
       {agents.length === 0 ? (
         <p className="serif text-[18px]">Authorize an agent first.</p>
+      ) : result && !result.success && result.screening ? (
+        <div className="space-y-5">
+          <div className="flex items-baseline justify-between rule-b pb-4">
+            <span className="serif text-[22px]">{result.hold ? "Held. Your call." : "Refused. Nothing signed."}</span>
+            <span className="readout text-[26px]" style={{ color: "var(--alarm)" }}>
+              ${Number(result.amount ?? price).toFixed(3)}
+            </span>
+          </div>
+          <Verdict verdict={result.screening} />
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <div className="flex justify-end gap-2">
+            {result.hold ? (
+              <>
+                <button onClick={() => answerHold("decline")} disabled={busy} className="btn btn-quiet">
+                  Decline
+                </button>
+                <button onClick={() => answerHold("approve")} disabled={busy} className="btn btn-solid">
+                  {busy ? "Settling…" : "Approve and pay"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setResult(null)} className="btn btn-quiet">
+                  Back
+                </button>
+                <button onClick={onClose} className="btn btn-solid">
+                  Done
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       ) : result ? (
         <div className="space-y-5">
           <div className="flex items-baseline justify-between rule-b pb-4">
@@ -159,6 +235,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
               </>
             )}
           </dl>
+          {result.screening && <Verdict verdict={result.screening} />}
           <div className="flex justify-end gap-2">
             <button onClick={() => setResult(null)} className="btn btn-quiet">
               Buy another

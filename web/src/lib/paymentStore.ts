@@ -17,10 +17,12 @@ export interface PaymentRecord {
   /** For Sui payments: which network, so the tape links the right explorer. */
   network?: string;
   drawdownId: string | null;
-  status: "SUCCESS" | "FAILED" | "REJECTED_CREDIT";
+  status: "SUCCESS" | "FAILED" | "REJECTED_CREDIT" | "REFUSED_RISK" | "HELD";
   timestamp: number;
   transactionId?: string;
   memo?: string;
+  /** Intercepta's verdict on an Arc payment, taken before it was signed. */
+  screening?: { decision: string; reasons: string[]; capUsd: number; holdId?: string };
 }
 
 /**

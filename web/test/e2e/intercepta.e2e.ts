@@ -1,0 +1,126 @@
+/**
+ * Intercepta in the Arc payment flow, live: real API, real mainnet risk data,
+ * real Arc testnet settlement. No stand-ins.
+ *
+ *   INTERCEPTA_API_KEY in .env
+ *   npm run dev            # the app
+ *   npm run premium        # the Express seller
+ *   npm run e2e:intercepta
+ *
+ * What it shows:
+ *   1. a payment to a clean seller is screened, cleared, signed and settled
+ *   2. a payment to a seller whose payee has a mainnet record is refused
+ *      before anything is signed, with the reason
+ *   3. a payment over the auto-approve limit is held for the human, who can
+ *      decline it (or approve it, and it is screened again)
+ *   4. both sellers screen the payer before settling, and refuse a flagged one
+ *
+ * As with the other harnesses, only the World ID scan is stood in for.
+ */
+import crypto from "node:crypto";
+import { NextResponse } from "next/server";
+import { attachSession } from "../../src/lib/session";
+import { ensureHumanProfileOnChain } from "../../src/lib/facilityContract";
+import { quickScan, deepScan, DEMO_RISKY_PAYTO, ARC_USDC } from "../../src/lib/intercepta";
+
+const APP = process.env.LIFELINE_APP_URL || "http://localhost:3000";
+const PREMIUM = process.env.NEXT_PUBLIC_X402_RESOURCE_BASE || "http://localhost:4402";
+const HUMAN = "0x" + crypto.randomBytes(32).toString("hex");
+// A flagged payer for the sellers to turn away. Override with an address from
+// Intercepta's pinned test list.
+const RISKY_PAYER = process.env.INTERCEPTA_DEMO_PAYER || DEMO_RISKY_PAYTO;
+
+let failures = 0;
+function check(label: string, ok: boolean, detail = "") {
+  console.log(`  ${ok ? "ok  " : "FAIL"}  ${label}${detail ? `  ${detail}` : ""}`);
+  if (!ok) failures++;
+}
+const say = (v: any) => (v ? `${v.decision}: ${v.reasons?.[0] ?? ""}` : "(no verdict)");
+
+/** A payment header claiming to come from `from`. The seller must look before it verifies. */
+async function claimedFrom(url: string, from: string) {
+  const quote = await fetch(url);
+  const accepted = JSON.parse(Buffer.from(quote.headers.get("PAYMENT-REQUIRED")!, "base64").toString()).accepts[0];
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(
+    JSON.stringify({
+      x402Version: 2,
+      accepted,
+      payload: {
+        authorization: { from, to: accepted.payTo, value: accepted.amount, validAfter: String(now - 600), validBefore: String(now + 604900), nonce: "0x" + crypto.randomBytes(32).toString("hex") },
+        signature: "0x" + "00".repeat(65),
+      },
+    })
+  ).toString("base64");
+  const res = await fetch(url, { headers: { "Payment-Signature": header } });
+  return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
+}
+
+async function main() {
+  if (!process.env.INTERCEPTA_API_KEY) throw new Error("INTERCEPTA_API_KEY is not set in .env");
+
+  console.log("\nIntercepta, direct\n");
+  const risky = await deepScan(DEMO_RISKY_PAYTO);
+  check("the demo payee has a record on mainnet", risky.data.toxicScore > 0 || risky.data.traits.length > 0,
+    `score ${risky.data.toxicScore} · ${risky.data.traits.map((t) => t.name).join(", ")} · ${risky.ms}ms`);
+  const quick = await quickScan(RISKY_PAYER);
+  console.log(`        quick-scan ${RISKY_PAYER}: score ${quick.data.toxicScore} · ${quick.data.traits.map((t) => t.name).join(", ")}`);
+
+  console.log(`\nhuman ${HUMAN}\n`);
+  await ensureHumanProfileOnChain(HUMAN);
+  const cookie = `lifeline_session=${attachSession(NextResponse.json({}), HUMAN).cookies.get("lifeline_session")!.value}`;
+  const call = async (method: string, route: string, body?: unknown) => {
+    const res = await fetch(`${APP}${route}`, {
+      method,
+      headers: { "Content-Type": "application/json", cookie },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
+  };
+
+  const agent = (await call("POST", "/api/agent/provision", { label: "e2e-intercepta", capUsd: 8 })).body.agent?.address as string;
+  check("agent provisioned", !!agent, agent);
+
+  console.log("\nThe paying agent\n");
+  const cleared = await call("POST", "/api/pay", { url: `${PREMIUM}/premium-data`, agentAddress: agent });
+  check("a clean seller is cleared, then paid", cleared.status === 200 && cleared.body.success && ["pay", "cap"].includes(cleared.body.screening?.decision),
+    say(cleared.body.screening));
+  const live = (cleared.body.screening?.checks ?? []).filter((c: any) => !c.cached && c.ms);
+  check("the verdict came from live calls", live.length >= 2, live.map((c: any) => `${c.endpoint} ${c.ms}ms`).join(", "));
+  check("the asset was Arc's USDC", cleared.body.screening?.checks?.some((c: any) => c.subject === "token" && c.target.toLowerCase() === ARC_USDC && c.level === "clean"));
+
+  const refused = await call("POST", "/api/pay", { url: `${PREMIUM}/unvetted`, agentAddress: agent });
+  check("a payee with a mainnet record is refused before signing", refused.status === 403 && refused.body.screening?.decision === "refuse",
+    say(refused.body.screening));
+  const inApp = await call("POST", "/api/pay", { url: `${APP}/api/paid/unvetted`, agentAddress: agent });
+  check("the same payee behind the app's own seller is refused too", inApp.status === 403, say(inApp.body.screening));
+
+  const held = await call("POST", "/api/pay", { url: `${PREMIUM}/dossier`, agentAddress: agent });
+  check("a $5 purchase is held for the human", held.status === 202 && !!held.body.hold?.holdId, say(held.body.screening));
+  const holds = await call("GET", "/api/pay/holds");
+  check("the hold is listed for its human", holds.body.holds?.some((h: any) => h.holdId === held.body.hold?.holdId));
+  const declined = await call("POST", `/api/pay/holds/${held.body.hold?.holdId}`, { action: "decline" });
+  check("the human declines it", declined.status === 200 && declined.body.declined);
+  const again = await call("POST", `/api/pay/holds/${held.body.hold?.holdId}`, { action: "approve" });
+  check("a declined hold cannot then be approved", again.status === 409, again.body.error);
+
+  const payments = await call("GET", "/api/payments");
+  const statuses = (payments.body.payments ?? []).map((p: any) => p.status);
+  check("refusals and holds are on the payment trail", statuses.includes("REFUSED_RISK") && statuses.includes("HELD"), statuses.join(","));
+
+  console.log("\nThe paid service\n");
+  const nextSeller = await claimedFrom(`${APP}/api/paid/signal`, RISKY_PAYER);
+  check("the app's seller refuses a flagged payer before verifying", nextSeller.status === 402 && /Payer refused/.test(nextSeller.body.error ?? ""),
+    nextSeller.body.reason);
+  const expressSeller = await claimedFrom(`${PREMIUM}/premium-data`, RISKY_PAYER);
+  check("the Express seller refuses a flagged payer before verifying", expressSeller.status === 402 && /Intercepta refuse/.test(expressSeller.body.reason ?? ""),
+    expressSeller.body.reason);
+
+  console.log(failures ? `\n${failures} check(s) failed\n` : "\nall checks passed\n");
+  process.exit(failures ? 1 : 0);
+}
+
+main().catch((err) => {
+  console.error("e2e failed:", err);
+  process.exit(1);
+});

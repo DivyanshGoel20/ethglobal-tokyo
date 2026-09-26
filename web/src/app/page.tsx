@@ -9,6 +9,7 @@ import { Vitals } from "@/components/Vitals";
 import { Monitor } from "@/components/Monitor";
 import { EventTape } from "@/components/EventTape";
 import { Underwriting } from "@/components/Underwriting";
+import { Counterparties } from "@/components/Counterparties";
 import { FacilityRecord } from "@/components/FacilityRecord";
 import { ParkedRepayments } from "@/components/ParkedRepayments";
 import { PurchaseModal } from "@/components/PurchaseModal";
@@ -98,6 +99,9 @@ function Dashboard() {
           <div className="space-y-12">
             <Underwriting humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} onTier={L.setCreditLimit} />
             {L.rail === "arc" && <FacilityRecord humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} />}
+            {L.rail === "arc" && (
+              <Counterparties payments={L.payments} refreshTrigger={L.refreshTrigger} agentName={L.nameOf} onChanged={L.done} />
+            )}
           </div>
         </div>
       </main>

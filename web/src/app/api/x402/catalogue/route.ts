@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
       { path: "/api/paid/signal", price: 0.01, title: "Alpha Signal Intelligence", artifact: "json" },
       { path: "/api/paid/risk-curve", price: 1.0, title: "Exposure curve · 30d", artifact: "svg" },
       { path: "/api/paid/dossier", price: 5.0, title: "Underwriting dossier", artifact: "svg" },
+      { path: "/api/paid/unvetted", price: 0.01, title: "Unvetted feed", artifact: "json" },
     ],
   });
 }

@@ -1,5 +1,7 @@
 import { GatewayClient } from "@circle-fin/x402-batching/client";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits, getAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import crypto from "crypto";
 import {
   getAgentByAddress,
   getHumanFacilityStats,
@@ -11,6 +13,29 @@ import { LIFELINE_CREDIT_FACILITY_ADDRESS } from "./arc";
 import { addPending } from "./pendingLedger";
 import { flushAgent } from "./ledgerFlush";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
+import { screenOutgoing, verdictLine, Verdict } from "./intercepta";
+import { createHold } from "./holdStore";
+
+// What Circle's BatchEvmScheme signs, reproduced so the authorisation
+// Intercepta screens is byte for byte the one that gets signed.
+const AUTH_TYPES = {
+  TransferWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" },
+  ],
+} as const;
+const EIP712_DOMAIN = [
+  { name: "name", type: "string" },
+  { name: "version", type: "string" },
+  { name: "chainId", type: "uint256" },
+  { name: "verifyingContract", type: "address" },
+];
+// Gateway wants an authorisation good for a week, plus slack.
+const GATEWAY_AUTH_VALIDITY_SECONDS = 7 * 24 * 60 * 60 + 100;
 
 export interface AgentPaymentContext {
   agentAddress: string;
@@ -22,10 +47,19 @@ export interface AgentPaymentContext {
    * three - agent limit, facility headroom, mandate cap - is what binds.
    */
   maxCreditUsd?: number;
+  /**
+   * The human has looked at a held payment and said yes. Turns a hold into a
+   * payment; a refusal stays a refusal.
+   */
+  humanApproved?: boolean;
 }
 
 export interface LifelinePayResult {
   success: boolean;
+  /** Intercepta's verdict, taken before anything was signed. */
+  screening?: Verdict & { approvedByHuman?: boolean };
+  /** Set when the verdict sent the payment to the human. */
+  hold?: { holdId: string; expiresAt: number };
   fundingSource: "AGENT_GATEWAY" | "LIFELINE_FACILITY";
   amount: string;
   borrowed: string;
@@ -207,17 +241,11 @@ export class LifelineSigner {
       // ----------------------------------------------------
       // PATH A: NORMAL AGENT PAYMENT (No Overdraft)
       // ----------------------------------------------------
-      let agentClient: GatewayClient;
       const resolvedAgentKey =
         agentContext.agentPrivateKey ||
         getAgentPrivateKey(agentContext.agentAddress);
 
-      if (resolvedAgentKey) {
-        agentClient = new GatewayClient({
-          chain: "arcTestnet",
-          privateKey: resolvedAgentKey,
-        });
-      } else {
+      if (!resolvedAgentKey) {
         throw new Error(
           `Agent ${agentContext.agentAddress} has sufficient Gateway balance ($${formattedAvailable} >= $${requestedAmountFormatted}), but no private key was found to sign the payment.`
         );
@@ -233,10 +261,14 @@ export class LifelineSigner {
         throw new Error(`Lifeline will not sign for this agent: ${allowed.reason}`);
       }
 
-      const paymentPayload = await (agentClient as any).batchScheme.createPaymentPayload(
-        x402Version,
-        batchingOption
-      );
+      const screened = await this.screenAndSign(resolvedAgentKey, x402Version, batchingOption, url, agentContext);
+      if ("blocked" in screened) {
+        return this.blocked(screened.blocked, {
+          paymentId, agentContext, humanOwner, url, method, body: options?.body, sellerAddress,
+          requestedAmountFormatted, formattedAvailable, fundingSource: "AGENT_GATEWAY",
+        });
+      }
+      const { payload: paymentPayload, verdict } = screened;
 
       const paymentHeader = Buffer.from(
         JSON.stringify({
@@ -258,7 +290,7 @@ export class LifelineSigner {
       if (!paidResponse.ok) {
         const errJson = await paidResponse.json().catch(() => ({}));
         throw new Error(
-          `Payment failed: ${errJson.error || paidResponse.statusText}`
+          `Payment failed: ${(errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")}`
         );
       }
 
@@ -288,10 +320,12 @@ export class LifelineSigner {
         timestamp: Date.now(),
         transactionId: settleResponse?.transaction,
         memo: "Normal x402 payment using agent Gateway balance",
+        screening: { decision: verdict.decision, reasons: verdict.reasons, capUsd: verdict.capUsd },
       });
 
       return {
         success: true,
+        screening: verdict,
         fundingSource: "AGENT_GATEWAY",
         amount: requestedAmountFormatted,
         borrowed: "0.00",
@@ -354,9 +388,15 @@ export class LifelineSigner {
       }
 
       // 3. Sign x402 Payment Authorization using Lifeline's Gateway-Funded Facility
-      const fundingPaymentPayload = await (
-        this.fundingClient as any
-      ).batchScheme.createPaymentPayload(x402Version, batchingOption);
+      // Screened before Lifeline's own wallet signs anything for the agent.
+      const screened = await this.screenAndSign(this.fundingPrivateKey, x402Version, batchingOption, url, agentContext);
+      if ("blocked" in screened) {
+        return this.blocked(screened.blocked, {
+          paymentId, agentContext, humanOwner, url, method, body: options?.body, sellerAddress,
+          requestedAmountFormatted, formattedAvailable, fundingSource: "LIFELINE_FACILITY",
+        });
+      }
+      const { payload: fundingPaymentPayload, verdict } = screened;
 
       const paymentHeader = Buffer.from(
         JSON.stringify({
@@ -391,12 +431,12 @@ export class LifelineSigner {
           drawdownId: null,
           status: "FAILED",
           timestamp: Date.now(),
-          memo: `Seller verification failed: ${errJson.error || paidResponse.statusText}`,
+          memo: `Seller verification failed: ${(errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")}`,
         });
 
         throw new Error(
           `Lifeline-funded payment failed: ${
-            errJson.error || paidResponse.statusText
+            (errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")
           }`
         );
       }
@@ -477,6 +517,7 @@ export class LifelineSigner {
         memo: `Overdraft funded via the Lifeline facility ($${shortfallAmount.toFixed(
           2
         )} shortfall)`,
+        screening: { decision: verdict.decision, reasons: verdict.reasons, capUsd: verdict.capUsd },
       });
 
       const updatedFacility = getHumanFacilityStats(humanOwner);
@@ -484,6 +525,7 @@ export class LifelineSigner {
 
       return {
         success: true,
+        screening: verdict,
         fundingSource: "LIFELINE_FACILITY",
         amount: requestedAmountFormatted,
         borrowed: shortfallAmount.toFixed(2),
@@ -502,5 +544,135 @@ export class LifelineSigner {
         facilityDebt: updatedFacility.totalOutstandingDebt,
       };
     }
+  }
+
+  /**
+   * Build the Gateway authorisation, have Intercepta read it along with the
+   * payee and the asset, and sign it only if the verdict allows.
+   */
+  private async screenAndSign(
+    privateKey: `0x${string}`,
+    x402Version: number,
+    requirements: any,
+    url: string,
+    ctx: AgentPaymentContext
+  ): Promise<{ payload: any; verdict: Verdict & { approvedByHuman?: boolean } } | { blocked: Verdict }> {
+    const account = privateKeyToAccount(privateKey);
+    const verifyingContract = requirements.extra?.verifyingContract;
+    if (!verifyingContract) throw new Error("Gateway quote is missing extra.verifyingContract");
+
+    const now = Math.floor(Date.now() / 1000);
+    const authorization = {
+      from: account.address,
+      to: getAddress(requirements.payTo),
+      value: String(requirements.amount),
+      validAfter: String(now - 600),
+      validBefore: String(now + Math.max(Number(requirements.maxTimeoutSeconds) || 0, GATEWAY_AUTH_VALIDITY_SECONDS)),
+      nonce: `0x${crypto.randomBytes(32).toString("hex")}` as `0x${string}`,
+    };
+    const domain = {
+      name: requirements.extra?.name ?? "GatewayWalletBatched",
+      version: requirements.extra?.version ?? "1",
+      chainId: Number(String(requirements.network).split(":")[1]),
+      verifyingContract: getAddress(verifyingContract),
+    };
+
+    const verdict = await screenOutgoing({
+      from: account.address,
+      payTo: requirements.payTo,
+      asset: requirements.asset,
+      amountUsd: Number(formatUnits(BigInt(requirements.amount), 6)),
+      typedData: {
+        types: { EIP712Domain: EIP712_DOMAIN, ...AUTH_TYPES },
+        domain,
+        primaryType: "TransferWithAuthorization",
+        message: authorization,
+      },
+      website: new URL(url).origin,
+    });
+
+    const approvedByHuman = verdict.decision === "hold" && ctx.humanApproved === true;
+    if (verdict.decision === "refuse" || (verdict.decision === "hold" && !approvedByHuman)) {
+      return { blocked: verdict };
+    }
+
+    const signature = await account.signTypedData({
+      domain,
+      types: AUTH_TYPES,
+      primaryType: "TransferWithAuthorization",
+      message: {
+        ...authorization,
+        value: BigInt(authorization.value),
+        validAfter: BigInt(authorization.validAfter),
+        validBefore: BigInt(authorization.validBefore),
+      },
+    });
+    return {
+      payload: { x402Version, payload: { authorization, signature } },
+      verdict: approvedByHuman ? { ...verdict, approvedByHuman } : verdict,
+    };
+  }
+
+  /** Nothing was signed. Say why, and if a human can decide, ask them. */
+  private blocked(
+    verdict: Verdict,
+    p: {
+      paymentId: string;
+      agentContext: AgentPaymentContext;
+      humanOwner: string;
+      url: string;
+      method: "GET" | "POST";
+      body?: unknown;
+      sellerAddress: string;
+      requestedAmountFormatted: string;
+      formattedAvailable: string;
+      fundingSource: "AGENT_GATEWAY" | "LIFELINE_FACILITY";
+    }
+  ): LifelinePayResult {
+    const hold =
+      verdict.decision === "hold"
+        ? createHold({
+            human: p.humanOwner,
+            agentAddress: p.agentContext.agentAddress,
+            url: p.url,
+            method: p.method,
+            body: p.body,
+            payTo: p.sellerAddress,
+            amountUsd: verdict.amountUsd,
+            verdict,
+          })
+        : null;
+
+    recordPayment({
+      paymentId: p.paymentId,
+      agentAddress: p.agentContext.agentAddress,
+      humanProfileId: p.humanOwner,
+      sellerAddress: p.sellerAddress,
+      resourceUrl: p.url,
+      requestedAmount: p.requestedAmountFormatted,
+      agentGatewayBalance: p.formattedAvailable,
+      shortfall: "0.00",
+      fundingSource: p.fundingSource,
+      drawdownId: null,
+      status: hold ? "HELD" : "REFUSED_RISK",
+      timestamp: Date.now(),
+      memo: verdictLine(verdict),
+      screening: { decision: verdict.decision, reasons: verdict.reasons, capUsd: verdict.capUsd, holdId: hold?.holdId },
+    });
+
+    return {
+      success: false,
+      screening: verdict,
+      hold: hold ? { holdId: hold.holdId, expiresAt: hold.expiresAt } : undefined,
+      fundingSource: p.fundingSource,
+      amount: p.requestedAmountFormatted,
+      borrowed: "0.00",
+      drawdownId: null,
+      agentGatewayBalance: p.formattedAvailable,
+      shortfall: "0.00",
+      data: null,
+      status: hold ? 202 : 403,
+      payer: p.agentContext.agentAddress,
+    };
   }
 }
