@@ -210,7 +210,6 @@ Sui addresses are not EVM addresses.
 |---|---|---|
 | the payee (`payTo`) | Deep Scan Address `GET /api/public/v2/extension/account/{address}/toxic-score` | [`web/src/lib/intercepta.ts`](web/src/lib/intercepta.ts) `screenOutgoing` |
 | the asset: Arc's USDC, not a lookalike | allowlist; anything else refused, with Scan Token `GET .../token-intelligence/token/{address}/risks` saying what it is - for the demo's lookalike "USD Coin", `FAKE_TOKEN`, `KNOWN_MALICIOUS`, action block | `screenToken` |
-| a payee none of your agents has paid | Lifeline's own payment history, on top of Intercepta's verdict: a first payment up to $0.05 is a trial, anything more is held for you once | [`payeePolicy.ts`](web/src/lib/payeePolicy.ts) |
 | the authorisation itself | Scan Message `POST /api/public/v2/extension/analysis/signature`, sent the exact EIP-712 `TransferWithAuthorization` about to be signed | `screenAuthorization` |
 
 The authorisation is built, screened and signed in one place,
@@ -222,7 +221,7 @@ The verdict decides what happens:
 |---|---|---|
 | **pay** | no known risk, amount within `INTERCEPTA_AUTO_APPROVE_USD` ($2) | signed and settled |
 | **cap** | warning signs (mixer or sanctioned-counterparty exposure, a middling score) | paid only up to `INTERCEPTA_ELEVATED_CAP_USD` ($0.25) a payment |
-| **hold** | over the cap, a first payment to a new payee over its $0.05 trial, or Intercepta did not answer | nothing signed; the human approves or declines ([`api/pay/holds`](web/src/app/api/pay/holds/[holdId]/route.ts)). Approving screens again, and a refusal still refuses |
+| **hold** | over the cap, or Intercepta did not answer | nothing signed; the human approves or declines ([`api/pay/holds`](web/src/app/api/pay/holds/[holdId]/route.ts)). Approving screens again, and a refusal still refuses |
 | **refuse** | sanctions, known scammer, stolen funds, phishing, a lookalike asset, a drainer authorisation | nothing signed, reason shown |
 
 No key, or no answer, is never a pass. Refusals and holds go on the payment
@@ -249,7 +248,7 @@ scores, each trait with its description, and Summarize Address
 testnet:
 
 - a first $1 payment to a payee none of the human's agents has paid, held;
-- a clean seller cleared and paid (a one-cent first payment is a trial);
+- a clean seller cleared and paid;
 - the "Unvetted feed", whose payee is a known scammer's wallet from
   Intercepta's test list (score 100), refused before signing;
 - the "Discount feed", a clean payee asking to be paid in a lookalike USDC

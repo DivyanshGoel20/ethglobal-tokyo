@@ -18,7 +18,6 @@ import { flushAgent } from "./ledgerFlush";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { screenOutgoing, verdictLine, Verdict } from "./intercepta";
 import { createHold } from "./holdStore";
-import { withFirstPayeeRule } from "./payeePolicy";
 import type { X402Trace } from "@lifeline/sui";
 import { acquireLedgerLock, syncAgentDebts } from "./ledgerLock";
 
@@ -721,11 +720,7 @@ export class LifelineSigner {
       },
       website: new URL(url).origin,
     });
-    // A payee none of this human's agents has paid before gets a small trial,
-    // and anything more waits for the human.
-    const verdict = ctx.humanProfileId
-      ? withFirstPayeeRule(screened, ctx.humanProfileId, requirements.payTo)
-      : screened;
+    const verdict = screened;
 
     const quotedUsd = Number(formatUnits(BigInt(requirements.amount), 6));
     const matchesApproval =

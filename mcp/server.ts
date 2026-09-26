@@ -500,7 +500,7 @@ server.registerTool(
     description:
       "Pay for an x402 resource on this agent's Lifeline line and return what it delivered. " +
       "Lifeline screens the payee with Intercepta, pays from the agent's own balance first and borrows the rest. " +
-      "Risky or first-time payees, and anything past the agent's spending cap, come back HELD for the human's approval.",
+      "Risky payees, and anything past the agent's spending cap, come back HELD for the human's approval.",
     inputSchema: {
       url: z.string().url(),
       maxUsd: z.number().positive().optional().describe("Refuse if the quoted price is higher than this"),

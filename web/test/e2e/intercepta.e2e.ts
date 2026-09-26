@@ -82,12 +82,6 @@ async function main() {
   check("agent provisioned", !!agent, agent);
 
   console.log("\nThe paying agent\n");
-  // A payee this human's agents have never paid: $1 is over the new-payee trial.
-  const firstTime = await call("POST", "/api/pay", { url: `${PREMIUM}/risk-curve`, agentAddress: agent });
-  check("a first $1 payment to a never-paid payee is held for the human", firstTime.status === 202 && /none of your agents has paid it before/.test(firstTime.body.screening?.reasons?.[0] ?? ""),
-    say(firstTime.body.screening));
-  if (firstTime.body.hold?.holdId) await call("POST", `/api/pay/holds/${firstTime.body.hold.holdId}`, { action: "decline" });
-
   const cleared = await call("POST", "/api/pay", { url: `${PREMIUM}/premium-data`, agentAddress: agent });
   check("a clean seller is cleared, then paid", cleared.status === 200 && cleared.body.success && ["pay", "cap"].includes(cleared.body.screening?.decision),
     `${say(cleared.body.screening)} · settled ${cleared.body.transactionId ?? "?"}`);
