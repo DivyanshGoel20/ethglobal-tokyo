@@ -6,6 +6,7 @@ import { WorldAuthGate } from "@/components/WorldAuthGate";
 import { Header } from "@/components/Header";
 import { CreditOverview } from "@/components/CreditOverview";
 import { ReputationTierCard } from "@/components/ReputationTierCard";
+import { SmartContractTelemetry } from "@/components/SmartContractTelemetry";
 import { AgentList } from "@/components/AgentList";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { SimulateDrawdownModal } from "@/components/SimulateDrawdownModal";
@@ -228,6 +229,8 @@ export default function Home() {
         />
 
         <ActivityFeed activities={currentActivities} rail={rail} />
+
+        <SmartContractTelemetry humanOwner={nullifierHash} refreshTrigger={currentDebt} />
       </main>
 
       <SimulateDrawdownModal
