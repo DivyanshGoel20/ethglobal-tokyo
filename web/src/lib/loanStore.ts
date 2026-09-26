@@ -90,7 +90,9 @@ export function createLoan(params: {
   const now = Date.now();
   const originationFee = Math.round(params.amount * 0.01 * 10000) / 10000;
   const initialTotalDue = Math.round((params.amount + originationFee) * 10000) / 10000;
-  const dueAt = now + 7 * 24 * 60 * 60 * 1000; // Strictly 7 days
+  // Due after the loan term (7 days unless LIFELINE_LOAN_TERM_DAYS says otherwise).
+  const termDays = Number(process.env.LIFELINE_LOAN_TERM_DAYS) > 0 ? Number(process.env.LIFELINE_LOAN_TERM_DAYS) : 7;
+  const dueAt = now + termDays * 24 * 60 * 60 * 1000;
 
   const newLoan: Loan = {
     loanId: `loan_${now}_${Math.random().toString(36).substring(2, 7)}`,

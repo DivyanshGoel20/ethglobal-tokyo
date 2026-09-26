@@ -7,6 +7,7 @@ import { validateArcAgentWallet } from "@/lib/arc";
 import { LifelineSigner } from "@/lib/lifelineSigner";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
 import { hasAgentPrivateKey } from "@/lib/agentKeys";
+import { enforceStanding } from "@/lib/standing";
 import { withSuiState } from "@/lib/suiRail";
 
 function sanitizeAgentForClient(agent: Agent): Agent {
@@ -22,6 +23,10 @@ export async function GET(req: NextRequest) {
     // index of exactly which keys this server holds.
     const human = getHuman(req);
     if (!human) return unauthenticated();
+
+    // Anything fallen due since the last look is acted on: the dashboard polls
+    // this, so a human sees their line suspended the moment it is.
+    await enforceStanding(human).catch((err: any) => console.warn("[standing]", err?.message ?? err));
 
     const rawAgents = getAgentsByOwner(human);
 

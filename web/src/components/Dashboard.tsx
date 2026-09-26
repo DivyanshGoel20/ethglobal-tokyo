@@ -13,6 +13,7 @@ import { Counterparties } from "@/components/Counterparties";
 import { FacilityRecord } from "@/components/FacilityRecord";
 import { ParkedRepayments } from "@/components/ParkedRepayments";
 import { HeldPayments } from "@/components/HeldPayments";
+import { StandingBanner } from "@/components/StandingBanner";
 import { PurchaseModal } from "@/components/PurchaseModal";
 import { RepayModal } from "@/components/RepayModal";
 import { LifelineMark } from "@/components/Pulse";
@@ -64,6 +65,7 @@ export function Dashboard({ rail }: { rail: Rail }) {
 
       <main className="max-w-[1180px] mx-auto px-6 sm:px-10">
         <AccountLinks onToast={L.showToast} />
+        <StandingBanner rail={L.rail} refreshTrigger={L.refreshTrigger} onRepay={() => L.setIsRepayOpen(true)} />
         <Vitals
           creditLimit={L.creditLimit}
           arcDebt={L.arcDebt}

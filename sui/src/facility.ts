@@ -485,3 +485,21 @@ export async function facilityLiquidity(): Promise<bigint> {
 }
 
 export const sameAddress = (a: string, b: string) => normalizeSuiAddress(a) === normalizeSuiAddress(b);
+
+/** Profile statuses in the Move facility. */
+export const SUI_PROFILE_STATUS = { inactive: 0, active: 1, suspended: 2, defaulted: 3 } as const;
+
+/**
+ * Underwriter only: set a profile's status. Anything but active stops new
+ * draws; a defaulted obligation can still be settled, which is how it is cured.
+ */
+export async function setProfileStatus(admin: Keypair, profileId: string, status: keyof typeof SUI_PROFILE_STATUS) {
+  const d = requireDeployment();
+  const tx = new Transaction();
+  tx.moveCall({
+    target: target(d, "facility", "set_profile_status"),
+    typeArguments: [d.coinType],
+    arguments: [tx.object(d.facilityId), tx.object(d.adminCapId), tx.pure.vector("u8", profileBytes(profileId)), tx.pure.u8(SUI_PROFILE_STATUS[status])],
+  });
+  return execute(tx, admin);
+}

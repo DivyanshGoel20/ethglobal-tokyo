@@ -1,6 +1,7 @@
 import { GatewayClient } from "@circle-fin/x402-batching/client";
 import { ORIGINATION_FEE_RATE } from "./reputationEngine";
 import { approvalCovers, capHoldVerdict } from "./spendingCap";
+import { borrowingBlocked } from "./standing";
 import { formatUnits, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import crypto from "crypto";
@@ -378,6 +379,26 @@ export class LifelineSigner {
         const agentAvailableLimit = current
           ? Math.max(0, current.creditLimit - current.outstandingDebt)
           : facility.totalAvailableCredit;
+        // A line with debt past due borrows nothing until it is paid.
+        const lineBlocked = borrowingBlocked(humanOwner, "arc");
+        if (lineBlocked) {
+          recordPayment({
+            paymentId,
+            agentAddress: agentContext.agentAddress,
+            humanProfileId: humanOwner,
+            sellerAddress,
+            resourceUrl: url,
+            requestedAmount: requestedAmountFormatted,
+            agentGatewayBalance: formattedAvailable,
+            shortfall: shortfallAmount.toFixed(2),
+            fundingSource: "LIFELINE_FACILITY",
+            drawdownId: null,
+            status: "REJECTED_CREDIT",
+            timestamp: Date.now(),
+            memo: lineBlocked,
+          });
+          throw new Error(`Lifeline: ${lineBlocked}`);
+        }
         // A suspended or delinquent agent borrows nothing, here as on /api/borrow.
         const standing = current?.status === "Suspended" || current?.status === "Delinquent" ? 0 : Number.POSITIVE_INFINITY;
         // What nobody can approve past: the human's line, a mandate's cap, the agent's standing.

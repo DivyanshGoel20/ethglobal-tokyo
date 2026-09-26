@@ -21,6 +21,9 @@ export interface HumanReputationData {
   currentTierNumber: number;
   tierGraduatedAt?: number;
   lastRepaymentAt?: number;
+  /** Set when this rail's line defaulted: the record starts again from the first tier. */
+  defaultedAt?: number;
+  defaults?: number;
 }
 
 function getReputationFilePath(): string {
@@ -92,6 +95,29 @@ export function getHumanCreditTier(humanOwner: string, rail: RecordRail = "arc")
   const record = getHumanReputationRecord(humanOwner, rail);
   const tier = CREDIT_TIERS.find((t) => t.tierNumber === record.currentTierNumber);
   return tier || CREDIT_TIERS[0];
+}
+
+/**
+ * A default costs the record: back to the first tier, with the repayments and
+ * time that earned the old one wiped. Paying the debt off afterwards lets it
+ * grow again from there - never back to where it was.
+ */
+export function penalizeDefault(humanOwner: string, rail: RecordRail): HumanReputationData {
+  const all = getAllReputationRecords();
+  const key = recordKey(humanOwner, rail);
+  const before = all[key] ?? getHumanReputationRecord(humanOwner, rail);
+  const after: HumanReputationData = {
+    ...before,
+    totalInterestPaid: 0,
+    totalActiveDurationDays: 0,
+    repaymentsCount: 0,
+    currentTierNumber: 1,
+    defaultedAt: Date.now(),
+    defaults: (before.defaults ?? 0) + 1,
+  };
+  all[key] = after;
+  saveAllReputationRecords(all);
+  return after;
 }
 
 /**

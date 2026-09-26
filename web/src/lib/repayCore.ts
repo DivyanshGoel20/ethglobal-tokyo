@@ -6,6 +6,7 @@ import { calculateLoanAccrual } from "./reputationEngine";
 import { executeOnChainRepayment } from "./facilityContract";
 import { invalidateTelemetryCache } from "./telemetryCache";
 import { claimReceipt } from "./receiptStore";
+import { appliedStanding, enforceStanding } from "./standing";
 
 /**
  * An Arc repayment, however it was funded.
@@ -100,5 +101,9 @@ export async function commitArcRepayment(p: {
   }
 
   invalidateTelemetryCache(p.humanOwner);
+  // A line suspended or in default comes back as soon as what was overdue is paid.
+  if (appliedStanding(p.humanOwner).arc?.status && appliedStanding(p.humanOwner).arc?.status !== "good") {
+    await enforceStanding(p.humanOwner).catch((err: any) => console.warn("[standing]", err?.message ?? err));
+  }
   return { result, txHash: onChain.txHash, transferTxHash: onChain.transferTxHash };
 }

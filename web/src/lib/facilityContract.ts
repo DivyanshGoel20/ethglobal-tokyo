@@ -108,6 +108,23 @@ export const LIFELINE_CREDIT_FACILITY_ABI = [
   },
   {
     type: "function",
+    name: "setProfileStatus",
+    inputs: [
+      { name: "profileId", type: "bytes32" },
+      { name: "status", type: "uint8" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "markDefault",
+    inputs: [{ name: "profileId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "getProfile",
     inputs: [{ name: "profileId", type: "bytes32" }],
     outputs: [
@@ -1117,3 +1134,41 @@ export async function fetchCompleteContractTelemetry(
     totalRepaymentsCount: repayments.length,
   };
 }
+
+/** The Arc contract's profile statuses, in its enum order. */
+export const ARC_PROFILE_STATUS = { inactive: 0, active: 1, suspended: 2, defaulted: 3 } as const;
+export type ArcProfileStatus = keyof typeof ARC_PROFILE_STATUS;
+
+async function underwriterWrite(functionName: "setProfileStatus" | "markDefault", args: readonly unknown[]): Promise<string> {
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  if (!pk) throw new Error("No underwriter key (PRIVATE_KEY) to change a profile's status");
+  const walletClient = createWalletClient({ account: privateKeyToAccount(pk), chain: arcTestnetChain, transport: getArcTransport() });
+  const hash = await walletClient.writeContract({
+    address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+    abi: LIFELINE_CREDIT_FACILITY_ABI,
+    functionName,
+    args: args as any,
+  });
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") throw new Error(`${functionName} reverted (${hash})`);
+  return hash;
+}
+
+/** The human's Arc profile status, as the contract has it. */
+export async function readArcProfileStatus(humanOwner: string): Promise<ArcProfileStatus | null> {
+  const profile = (await getPublicClient().readContract({
+    address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+    abi: LIFELINE_CREDIT_FACILITY_ABI,
+    functionName: "getProfile",
+    args: [computeProfileId(humanOwner)],
+  })) as any;
+  if (!profile || !Number(profile.createdAt)) return null;
+  return (Object.keys(ARC_PROFILE_STATUS) as ArcProfileStatus[])[Number(profile.status)] ?? null;
+}
+
+/** Suspend or re-activate a profile (the contract refuses drawdowns unless active). */
+export const setArcProfileStatus = (humanOwner: string, status: "active" | "suspended") =>
+  underwriterWrite("setProfileStatus", [computeProfileId(humanOwner), ARC_PROFILE_STATUS[status]]);
+
+/** Record a default on chain, publicly. The debt stays; repaying it cures the profile. */
+export const markArcDefault = (humanOwner: string) => underwriterWrite("markDefault", [computeProfileId(humanOwner)]);

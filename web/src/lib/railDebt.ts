@@ -120,6 +120,11 @@ export function unpaidRailDebts(humanOwner: string): RailDebt[] {
   );
 }
 
+/** Every row behind one obligation, whatever its status. */
+export function railDebtsForObligation(obligationId: string): RailDebt[] {
+  return readAll().filter((r) => r.obligationId === obligationId);
+}
+
 /** The unpaid rows behind one obligation, whoever's they are. */
 export function unpaidRowsOf(obligationId: string): RailDebt[] {
   return readAll().filter((r) => r.obligationId === obligationId && (r.status === "open" || r.status === "defaulted"));

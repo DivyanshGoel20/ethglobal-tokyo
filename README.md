@@ -340,6 +340,29 @@ sandbox - approved by a different World identity, which was refused.
   binding message or `authorization_details` shown on the approval screen would
   make this a true transaction approval rather than a sign-in.
 
+## When a human does not repay
+
+Every loan has a due date (7 days on Arc; a Sui parked repayment carries its
+own). Lifeline checks each human's standing whenever their dashboard loads,
+after every repayment, and on a scheduled sweep
+([`lib/standing.ts`](web/src/lib/standing.ts)):
+
+| standing | when | what happens |
+|---|---|---|
+| **good** | nothing overdue | nothing |
+| **delinquent** | an Arc loan is past due | the profile is **suspended on chain** (`setProfileStatus`), so the contract takes no new drawdowns; the agents that owe are marked delinquent; the app refuses new credit and says why |
+| **defaulted** | Arc: still unpaid 30 days after the due date. Sui: a parked repayment fell due and the purse could not cover it | **marked defaulted on chain** (`markDefault` on Arc, `set_profile_status` on Sui); the record drops to the first tier, with its repayments and time wiped |
+
+Repaying still works while suspended or in default - by the agent, from a
+wallet, or by card - and paying off what was overdue makes the profile active
+on chain again. The tier penalty stays: the record grows back from the first
+tier. World ID makes this stick: one person gets one account, so a defaulter
+cannot start over with a clean line.
+
+`GET /api/standing` answers for the signed-in human; `POST /api/standing/sweep`
+(with `LIFELINE_CRON_SECRET`) checks everyone. The grace period and loan term
+are `LIFELINE_DEFAULT_GRACE_DAYS` and `LIFELINE_LOAN_TERM_DAYS`.
+
 ## Repaying by Apple Pay, Google Pay or card
 
 Arc debt can be repaid three ways, and the repay sheet offers whichever apply:
@@ -530,6 +553,7 @@ npm run e2e:intercepta        # screening, live: cleared, refused, held, approve
 npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc, settled on Sui
 npm run e2e:world-agents      # an agent's held payment approved (or --deny) in World ID for Agents
 npm run e2e:mcp               # the MCP server over stdio: connect, approve, buy, revoke, on both rails
+npm run e2e:standing          # a human who does not repay: suspended, defaulted, restored - on chain, both rails
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
 

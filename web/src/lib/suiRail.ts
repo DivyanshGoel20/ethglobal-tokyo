@@ -30,11 +30,13 @@ import {
   unpaidObligations,
   unpaidRailDebts,
   unpaidRowsOf,
+  railDebtsForObligation,
 } from "./railDebt";
 import { invalidateTelemetryCache } from "./telemetryCache";
 import { withLedgerLock } from "./ledgerLock";
 import { createHold } from "./holdStore";
 import { OverSpendingCap, approvalCovers, capHoldVerdict } from "./spendingCap";
+import { borrowingBlocked, enforceStanding } from "./standing";
 import type { Verdict } from "./intercepta";
 import type { Agent } from "@/types";
 
@@ -163,6 +165,8 @@ async function payOnSuiNow(args: {
 
   // Sui's own line: its limit and its debt. Nothing drawn on Arc counts here.
   const facility = getSuiFacilityStats(args.human);
+  // In default, the line lends nothing until the default is cured.
+  const lineBlocked = borrowingBlocked(args.human, "sui");
   const maxCreditUsd = Math.min(facility.availableCredit, args.capUsd ?? Number.POSITIVE_INFINITY);
 
   // This agent's spending cap, less what it already owes on Sui.
@@ -185,6 +189,7 @@ async function payOnSuiNow(args: {
       // Borrowing past the agent's cap is the human's call: held, unless they
       // already approved exactly this payment.
       approveDraw: (drawUsd, quote) => {
+        if (lineBlocked && drawUsd > 0) throw new Error(`Lifeline: ${lineBlocked}`);
         if (drawUsd > capLeft + 1e-9 && !approvalCovers(args.approvedFor, quote.payTo, quote.priceUsd)) {
           throw new OverSpendingCap(drawUsd, capLeft, quote.payTo, quote.priceUsd);
         }
@@ -339,6 +344,8 @@ export async function settleEarlyFor(human: string, obligationId: string) {
   const closed = settleObligation(obligationId);
   creditSuiRecord(closed);
   invalidateTelemetryCache(human);
+  // Curing a default puts the Sui line back.
+  await enforceStanding(human).catch((err: any) => console.warn("[standing]", err?.message ?? err));
   return {
     obligationId,
     digest: r.digest,
@@ -393,6 +400,10 @@ export async function reconcileSui(human?: string) {
     }
   }
   if (human) invalidateTelemetryCache(human);
+  // Defaults recorded (or cured) here change the humans' standing.
+  const touched = new Set([...out.defaulted, ...out.settled].flatMap((id) => unpaidRowsOf(id).concat(railDebtsForObligation(id)).map((r) => r.humanOwner)));
+  if (human) touched.add(human);
+  for (const h of touched) await enforceStanding(h).catch((err: any) => console.warn("[standing]", err?.message ?? err));
   return out;
 }
 
