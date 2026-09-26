@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 async function who(req: NextRequest, holdId: string): Promise<{ error: NextResponse } | { human: string }> {
   const hold = getHold(holdId);
   if (!hold) return { error: NextResponse.json({ success: false, error: "No such held payment." }, { status: 404 }) };
-  const auth = resolveSpender(req, hold.agentAddress, "arc");
+  const auth = resolveSpender(req, hold.agentAddress, hold.rail ?? "arc");
   if ("error" in auth) return { error: auth.error };
   if (auth.spender.human.toLowerCase() !== hold.human.toLowerCase()) {
     return { error: NextResponse.json({ success: false, error: "No such held payment." }, { status: 404 }) };

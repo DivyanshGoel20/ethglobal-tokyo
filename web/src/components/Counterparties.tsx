@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import type { Payment } from "@/lib/useLifeline";
-import { WorldAgentApproval } from "./WorldAgentApproval";
+import { HeldPayments } from "./HeldPayments";
 
 type Trait = { name: string; risk: number; txsCount: number; description: string };
 type Profile = {
@@ -13,7 +13,6 @@ type Profile = {
   traits: Trait[];
   overview: { ens?: string | null; firstTxDate?: string | null; txCount?: number | null; fundedBy?: any; isContract?: boolean | null } | null;
 };
-type Hold = { holdId: string; agentAddress: string; url: string; amountUsd: number; verdict: { reasons: string[] } };
 
 const TONE: Record<string, string> = {
   pay: "var(--steady)",
@@ -46,20 +45,9 @@ export const Counterparties: React.FC<{
   agentName: (a: string) => string;
   onChanged: (message: string) => void;
 }> = ({ payments, refreshTrigger, agentName, onChanged }) => {
-  const [holds, setHolds] = useState<Hold[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, Profile | { error: string }>>({});
   const [lookup, setLookup] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  // The hold waiting on a fresh World ID approval, if any.
-  const [approving, setApproving] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/pay/holds")
-      .then((r) => r.json())
-      .then((d) => setHolds(d.holds ?? []))
-      .catch(() => {});
-  }, [refreshTrigger]);
 
   const payees = useMemo(() => {
     const seen = new Map<string, Payment>();
@@ -79,31 +67,6 @@ export const Counterparties: React.FC<{
     setProfiles((p) => ({ ...p, [address]: res.ok ? data : { error: data.error ?? "No answer" } }));
   };
 
-  const answer = async (hold: Hold, action: "approve" | "decline") => {
-    setBusy(hold.holdId);
-    try {
-      const res = await fetch(`/api/pay/holds/${hold.holdId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data.code === "world_id_required") return setApproving(hold.holdId);
-      onChanged(
-        action === "decline"
-          ? "Declined. Nothing was signed."
-          : data.success
-            ? `Approved - ${agentName(hold.agentAddress)} paid for ${path(hold.url)}`
-            : `Still not paid: ${data.screening?.reasons?.[0] ?? data.error ?? "refused"}`
-      );
-      setHolds((h) => h.filter((x) => x.holdId !== hold.holdId));
-    } catch (err: any) {
-      onChanged(`Could not reach Lifeline: ${err?.message ?? "network error"}. Nothing was changed.`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const shown = open ? profiles[open] : null;
 
   return (
@@ -113,37 +76,9 @@ export const Counterparties: React.FC<{
         <span className="lab">screened by Intercepta</span>
       </div>
 
-      {holds.map((h) => (
-        <div key={h.holdId} className="py-3 hair-b space-y-2">
-          <div className="flex justify-between mono text-[11px]">
-            <span style={{ color: "var(--alarm)" }}>held · {agentName(h.agentAddress)}</span>
-            <span>${h.amountUsd.toFixed(2)} · {path(h.url)}</span>
-          </div>
-          <p className="text-[12.5px] ink-2 leading-snug">{h.verdict.reasons[0]}</p>
-          {approving === h.holdId ? (
-            <WorldAgentApproval
-              holdId={h.holdId}
-              onDone={({ message }) => {
-                setApproving(null);
-                setHolds((all) => all.filter((x) => x.holdId !== h.holdId));
-                onChanged(message);
-              }}
-              onCancel={() => setApproving(null)}
-            />
-          ) : (
-            <div className="flex justify-end gap-2">
-              <button className="btn btn-quiet" disabled={busy === h.holdId} onClick={() => answer(h, "decline")}>
-                Decline
-              </button>
-              <button className="btn btn-solid" disabled={busy === h.holdId} onClick={() => answer(h, "approve")}>
-                {busy === h.holdId ? "Settling…" : "Approve"}
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+      <HeldPayments rail="arc" refreshTrigger={refreshTrigger} agentName={agentName} onChanged={onChanged} />
 
-      {payees.length === 0 && holds.length === 0 && (
+      {payees.length === 0 && (
         <p className="py-4 text-[13px] ink-3">No Arc payees yet. Each one is screened before an agent signs.</p>
       )}
 

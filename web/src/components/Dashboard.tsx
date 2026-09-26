@@ -12,6 +12,7 @@ import { AccountLinks } from "@/components/AccountLinks";
 import { Counterparties } from "@/components/Counterparties";
 import { FacilityRecord } from "@/components/FacilityRecord";
 import { ParkedRepayments } from "@/components/ParkedRepayments";
+import { HeldPayments } from "@/components/HeldPayments";
 import { PurchaseModal } from "@/components/PurchaseModal";
 import { RepayModal } from "@/components/RepayModal";
 import { LifelineMark } from "@/components/Pulse";
@@ -84,6 +85,9 @@ export function Dashboard({ rail }: { rail: Rail }) {
           onBuy={(a) => L.setPurchaseFor(a.address)}
         />
 
+        {L.rail === "sui" && (
+          <HeldPayments rail="sui" titled refreshTrigger={L.refreshTrigger} agentName={L.nameOf} onChanged={L.done} />
+        )}
         {L.rail === "sui" && <ParkedRepayments refreshTrigger={L.refreshTrigger} agentName={L.nameOf} onChanged={L.done} />}
 
         <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr] pb-20">

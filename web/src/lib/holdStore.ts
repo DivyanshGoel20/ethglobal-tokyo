@@ -22,6 +22,8 @@ export interface HeldPayment {
   payTo: string;
   amountUsd: number;
   verdict: Verdict;
+  /** Which rail the payment was on. Missing means Arc. */
+  rail?: "arc" | "sui";
   status: "held" | "approved" | "declined";
   createdAt: number;
   expiresAt: number;

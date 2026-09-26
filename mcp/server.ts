@@ -449,7 +449,7 @@ server.registerTool(
     description:
       "Pay for an x402 resource on this agent's Lifeline line and return what it delivered. " +
       "Lifeline screens the payee with Intercepta, pays from the agent's own balance first and borrows the rest. " +
-      "Risky or first-time payees come back HELD for the human's approval.",
+      "Risky or first-time payees, and anything past the agent's spending cap, come back HELD for the human's approval.",
     inputSchema: {
       url: z.string().url(),
       maxUsd: z.number().positive().optional().describe("Refuse if the quoted price is higher than this"),
@@ -525,7 +525,8 @@ server.registerTool(
     if (!r.data.success) return fail(r.data.error ?? `status ${r.status}`);
     if (r.data.status === "pending") return text(`Still waiting for your human to answer in World ID${r.data.userCode ? ` (code ${r.data.userCode})` : ""}.`);
     if (r.data.status === "approved" && r.data.payment) {
-      return text(`Your human approved it.\n\n${describePurchase(r.data.payment.x402?.request?.url ?? "the held resource", { status: 200, data: r.data.payment }, "arc")}`);
+      const rail: Rail = r.data.payment.x402?.rail === "sui" ? "sui" : "arc";
+      return text(`Your human approved it.\n\n${describePurchase(r.data.payment.x402?.request?.url ?? "the held resource", { status: 200, data: r.data.payment }, rail)}`);
     }
     return text(`Not approved (${r.data.status}${r.data.reason ? `: ${r.data.reason}` : ""}). Nothing was paid.`);
   }

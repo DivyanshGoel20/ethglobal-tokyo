@@ -3,6 +3,7 @@ import { getAgentByAddress } from "./agentStore";
 import { getAgentPrivateKey } from "./agentKeys";
 import { LifelineSigner, type LifelinePayResult } from "./lifelineSigner";
 import { invalidateTelemetryCache } from "./telemetryCache";
+import { payOnSui } from "./suiRail";
 
 /**
  * The checks every answer to a held payment goes through, whoever asks.
@@ -27,14 +28,28 @@ export function holdProblem(holdId: string, human: string): { status: number; er
 export async function releaseHeldPayment(
   holdId: string,
   human: string
-): Promise<{ ok: true; result: LifelinePayResult; hold: HeldPayment } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; result: LifelinePayResult | Awaited<ReturnType<typeof payOnSui>>; hold: HeldPayment }
+  | { ok: false; status: number; error: string }
+> {
   const problem = holdProblem(holdId, human);
   if (problem) return { ok: false, ...problem };
 
   // Resolved before paying, so a double tap cannot pay twice.
   const hold = resolveHold(holdId, "approved")!;
-  let result: LifelinePayResult;
+  let result: LifelinePayResult | Awaited<ReturnType<typeof payOnSui>>;
   try {
+    if (hold.rail === "sui") {
+      const agent = getAgentByAddress(hold.agentAddress)!;
+      result = await payOnSui({
+        url: hold.url,
+        agent,
+        human,
+        approvedFor: { payTo: hold.payTo, amountUsd: hold.amountUsd },
+      });
+      invalidateTelemetryCache(human);
+      return { ok: true, result, hold };
+    }
     result = await new LifelineSigner().pay(
       hold.url,
       {

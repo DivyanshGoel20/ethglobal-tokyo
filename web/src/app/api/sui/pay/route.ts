@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
       human: auth.spender.human,
       capUsd: auth.spender.capUsd,
     });
+    // Held for the human (over the agent's spending cap): 202, with the hold.
+    if (!result.success) return NextResponse.json(result, { status: 202 });
     recordMandateSpend(auth.spender.mandateId, Number(result.borrowed));
     return NextResponse.json(result);
   } catch (err: any) {

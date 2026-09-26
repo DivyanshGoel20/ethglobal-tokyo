@@ -33,6 +33,9 @@ import {
 } from "./railDebt";
 import { invalidateTelemetryCache } from "./telemetryCache";
 import { withLedgerLock } from "./ledgerLock";
+import { createHold } from "./holdStore";
+import { OverSpendingCap, approvalCovers, capHoldVerdict } from "./spendingCap";
+import type { Verdict } from "./intercepta";
 import type { Agent } from "@/types";
 
 /**
@@ -120,12 +123,24 @@ export async function withSuiState(agents: Agent[], human: string): Promise<Agen
 }
 
 /** Buy something on Sui for an agent, on its human's line. */
+export type SuiHeld = {
+  success: false;
+  status: 202;
+  screening: Verdict;
+  hold: { holdId: string; expiresAt: number };
+  amount: string;
+  borrowed: "0";
+  data: null;
+};
+
 export async function payOnSui(args: {
   url: string;
   agent: Agent;
   human: string;
   capUsd?: number;
-}): Promise<SuiPayResult & { explorer?: string | null }> {
+  /** A held payment the human approved: past the agent's cap, for this payee and price only. */
+  approvedFor?: { payTo: string; amountUsd: number };
+}): Promise<(SuiPayResult & { explorer?: string | null }) | SuiHeld> {
   // One Sui payment per human at a time: two first payments for one agent
   // used to open two purses, and the agent book kept only one of them. Keyed
   // apart from Arc's ledger lock - the rails are separate lines.
@@ -137,7 +152,8 @@ async function payOnSuiNow(args: {
   agent: Agent;
   human: string;
   capUsd?: number;
-}): Promise<SuiPayResult & { explorer?: string | null }> {
+  approvedFor?: { payTo: string; amountUsd: number };
+}): Promise<(SuiPayResult & { explorer?: string | null }) | SuiHeld> {
   const key = getAgentPrivateKey(args.agent.address);
   if (!key) {
     throw new Error(
@@ -149,16 +165,73 @@ async function payOnSuiNow(args: {
   const facility = getSuiFacilityStats(args.human);
   const maxCreditUsd = Math.min(facility.availableCredit, args.capUsd ?? Number.POSITIVE_INFINITY);
 
-  const result = await paySui(args.url, {
-    agentKey: key,
-    profileId: computeProfileId(args.human),
-    creditLimitUsd: facility.creditLimit,
-    maxCreditUsd,
-    approve: (amountUsd) => {
-      const allowed = authorizeAgentSpend(args.agent.address, amountUsd);
-      if (!allowed.ok) throw new Error(`Lifeline will not sign for this agent: ${allowed.reason}`);
-    },
-  });
+  // This agent's spending cap, less what it already owes on Sui.
+  const owedByAgent = unpaidRailDebts(args.human)
+    .filter((d) => d.agentAddress.toLowerCase() === args.agent.address.toLowerCase())
+    .reduce((n, d) => n + d.amountUsd, 0);
+  const capLeft = Math.max(0, Math.round((args.agent.creditLimit - owedByAgent) * 1e6) / 1e6);
+
+  let result: SuiPayResult;
+  try {
+    result = await paySui(args.url, {
+      agentKey: key,
+      profileId: computeProfileId(args.human),
+      creditLimitUsd: facility.creditLimit,
+      maxCreditUsd,
+      approve: (amountUsd) => {
+        const allowed = authorizeAgentSpend(args.agent.address, amountUsd);
+        if (!allowed.ok) throw new Error(`Lifeline will not sign for this agent: ${allowed.reason}`);
+      },
+      // Borrowing past the agent's cap is the human's call: held, unless they
+      // already approved exactly this payment.
+      approveDraw: (drawUsd, quote) => {
+        if (drawUsd > capLeft + 1e-9 && !approvalCovers(args.approvedFor, quote.payTo, quote.priceUsd)) {
+          throw new OverSpendingCap(drawUsd, capLeft, quote.payTo, quote.priceUsd);
+        }
+      },
+    });
+  } catch (err) {
+    if (!(err instanceof OverSpendingCap)) throw err;
+    const verdict = capHoldVerdict(err.needUsd, err.capLeftUsd, err.priceUsd);
+    const hold = createHold({
+      human: args.human,
+      agentAddress: args.agent.address,
+      url: args.url,
+      method: "GET",
+      payTo: err.payTo,
+      amountUsd: err.priceUsd,
+      verdict,
+      rail: "sui",
+    });
+    recordPayment({
+      paymentId: `sui_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      agentAddress: args.agent.address,
+      humanProfileId: args.human,
+      sellerAddress: err.payTo,
+      resourceUrl: args.url,
+      requestedAmount: err.priceUsd.toFixed(6),
+      agentGatewayBalance: "0",
+      shortfall: err.needUsd.toFixed(6),
+      fundingSource: "LIFELINE_FACILITY",
+      drawdownId: null,
+      status: "HELD",
+      timestamp: Date.now(),
+      rail: "sui",
+      network: network(),
+      memo: verdict.reasons[0],
+      screening: { decision: "hold", reasons: verdict.reasons, capUsd: verdict.capUsd, holdId: hold.holdId },
+    });
+    invalidateTelemetryCache(args.human);
+    return {
+      success: false,
+      status: 202,
+      screening: verdict,
+      hold: { holdId: hold.holdId, expiresAt: hold.expiresAt },
+      amount: err.priceUsd.toFixed(6),
+      borrowed: "0",
+      data: null,
+    };
+  }
 
   const borrowed = Number(result.borrowed);
   if (result.fundingSource === "LIFELINE_CREDIT" && borrowed > 0 && result.obligationId) {

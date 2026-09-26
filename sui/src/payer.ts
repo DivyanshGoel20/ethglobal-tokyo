@@ -46,6 +46,11 @@ export interface SuiPayContext {
    * and an expiry; this is where they are enforced. Throw to refuse.
    */
   approve?: (amountUsd: number) => void;
+  /**
+   * Called with what must be borrowed, once that is known and before anything
+   * is signed. Throw to stop the payment (the web app holds it for the human).
+   */
+  approveDraw?: (drawUsd: number, quote: { payTo: string; priceUsd: number }) => void;
 }
 
 export interface SuiPayResult {
@@ -220,6 +225,7 @@ export async function paySui(
   } else {
     drawUnits = price - own;
     ownUnits = own;
+    ctx.approveDraw?.(fromUnits(drawUnits), { payTo: quote.payTo, priceUsd: fromUnits(price) });
     if (fromUnits(drawUnits) > ctx.maxCreditUsd + 1e-9) {
       throw new Error(
         `Lifeline: shortfall of ${fromUnits(drawUnits).toFixed(6)} exceeds the ` +

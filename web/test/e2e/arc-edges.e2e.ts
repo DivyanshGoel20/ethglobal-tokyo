@@ -118,7 +118,12 @@ async function main() {
   // ── Caps ──────────────────────────────────────────────────────────────
   heading("caps");
   const overAgent = await call("POST", "/api/pay", { url: DOLLAR, agentAddress: b });
-  check("B's $0.50 agent cap refuses a $1 purchase", !overAgent.body.success && /exceeds/i.test(overAgent.body.error ?? ""), overAgent.body.error);
+  // Past the agent's cap but within the line: held for the human, not refused.
+  check(
+    "B's $0.50 agent cap holds a $1 purchase for the human",
+    overAgent.status === 202 && !overAgent.body.success && !!overAgent.body.hold?.holdId && /spending cap/i.test(overAgent.body.screening?.reasons?.[0] ?? ""),
+    overAgent.body.screening?.reasons?.[0] ?? overAgent.body.error
+  );
   check("and B owes nothing for the attempt", near(await debtOf(b), 0));
 
   const overAgentDraw = await call("POST", "/api/borrow", { agentAddress: b, amount: 0.6 });

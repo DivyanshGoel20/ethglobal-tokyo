@@ -95,7 +95,7 @@ export interface Verdict {
   amountUsd: number;
   checks: Check[];
   screenedAt: number;
-  provider: "intercepta";
+  provider: "intercepta" | "lifeline";
 }
 
 export class InterceptaError extends Error {

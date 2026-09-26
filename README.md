@@ -277,6 +277,12 @@ Discount feed.
   screened on mainnet data and the Gateway authorisation under Base's id. A
   batch address scan would also help a seller screening many payers.
 
+**An agent's spending cap works the same way, on both rails.** A payment that
+would take an agent past the cap its human set is held rather than refused,
+and goes through once the human approves it with World ID - for that payee
+and that price only. Past the human's whole line is still refused. Intercepta
+itself screens Arc only (its API covers EVM chains); the cap applies on Sui too.
+
 ## World ID for Agents: a human's fresh yes before an agent's money moves
 
 IDKit decides who gets a line - one unique human, once. World ID for Agents

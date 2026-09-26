@@ -20,7 +20,8 @@ async function main() {
   const args = process.argv.slice(2);
   const toIndex = args.indexOf("--to");
   const to = toIndex >= 0 ? args[toIndex + 1] : null;
-  const amountArg = args.find((a, i) => i !== toIndex + 1 && a !== "--to") ?? null;
+  // The amount is whichever argument is neither --to nor the address after it.
+  const amountArg = args.find((a, i) => a !== "--to" && !(toIndex >= 0 && i === toIndex + 1)) ?? null;
 
   const sellerKey = process.env.SELLER_PRIVATE_KEY as `0x${string}` | undefined;
   if (!sellerKey) throw new Error("no SELLER_PRIVATE_KEY in the root .env");

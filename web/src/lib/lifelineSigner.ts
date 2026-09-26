@@ -1,5 +1,6 @@
 import { GatewayClient } from "@circle-fin/x402-batching/client";
 import { ORIGINATION_FEE_RATE } from "./reputationEngine";
+import { approvalCovers, capHoldVerdict } from "./spendingCap";
 import { formatUnits, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import crypto from "crypto";
@@ -379,15 +380,33 @@ export class LifelineSigner {
           : facility.totalAvailableCredit;
         // A suspended or delinquent agent borrows nothing, here as on /api/borrow.
         const standing = current?.status === "Suspended" || current?.status === "Delinquent" ? 0 : Number.POSITIVE_INFINITY;
-        const effectiveAvailable = Math.min(
-          agentAvailableLimit,
+        // What nobody can approve past: the human's line, a mandate's cap, the agent's standing.
+        const hardAvailable = Math.min(
           facility.totalAvailableCredit,
           agentContext.maxCreditUsd ?? Number.POSITIVE_INFINITY,
           standing
         );
+        const needed = shortfallAmount * (1 + ORIGINATION_FEE_RATE);
+
+        // Past the agent's own spending cap, but within the line: the human's
+        // call. Held for a World ID approval - unless this is that approval,
+        // for this payee and no more than this price.
+        if (
+          needed <= hardAvailable + 1e-9 &&
+          needed > agentAvailableLimit + 1e-9 &&
+          !approvalCovers(agentContext.approvedFor, sellerAddress, shortfallAmount)
+        ) {
+          return this.blocked(capHoldVerdict(needed, agentAvailableLimit, shortfallAmount), {
+            paymentId, agentContext, humanOwner, url, method, body: options?.body, sellerAddress,
+            requestedAmountFormatted, formattedAvailable, fundingSource: "LIFELINE_FACILITY",
+          });
+        }
+        const effectiveAvailable = approvalCovers(agentContext.approvedFor, sellerAddress, shortfallAmount)
+          ? hardAvailable
+          : Math.min(agentAvailableLimit, hardAvailable);
 
         // The loan is booked with its origination fee, so that is what must fit.
-        if (shortfallAmount * (1 + ORIGINATION_FEE_RATE) > effectiveAvailable + 1e-9) {
+        if (needed > effectiveAvailable + 1e-9) {
           recordPayment({
             paymentId,
             agentAddress: agentContext.agentAddress,
