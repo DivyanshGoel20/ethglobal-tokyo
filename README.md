@@ -175,6 +175,7 @@ npm run typecheck             # every TypeScript tree
 npm run lint
 
 npm run e2e:arc               # the Arc rail through the app, on Arc testnet
+npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
 npm run e2e:sui               # the Sui rail through the app
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
@@ -186,6 +187,7 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 | web tests (18) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
+| `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
 | `e2e:sui` (20) | credit on Sui, Arc refusing what Sui drew, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
 | `sui:lifecycle` (18) | the Hedera lifecycle on Sui: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
 

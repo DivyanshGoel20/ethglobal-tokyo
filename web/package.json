@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test": "tsx --test test/*.test.ts",
     "e2e:arc": "tsx --env-file-if-exists=../.env test/e2e/arc.e2e.ts",
-    "e2e:sui": "tsx --env-file-if-exists=../.env test/e2e/sui.e2e.ts"
+    "e2e:sui": "tsx --env-file-if-exists=../.env test/e2e/sui.e2e.ts",
+    "e2e:arc-edges": "tsx --env-file-if-exists=../.env test/e2e/arc-edges.e2e.ts"
   },
   "dependencies": {
     "@circle-fin/x402-batching": "^3.5.0",

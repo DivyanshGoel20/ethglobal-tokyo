@@ -308,8 +308,11 @@ export class FloatSignerTS {
       // ----------------------------------------------------
       // PATH B: OVERDRAFT DRAWDOWN (Float Credit Facility)
       // ----------------------------------------------------
-      const shortfallBigInt = requestedAmount - agentGatewayAvailable;
-      const shortfallAmount = parseFloat(formatUnits(shortfallBigInt, 6));
+      // An x402 payment has one payer. When the agent cannot cover all of it,
+      // Lifeline's Gateway pays the seller the whole price - so the whole
+      // price is what is lent. Booking only the shortfall left Lifeline out
+      // of pocket by whatever the agent happened to hold.
+      const shortfallAmount = parseFloat(requestedAmountFormatted);
 
       // 1. Check Float Credit Facility Limits
       const facility = getHumanFacilityStats(humanOwner);
@@ -350,49 +353,6 @@ export class FloatSignerTS {
         );
       }
 
-      // 2. Book the debt. It reaches the chain with the next batch.
-      //
-      // Writing a drawdown per nanopayment cost more gas than the payment was
-      // worth. The debt is recorded here first and settled on chain as one row
-      // covering however many payments have accumulated.
-      //
-      // Admission control above reads the agent store, which is updated the
-      // moment a payment is booked - so it already accounts for debt that has
-      // not reached the chain yet. Adding the pending total on top would
-      // double-count it, and the contract's own limit check cannot fail at
-      // flush time for the same reason: chain debt plus the batch can never
-      // exceed what the store already admitted.
-      const loan = createLoan({
-        agentAddress: agentContext.agentAddress,
-        agentName: agent?.name || "Autonomous Agent",
-        humanOwner,
-        amount: shortfallAmount,
-        txHash: "",
-        memo: `Lifeline Overdraft x402 Drawdown for ${url}`,
-      });
-
-      addPending({
-        humanOwner,
-        agentAddress: agentContext.agentAddress,
-        amountUsdc: shortfallAmount,
-        reference: "x402",
-        loanId: loan.loanId,
-      });
-
-      // Settles only once the position is worth the gas, or has waited long
-      // enough. Most calls return here without touching the chain at all.
-      const flush = await flushAgent(humanOwner, agentContext.agentAddress);
-      const arcTxHash = flush.txHash ?? "";
-
-      // Update agent & human profile debt
-      if (agent) {
-        updateAgentInStore(agent.address, {
-          outstandingDebt: agent.outstandingDebt + shortfallAmount,
-          totalBorrowed: agent.totalBorrowed + shortfallAmount,
-          status: "Active",
-        });
-      }
-
       // 3. Sign x402 Payment Authorization using Float's Gateway-Funded Facility
       const floatPaymentPayload = await (
         this.floatFundingClient as any
@@ -428,7 +388,7 @@ export class FloatSignerTS {
           agentGatewayBalance: formattedAvailable,
           shortfall: shortfallAmount.toFixed(2),
           fundingSource: "FLOAT_FACILITY",
-          drawdownId: loan.loanId,
+          drawdownId: null,
           status: "FAILED",
           timestamp: Date.now(),
           memo: `Seller verification failed: ${errJson.error || paidResponse.statusText}`,
@@ -439,6 +399,54 @@ export class FloatSignerTS {
             errJson.error || paidResponse.statusText
           }`
         );
+      }
+
+      // 2. Book the debt - only now the seller has taken the payment. Booked
+      // before paying, a seller that refused left the human owing for
+      // something they never received. It reaches the chain with the next
+      // batch.
+      //
+      // Writing a drawdown per nanopayment cost more gas than the payment was
+      // worth. The debt is recorded here first and settled on chain as one row
+      // covering however many payments have accumulated.
+      //
+      // Admission control above reads the agent store, which is updated the
+      // moment a payment is booked - so it already accounts for debt that has
+      // not reached the chain yet. Adding the pending total on top would
+      // double-count it, and the contract's own limit check cannot fail at
+      // flush time for the same reason: chain debt plus the batch can never
+      // exceed what the store already admitted.
+      const loan = createLoan({
+        agentAddress: agentContext.agentAddress,
+        agentName: agent?.name || "Autonomous Agent",
+        humanOwner,
+        amount: shortfallAmount,
+        txHash: "",
+        memo: `Lifeline Overdraft x402 Drawdown for ${url}`,
+      });
+
+      addPending({
+        humanOwner,
+        agentAddress: agentContext.agentAddress,
+        amountUsdc: shortfallAmount,
+        reference: "x402",
+        loanId: loan.loanId,
+      });
+
+      // Settles only once the position is worth the gas, or has waited long
+      // enough. Most calls return here without touching the chain at all.
+      const flush = await flushAgent(humanOwner, agentContext.agentAddress);
+      const arcTxHash = flush.txHash ?? "";
+
+      // The agent owes what the loan says: principal and its 1% fee, the same
+      // as a direct draw. Adding the principal alone left the fee off the
+      // debt the dashboard showed, and the first repayment quietly paid it.
+      if (agent) {
+        updateAgentInStore(agent.address, {
+          outstandingDebt: Math.round((agent.outstandingDebt + loan.outstandingAmount) * 10000) / 10000,
+          totalBorrowed: Math.round((agent.totalBorrowed + shortfallAmount) * 10000) / 10000,
+          status: "Active",
+        });
       }
 
       const settleHeader = paidResponse.headers.get("PAYMENT-RESPONSE");

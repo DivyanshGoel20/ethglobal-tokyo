@@ -101,7 +101,15 @@ export async function POST(req: NextRequest) {
     // subtracts from the debt it can see, and un-flushed drawdowns are not
     // part of that yet - repaying the full off-chain balance against a
     // smaller on-chain one would be refused.
-    await flushAgent(payingAgent.humanOwner, payingAgent.address, { force: true });
+    //
+    // Every agent of this human, not only the one paying: the repayment below
+    // clears the human's oldest loans first, whichever agent drew them. Flushing
+    // only the payer left a sibling's pending payments off chain, so the
+    // contract clamped the repayment to less than the app applied, and the
+    // sibling's debt reached the chain later with nothing left to clear it.
+    for (const sibling of getAgentsByOwner(payingAgent.humanOwner)) {
+      await flushAgent(payingAgent.humanOwner, sibling.address, { force: true });
+    }
 
     const humanFacility = getHumanFacilityStats(payingAgent.humanOwner);
     // Arc debt only: what is owed on Sui is repaid on Sui, by the obligation

@@ -79,6 +79,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2b. The agent's own cap. A purchase on credit already respects it; a
+    // direct draw did not, so an agent capped at fifty cents could draw
+    // whatever the human's line had left.
+    const agentAvailable = Math.max(0, (agent.creditLimit || 0) - (agent.outstandingDebt || 0));
+    if (borrowAmount > agentAvailable + 0.0001) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Draw exceeds this agent's cap. It may borrow $${agentAvailable.toFixed(2)} more; requested $${borrowAmount.toFixed(2)}.`,
+        },
+        { status: 403 }
+      );
+    }
+
     // 3. Human Borrower Credit Limits & Outstanding Headroom (Strictly Shared Pool)
     const facility = getHumanFacilityStats(agent.humanOwner);
     const facilityAvailable = facility.totalAvailableCredit;
