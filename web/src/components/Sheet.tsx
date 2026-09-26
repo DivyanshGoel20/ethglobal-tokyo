@@ -24,18 +24,18 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, kicker, chil
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="sheet-wrap fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "var(--scrim)" }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="sheet rise w-full" style={{ maxWidth: width }} role="dialog" aria-modal="true" aria-label={title}>
+      <div className="sheet sheet-panel rise w-full" style={{ maxWidth: width }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 rule-b">
           <div>
             {kicker && <div className="lab mb-1.5">{kicker}</div>}
             <h2 className="serif text-[26px] leading-none">{title}</h2>
           </div>
           <button onClick={onClose} className="btn btn-quiet" aria-label="Close">
-            esc
+            close
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>

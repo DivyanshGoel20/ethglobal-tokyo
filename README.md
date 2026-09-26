@@ -96,6 +96,31 @@ Type is Newsreader for words, Martian Mono for every figure, Hanken Grotesk for
 the rest. Red is reserved for money that was lent; nothing else on the page is
 that colour.
 
+## In World App
+
+Lifeline also runs as a World mini app, at `/mini`: the same line, agents and
+rails as the dashboard - one state, shared between the two - laid out the way
+World's design guidelines ask. A tab bar (Pulse, Owed, Tape, Record), sheets
+that rise from the bottom, the purchase anchored above the tabs, the user's
+World username instead of an address, and a haptic tap when money moves.
+
+Sign-in follows World's guidance that World ID is not a login:
+
+- **The wallet is the login.** MiniKit's Sign-In with Ethereum, one tap, every
+  visit, verified server-side against a nonce this server issued.
+- **World ID runs once.** The first time, the uniqueness proof - native in
+  World App, no QR code - establishes the human, and the wallet is linked to
+  them for good. A wallet is never moved to a second human.
+- **Already signed up in a browser?** World ID will not issue a uniqueness proof
+  twice, so the signed-in dashboard vouches instead: *World App* in its header
+  shows a QR code for a ten-minute, one-use link that opens Lifeline in World
+  App and binds the wallet that opens it.
+
+To try it on a phone, expose the app over HTTPS (`ngrok http 3000`), set the
+mini app URL in the World Developer Portal to `https://<tunnel>/mini`, and open
+`https://world.org/mini-app?app_id=<your app id>`. Set `NEXT_PUBLIC_MINIAPP_ID`
+if the mini app is a different Developer Portal app from the World ID one.
+
 ## The payment flow
 
 1. An agent requests a metered resource and gets `402` with the requirements in

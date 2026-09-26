@@ -192,7 +192,7 @@ export const Monitor: React.FC<MonitorProps> = ({
   );
 };
 
-const AuthorizeSheet: React.FC<{
+export const AuthorizeSheet: React.FC<{
   open: boolean;
   onClose: () => void;
   onAddAgent: MonitorProps["onAddAgent"];

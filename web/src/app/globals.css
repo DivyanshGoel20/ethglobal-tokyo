@@ -420,3 +420,47 @@ select.field {
       "trace trace";
   }
 }
+
+/* ── The World App shell ──────────────────────────────────────────────── */
+
+/* Inside the mini app every sheet is a drawer: it rises from the bottom and
+   sits 12px above the system bar, as World's design guidelines ask. */
+[data-shell="mini"] .sheet-wrap {
+  align-items: flex-end;
+  padding: 0 0 calc(12px + env(safe-area-inset-bottom));
+}
+[data-shell="mini"] .sheet-panel {
+  max-width: none !important;
+  max-height: 88dvh;
+  overflow-y: auto;
+  border-left: 0;
+  border-right: 0;
+  box-shadow: none;
+}
+[data-shell="mini"] .sheet-panel.rise {
+  animation: drawer 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes drawer {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* No rubber-band scrolling in the webview; the page scrolls inside the shell. */
+html[data-shell="mini"],
+html[data-shell="mini"] body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+.tabbar button[aria-current="page"] {
+  color: var(--ink);
+}
+.tabbar button[aria-current="page"] .tab-mark {
+  background: var(--alarm);
+}
