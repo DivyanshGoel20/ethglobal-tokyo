@@ -20,8 +20,6 @@
     "@lifeline/sui": "*",
     "@stripe/react-stripe-js": "^6.12.0",
     "@stripe/stripe-js": "^9.17.0",
-    "@worldcoin/agentkit": "^0.2.1",
-    "@worldcoin/agentkit-cli": "^0.2.0",
     "@worldcoin/idkit": "^4.3.0",
     "@worldcoin/minikit-js": "^2.0.3",
     "@worldcoin/minikit-react": "^2.0.3",

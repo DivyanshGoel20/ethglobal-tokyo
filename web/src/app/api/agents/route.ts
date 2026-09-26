@@ -4,15 +4,14 @@ import { getAgentWalletUsdc } from "@/lib/walletBalance";
 import { Agent } from "@/types";
 import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore, agentRail } from "@/lib/agentStore";
 import { validateArcAgentWallet } from "@/lib/arc";
-import { resolveAgentBookStatus } from "@/lib/agentKit";
 import { LifelineSigner } from "@/lib/lifelineSigner";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
 import { hasAgentPrivateKey, setAgentPrivateKey } from "@/lib/agentKeys";
 import { withSuiState } from "@/lib/suiRail";
 
 function sanitizeAgentForClient(agent: Agent): Agent {
-  // Strip out internal agentBookHumanId to protect human privacy in UI
-  const { agentBookHumanId, ...rest } = agent;
+  // Records written before AgentKit was removed may still carry its human id.
+  const { agentBookHumanId: _hidden, ...rest } = agent as Agent & { agentBookHumanId?: string };
   return rest as Agent;
 }
 
@@ -121,9 +120,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // AgentKit AgentBook verification on World Chain
-    const agentBookInfo = await resolveAgentBookStatus(formattedAddress);
-
     const newAgent: Agent = {
       agentId: `agent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       address: formattedAddress,
@@ -140,10 +136,7 @@ export async function POST(req: NextRequest) {
       currentBalance: validation.balanceUsdc || 0,
       status: "Healthy",
       registeredAt: Date.now(),
-      isWorldBacked: agentBookInfo.isWorldBacked,
       isAutonomous: hasAgentPrivateKey(formattedAddress),
-      agentBookStatus: agentBookInfo.agentBookStatus,
-      agentBookHumanId: agentBookInfo.humanId || undefined,
     };
 
     const saved = addAgentToStore(newAgent);
@@ -169,8 +162,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       agent: sanitizeAgentForClient(saved),
-      agentBookStatus: agentBookInfo.agentBookStatus,
-      isWorldBacked: agentBookInfo.isWorldBacked,
       authorizedOnChain,
       ...(authorizationError ? { authorizationError } : {}),
       message: authorizedOnChain

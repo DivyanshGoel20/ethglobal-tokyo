@@ -49,21 +49,11 @@ export function saveAllAgents(agents: Agent[]) {
   }
 }
 
-export function getAgentsByOwner(owner?: string, agentBookHumanId?: string): Agent[] {
+export function getAgentsByOwner(owner?: string): Agent[] {
   const all = getAllAgents();
-  if (!owner && !agentBookHumanId) return all;
+  if (!owner) return all;
   return all.filter((a) => {
-    if (
-      agentBookHumanId &&
-      a.agentBookHumanId &&
-      a.agentBookHumanId.toLowerCase() === agentBookHumanId.toLowerCase()
-    ) {
-      return true;
-    }
-    if (owner && a.humanOwner && a.humanOwner.toLowerCase() === owner.toLowerCase()) {
-      return true;
-    }
-    return false;
+    return !!a.humanOwner && a.humanOwner.toLowerCase() === owner.toLowerCase();
   });
 }
 
@@ -116,8 +106,7 @@ export function getAgentByAddress(address: string): Agent | null {
 export const agentRail = (agent: Pick<Agent, "rail">): "arc" | "sui" => (agent.rail === "sui" ? "sui" : "arc");
 
 export function getHumanFacilityStats(
-  humanOwner: string,
-  agentBookHumanId?: string
+  humanOwner: string
 ): {
   humanOwner: string;
   agentCount: number;
@@ -129,7 +118,7 @@ export function getHumanFacilityStats(
   totalRepaid: number;
 } {
   // Arc's agents only: a Sui agent is on the Sui line.
-  const humanAgents = getAgentsByOwner(humanOwner, agentBookHumanId).filter((a) => agentRail(a) === "arc");
+  const humanAgents = getAgentsByOwner(humanOwner).filter((a) => agentRail(a) === "arc");
   const tier = getHumanCreditTier(humanOwner, "arc");
   const totalCreditLimit = tier.creditLimit;
   const arcOutstandingDebt = Math.round(

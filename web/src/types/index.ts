@@ -13,10 +13,6 @@ export interface Agent {
   purpose?: string;
   apiKey?: string;
   isPlatformCreated?: boolean;
-  isWorldBacked?: boolean;
-  agentBookStatus?: "VERIFIED" | "UNVERIFIED";
-  agentBookHumanId?: string; // Stored internally, omitted in client UI
-  agentBookTxHash?: string;  // World Chain AgentBook registration tx hash
   creditLimit: number;       // in USDC
   allocatedLimit?: number;
   outstandingDebt: number;   // in USDC
