@@ -117,19 +117,32 @@ test("the Open in World App link names the account, and only that", async () => 
   assert.equal(noSession.status, 409, "no link for an account with no session to prove");
 });
 
+test("two codes started in one browser each keep their own claim", async () => {
+  const a = await pairStart();
+  const b = await pairStart();
+  const codeA = (await a.json()).code;
+  const codeB = (await b.json()).code;
+  // Both claims survive in the same browser: approving the one on screen works.
+  const jar = `lifeline_pair_${codeA}=${cookieOf(a, `lifeline_pair_${codeA}`)}; lifeline_pair_${codeB}=${cookieOf(b, `lifeline_pair_${codeB}`)}`;
+  assert.equal((await pairApprove(post("/api/auth/pair/approve", { code: codeA }, sessionCookie(ALICE)))).status, 200);
+  const done = await pairPoll(get(`/api/auth/pair?code=${codeA}`, jar));
+  assert.equal((await done.json()).nullifierHash, ALICE);
+});
+
 test("a browser is paired from World App, once, and only by the browser that asked", async () => {
   const started = await pairStart();
   const { code } = await started.json();
-  const claim = `lifeline_pair=${cookieOf(started, "lifeline_pair")}`;
+  const claim = `lifeline_pair_${code}=${cookieOf(started, `lifeline_pair_${code}`)}`;
+  const poll = (c: string) => pairPoll(get(`/api/auth/pair?code=${code}`, c));
 
-  assert.equal((await (await pairPoll(get("/api/auth/pair", claim))).json()).status, "pending");
+  assert.equal((await (await poll(claim)).json()).status, "pending");
   assert.equal((await pairApprove(post("/api/auth/pair/approve", { code }))).status, 401, "approving needs a signed-in human");
   assert.equal((await pairApprove(post("/api/auth/pair/approve", { code }, sessionCookie(ALICE)))).status, 200);
   assert.equal((await pairApprove(post("/api/auth/pair/approve", { code }, sessionCookie(BOB)))).status, 400, "a code is approved once");
 
-  assert.equal((await (await pairPoll(get("/api/auth/pair", `lifeline_pair=${code}.not-the-claim`))).json()).status, "expired", "the code alone is not enough");
-  const done = await pairPoll(get("/api/auth/pair", claim));
+  assert.equal((await (await poll(`lifeline_pair_${code}=not-the-claim`)).json()).status, "expired", "the code alone is not enough");
+  const done = await poll(claim);
   assert.equal((await done.json()).nullifierHash, ALICE);
   assert.ok(cookieOf(done, "lifeline_session"));
-  assert.equal((await (await pairPoll(get("/api/auth/pair", claim))).json()).status, "expired", "collected once");
+  assert.equal((await (await poll(claim)).json()).status, "expired", "collected once");
 });

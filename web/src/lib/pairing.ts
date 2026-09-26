@@ -14,7 +14,7 @@ import { writeJsonAtomic } from "./atomicWrite";
  */
 type Pairing = { code: string; claimHash: string; human: string | null; expiresAt: number; collected: boolean };
 
-const TTL_MS = 5 * 60 * 1000;
+const TTL_MS = 10 * 60 * 1000;
 
 function file(): string {
   const candidates = [

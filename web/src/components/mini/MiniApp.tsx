@@ -65,7 +65,13 @@ export default function MiniApp() {
         body: JSON.stringify({ code: pairCode }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.success) throw new Error(d.error || "Could not sign that browser in.");
+      if (!res.ok || !d.success) {
+        throw new Error(
+          res.status === 400
+            ? "That code has expired or was already used. Show a new code on your computer and scan it again."
+            : d.error || "Could not sign that browser in."
+        );
+      }
       haptic("success");
       L.showToast("Your browser is signed in.");
     } catch (err: any) {

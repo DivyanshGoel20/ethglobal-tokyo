@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 
 /**
@@ -15,13 +15,18 @@ export const PairPanel: React.FC<{ onSignedIn: (human: string) => void; onClose:
   const [pair, setPair] = useState<{ code: string; url: string; qr: string; expiresAt: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
+  // One code per round. React runs effects twice in development, and each run
+  // started its own code; the request is shared instead.
+  const started = useRef<{ round: number; request: Promise<any> } | null>(null);
 
   useEffect(() => {
     let live = true;
     setPair(null);
     setError(null);
-    fetch("/api/auth/pair", { method: "POST" })
-      .then((r) => r.json())
+    if (started.current?.round !== round) {
+      started.current = { round, request: fetch("/api/auth/pair", { method: "POST" }).then((r) => r.json()) };
+    }
+    started.current.request
       .then(async (d) => {
         const qr = await QRCode.toDataURL(d.url, { margin: 1, width: 360, color: { dark: "#111111", light: "#ffffff" } });
         if (live) setPair({ ...d, qr });
@@ -35,7 +40,10 @@ export const PairPanel: React.FC<{ onSignedIn: (human: string) => void; onClose:
   useEffect(() => {
     if (!pair) return;
     const t = setInterval(async () => {
-      const d = await fetch("/api/auth/pair", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      // The code on screen, and only that one.
+      const d = await fetch(`/api/auth/pair?code=${encodeURIComponent(pair.code)}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null);
       if (d?.status === "approved") {
         clearInterval(t);
         onSignedIn(d.nullifierHash);
