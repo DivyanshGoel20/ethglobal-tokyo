@@ -18,10 +18,9 @@ can work when agents are free to create.
 **Arc** is an EVM chain where USDC is the native currency. The credit facility
 is a Solidity contract; x402 payments settle through Circle Gateway.
 
-**Sui** is a Move chain. The same facility is ported to Move - and the part
-the Hedera rail of Float - the ETHOnline project Lifeline grew out of - did
-with scheduled transfers, a repayment parked *before*
-the money is spent, is rebuilt from Sui objects.
+**Sui** is a Move chain. The same facility, in Move - plus a repayment the
+agent parks *before* the money is spent, built from Sui objects so it can be
+collected on its date without anyone having to be trusted to do it.
 
 ```
                      World ID  ─── one human, one credit line
@@ -30,8 +29,8 @@ the money is spent, is rebuilt from Sui objects.
             ▼                          ▼
   ┌───────────────────┐      ┌──────────────────────────┐
   │ Arc testnet       │      │ Sui                      │
-  │ FloatCredit-      │      │ float::facility          │
-  │ Facility.sol      │      │ float::obligation (Move) │
+  │ LifelineCredit-   │      │ lifeline::facility       │
+  │ Facility.sol      │      │ lifeline::obligation     │
   │                   │      │                          │
   │ x402 via Circle   │      │ x402 exact scheme,       │
   │ Gateway batching  │      │ gas sponsored by Lifeline│
@@ -50,32 +49,34 @@ One key is one agent on both rails: an agent's secp256k1 key is its Arc
 address and, unchanged, its Sui address. The agent that borrows is the agent
 that signs its own repayment, on either rail.
 
-## The Sui port
+## On Sui
 
-`sui/float` is `contracts/src/FloatCreditFacility.sol` in Move, plus what the
-Hedera rail proved on testnet, rebuilt for a chain with no scheduler.
+`sui/lifeline` is `contracts/src/LifelineCreditFacility.sol` in Move, plus the
+part of credit that is usually weakest: getting paid back. A promise to repay
+"on the 30th" is normally a keeper bot with a hot key, or an allowance the
+borrower can revoke the moment the goods arrive. Sui has no scheduled
+transactions, so the promise is made of objects instead.
 
-| Float on Arc / Hedera | Lifeline on Sui |
-|---|---|
-| `onlyOwner` | `AdminCap` - hold it to underwrite; transfer it to change owner |
-| profiles, limits, agent auth, batched drawdowns, `repayWithToken`, `markDefault`, `withdraw` | `float::facility`, same rules, same exploit tests |
-| drawdown records debt; money moves off-chain via Gateway | `obligation::draw` takes coins out of the facility **in the transaction that books the debt** |
-| HIP-423 schedule: borrower signs a dated transfer before the spend | `obligation::park`: the agent signs a dated claim on its `Purse` before it can draw |
-| consensus executes the schedule unattended | `obligation::collect` is open to anyone once due - no capability, same outcome for a stranger as for Lifeline |
-| empty account at expiry: `INSUFFICIENT_TOKEN_BALANCE`, nothing moves | purse short at the due date: `RepaymentDefaulted`, nothing moves, the debt keeps consuming the line |
-| tranche: one schedule for many payments, **collects the ceiling** | one obligation for many draws, **collects what was drawn** |
-| repay early by deleting the schedule | `obligation::settle`; also cures a default |
-| Blocky402 pays fees | Lifeline's operator sponsors every agent transaction |
-| — | while a pledge is outstanding, the purse will not release the coins covering it |
+| | Arc (Solidity) | Sui (Move) |
+|---|---|---|
+| underwriter | `onlyOwner` | `AdminCap` - hold it to underwrite; transfer it to change owner |
+| the ledger | profiles, limits, agent auth, batched drawdowns, `repayWithToken`, `markDefault`, `withdraw` | `lifeline::facility`, same rules, same exploit tests |
+| a drawdown | records debt; the money moves through Circle Gateway | `obligation::draw` takes coins out of the facility **in the transaction that books the debt** |
+| the promise to repay | - | `obligation::park`: the agent signs a dated claim on its `Purse` before it can draw |
+| collection | the operator books a repayment | `obligation::collect` is open to anyone once due - no capability, the same outcome for a stranger as for Lifeline |
+| a default | - | the purse is short at the due date: `RepaymentDefaulted`, nothing moves, the debt keeps consuming the line |
+| many payments | batched into one drawdown row | one obligation is a tranche that **collects what was drawn**, never its ceiling |
+| repaying early | `repayWithToken` | `obligation::settle`; also cures a default |
+| fees | paid by Lifeline's Gateway balance | Lifeline's operator sponsors every agent transaction |
+| earnings | - | while a pledge is outstanding, the purse will not release the coins covering it |
 
 Sui runs nothing on its own, so collection needs a caller. Lifeline's
 reconciliation is that caller (`npm run sui:reconcile` for a cron), but the
 function needs no permission: if Lifeline disappeared, anyone could still collect.
 
 The pledge lock covers what arrives in the purse. An agent that routes its
-earnings elsewhere can still leave its purse short - the same honest limit as a
-Hedera account that is emptied before its schedule runs, and it ends the same
-way: a default anyone can read on chain.
+earnings elsewhere can still leave its purse short - and it ends the way every
+default here does: in plain sight, on chain, for anyone to read.
 
 ## Reading the monitor
 
@@ -108,16 +109,20 @@ Sign-in follows World's guidance that World ID is not a login:
 
 - **The wallet is the login.** MiniKit's Sign-In with Ethereum, one tap, every
   visit, verified server-side against a nonce this server issued.
-- **World ID runs once.** The first time, the uniqueness proof - native in
-  World App, no QR code - establishes the human, and the wallet is linked to
-  them for good. A wallet is never moved to a second human.
-- **Already signed up in a browser?** World ID will not issue a uniqueness proof
-  twice, so the signed-in dashboard vouches instead: *World App* in its header
-  shows a QR code for a ten-minute, one-use link that opens Lifeline in World
-  App and binds the wallet that opens it.
+- **World ID runs once per wallet.** The first time a wallet is seen, World ID
+  - native in World App, no QR code - says which human is holding it, and the
+  wallet is linked to them for good. It is the same human, with the same line,
+  whether they first signed up in a browser or here. A wallet is never moved
+  to a second human.
+
+The World ID action must allow more than one verification per person (its
+*max verifications* in the Developer Portal), since the same person verifies
+once in the browser and once per World App wallet - and the proof's nullifier
+is what makes them the same human every time.
 
 To try it on a phone, expose the app over HTTPS (`ngrok http 3000`), set the
-mini app URL in the World Developer Portal to `https://<tunnel>/mini`, and open
+mini app URL in the World Developer Portal to `https://<tunnel>` (the root
+serves the mini app inside World App; `/mini` works too), and open
 `https://world.org/mini-app?app_id=<your app id>`. Set `NEXT_PUBLIC_MINIAPP_ID`
 if the mini app is a different Developer Portal app from the World ID one.
 
@@ -139,8 +144,8 @@ if the mini app is a different Developer Portal app from the World ID one.
 ## Layout
 
 ```text
-contracts/      Foundry: FloatCreditFacility for Arc, tests, deploy scripts
-sui/float/      Move package: facility, obligation, fusd (demo coin), tests
+contracts/      Foundry: LifelineCreditFacility for Arc, tests, deploy scripts
+sui/lifeline/      Move package: facility, obligation, fusd (demo coin), tests
 sui/src/        @lifeline/sui: Move client, x402 on Sui, the payer, reconcile
 sui/service/    the Sui x402 feed, metered per record
 sui/scripts/    deploy, lifecycle (both endings on chain), reconcile
@@ -209,12 +214,12 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (18) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts |
+| web tests (27) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
 | `e2e:sui` (20) | credit on Sui, Arc refusing what Sui drew, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
-| `sui:lifecycle` (18) | the Hedera lifecycle on Sui: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
+| `sui:lifecycle` (18) | both endings on chain: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
 
 World ID cannot be scripted - it needs a phone - so the end-to-end harnesses
 stand in for exactly one step: they provision the human's profile as the verify
@@ -225,7 +230,7 @@ app's HTTP API and real transactions.
 
 | | |
 |---|---|
-| Arc `FloatCreditFacility` | [`0xe382723bE95cB5c8801270a03Da17Bf4c27F320f`](https://testnet.arcscan.app/address/0xe382723bE95cB5c8801270a03Da17Bf4c27F320f), block 64024661 |
+| Arc `LifelineCreditFacility` | [`0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f`](https://testnet.arcscan.app/address/0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f), block 64053316 |
 | Arc USDC | `0x3600000000000000000000000000000000000000` (native, 6-decimal ERC-20 interface) |
 | Sui testnet package | [`0x14e7136b…`](https://suiscan.xyz/testnet/object/0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91), tx [`5spRKM7U37…`](https://suiscan.xyz/testnet/tx/5spRKM7U37KcxpXybiVKbWcm2RbykqYtPw1snYA6PvUL) |
 | Sui testnet `Facility<FUSD>` | [`0x9ab70797…`](https://suiscan.xyz/testnet/object/0x9ab70797320978608fce71b115d088e2d67c68d4eaf2941b5cbf382ed94e5cea), 500 FUSD liquidity |

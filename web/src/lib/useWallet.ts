@@ -26,7 +26,7 @@ const provider = (): Eip1193 | null =>
   typeof window !== "undefined" ? ((window as any).ethereum ?? null) : null;
 
 /** Fired on connect so other mounted copies of this hook resync at once. */
-const SYNC_EVENT = "float:wallet-sync";
+const SYNC_EVENT = "lifeline:wallet-sync";
 
 export type Wallet = {
   /** True when an extension exists at all. Never means connected. */

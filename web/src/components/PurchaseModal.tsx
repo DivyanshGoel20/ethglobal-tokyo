@@ -111,7 +111,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
 
   const link = result?.explorer ?? result?.arcTxLink ?? null;
   const tx = result?.digest ?? result?.arcTxHash ?? result?.txHash ?? result?.circleSettlementId ?? result?.transactionId;
-  const onCredit = result && (result.fundingSource === "FLOAT_CREDIT" || result.fundingSource === "FLOAT_FACILITY" || choice === "direct");
+  const onCredit = result && (result.fundingSource === "LIFELINE_CREDIT" || result.fundingSource === "LIFELINE_FACILITY" || choice === "direct");
 
   return (
     <Sheet open={isOpen} onClose={onClose} kicker={rail === "arc" ? "Arc · Circle Gateway" : "Sui · parked repayment"} title="x402 purchase">

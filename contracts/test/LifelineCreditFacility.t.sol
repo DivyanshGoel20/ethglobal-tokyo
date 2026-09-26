@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {MockUSDC} from "../src/MockUSDC.sol";
-import {FloatCreditFacility} from "../src/FloatCreditFacility.sol";
+import {LifelineCreditFacility} from "../src/LifelineCreditFacility.sol";
 
 abstract contract TestHelper {
     function assertTrue(bool condition) internal pure {
@@ -30,9 +30,9 @@ abstract contract TestHelper {
     }
 }
 
-contract FloatCreditFacilityTest is TestHelper {
+contract LifelineCreditFacilityTest is TestHelper {
     MockUSDC public usdc;
-    FloatCreditFacility public facility;
+    LifelineCreditFacility public facility;
 
     address public owner = address(this);
     address public humanOwner = address(0x1111);
@@ -43,7 +43,7 @@ contract FloatCreditFacilityTest is TestHelper {
 
     function setUp() public {
         usdc = new MockUSDC();
-        facility = new FloatCreditFacility(address(usdc));
+        facility = new LifelineCreditFacility(address(usdc));
 
         // Create human credit profile with $500 USDC limit (500 * 1e6)
         facility.createCreditProfile(profileId, humanOwner, humanRoot, 500 * 1e6);
@@ -54,7 +54,7 @@ contract FloatCreditFacilityTest is TestHelper {
     }
 
     function testProfileCreationAndAgentAuthorization() public {
-        FloatCreditFacility.CreditProfile memory p = facility.getProfile(profileId);
+        LifelineCreditFacility.CreditProfile memory p = facility.getProfile(profileId);
         assertEq(p.humanOwner, humanOwner);
         assertEq(p.creditLimit, 500 * 1e6);
         assertEq(p.outstandingDebt, 0);
@@ -73,14 +73,14 @@ contract FloatCreditFacilityTest is TestHelper {
         assertEq(facility.getOutstandingDebt(profileId), 30_000);
         assertEq(facility.getRemainingCredit(profileId), 500 * 1e6 - 30_000);
 
-        FloatCreditFacility.Drawdown memory d = facility.getDrawdown(loanId);
+        LifelineCreditFacility.Drawdown memory d = facility.getDrawdown(loanId);
         assertEq(d.agentAddress, agentA);
         assertEq(d.amount, 30_000);
         assertEq(d.referenceHash, keccak256(bytes("x402:/premium-data:tx1")));
         assertEq(d.paymentCount, 1);
 
         // Notice: Contract does NOT transfer USDC to agent, as the x402 payment
-        // is covered directly by Float's Gateway funding facility.
+        // is covered directly by Lifeline's Gateway funding facility.
         assertEq(usdc.balanceOf(agentA), 0);
     }
 

@@ -1,5 +1,5 @@
 /**
- * Float settlement rails: Arc and Sui.
+ * Lifeline settlement rails: Arc and Sui.
  *
  * Arc is the primary debt ledger and credit facility on EVM (Chain ID 5042002).
  * Sui is the non-EVM Move credit execution rail.

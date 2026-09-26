@@ -23,11 +23,11 @@ import {
   getPublicClient,
 } from "../../src/lib/facilityContract";
 
-const APP = process.env.FLOAT_APP_URL || "http://localhost:3000";
+const APP = process.env.LIFELINE_APP_URL || "http://localhost:3000";
 const PREMIUM = process.env.NEXT_PUBLIC_X402_RESOURCE_BASE || "http://localhost:4402";
 const HUMAN = process.env.E2E_HUMAN || "0x" + crypto.randomBytes(32).toString("hex");
 
-/** Native USDC from Float's operator to the agent: the customer, played by the demo. */
+/** Native USDC from Lifeline's operator to the agent: the customer, played by the demo. */
 async function payAgent(to: `0x${string}`, usdc: number): Promise<string> {
   const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
   const wallet = createWalletClient({ account, chain: arcTestnetChain, transport: getArcTransport() });
@@ -48,8 +48,8 @@ async function main() {
   const profile = await ensureHumanProfileOnChain(HUMAN);
   check("credit profile on Arc", true, profile.txHash ?? "(already existed)");
 
-  const token = attachSession(NextResponse.json({}), HUMAN).cookies.get("float_session")!.value;
-  const cookie = `float_session=${token}`;
+  const token = attachSession(NextResponse.json({}), HUMAN).cookies.get("lifeline_session")!.value;
+  const cookie = `lifeline_session=${token}`;
 
   const call = async (method: string, route: string, body?: unknown, auth = true) => {
     const res = await fetch(`${APP}${route}`, {
@@ -82,11 +82,11 @@ async function main() {
 
   // The drawdown above landed in the agent's own Gateway balance, so cent
   // purchases are paid by the agent and owe nothing. The dollar one is more
-  // than it holds, and Float covers the shortfall on credit.
+  // than it holds, and Lifeline covers the shortfall on credit.
   const purchases: [string, string][] = [
     [`${APP}/api/paid/signal`, "AGENT_GATEWAY"],
     [`${PREMIUM}/premium-data`, "AGENT_GATEWAY"],
-    [`${APP}/api/paid/risk-curve`, "FLOAT_FACILITY"],
+    [`${APP}/api/paid/risk-curve`, "LIFELINE_FACILITY"],
   ];
   for (const [url, expected] of purchases) {
     const paid = await call("POST", "/api/pay", { url, agentAddress: agent });

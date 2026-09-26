@@ -14,9 +14,9 @@ export const ARC_TESTNET_CHAIN_ID = 5042002;
  */
 export const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network";
 export const ARC_TESTNET_NAME = "Arc Testnet";
-export const FLOAT_CREDIT_FACILITY_ADDRESS = (process.env.FLOAT_CREDIT_FACILITY_ADDRESS ||
-  process.env.NEXT_PUBLIC_FLOAT_CREDIT_FACILITY_ADDRESS ||
-  "0xe382723bE95cB5c8801270a03Da17Bf4c27F320f") as `0x${string}`;
+export const LIFELINE_CREDIT_FACILITY_ADDRESS = (process.env.LIFELINE_CREDIT_FACILITY_ADDRESS ||
+  process.env.NEXT_PUBLIC_LIFELINE_CREDIT_FACILITY_ADDRESS ||
+  "0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f") as `0x${string}`;
 export const ARC_USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ||
   "0x3600000000000000000000000000000000000000") as `0x${string}`;
 
@@ -79,7 +79,7 @@ export async function validateArcAgentWallet(
 }
 
 /**
- * Provisions a fresh Arc Testnet agent wallet keypair and Float API authentication key.
+ * Provisions a fresh Arc Testnet agent wallet keypair and Lifeline API authentication key.
  * Compatible with Circle Agent Wallet architecture on Arc Testnet (ARC-TESTNET / 5042002).
  */
 export function provisionArcAgentWallet(): {
@@ -90,7 +90,7 @@ export function provisionArcAgentWallet(): {
   const privateKey = generatePrivateKey();
   const account = privateKeyToAccount(privateKey);
   const randomSuffix = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
-  const apiKey = `float_sk_${randomSuffix}`;
+  const apiKey = `lifeline_sk_${randomSuffix}`;
 
   return {
     address: account.address,

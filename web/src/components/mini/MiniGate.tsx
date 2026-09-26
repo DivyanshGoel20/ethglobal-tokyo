@@ -14,13 +14,13 @@ const IDKitRequestWidget = dynamic(() => import("@worldcoin/idkit").then((m) => 
  *
  * The wallet is the login: MiniKit's Sign-In with Ethereum, one tap, every
  * visit - World's own guidance is not to use World ID as a login. World ID
- * does the one thing only it can: the first time, it proves this is a unique
- * human, and the wallet is linked to them for good. Inside World App the proof
- * is native; there is no QR code to scan.
+ * does the one thing only it can: the first time a wallet is seen, it proves
+ * which unique human is holding it, and the wallet is linked to them for good.
+ * That is the same human, with the same line, whether they signed up here or
+ * in a browser. Inside World App the proof is native; there is no QR code.
  *
- *   returning:  wallet  -> in
- *   first time: wallet  -> World ID (once) -> linked -> in
- *   from a link made in a signed-in browser: wallet -> linked -> in
+ *   returning wallet:  wallet -> in
+ *   new wallet:        wallet -> World ID -> linked -> in
  */
 export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (k: "success" | "error") => void }> = ({
   onSignedIn,
@@ -33,7 +33,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
   const human = useRef("");
 
   const appId = (process.env.NEXT_PUBLIC_WORLD_APP_ID || "app_6ad9b6ef952f1c2a9a70a58e05aa9878") as `app_${string}`;
-  const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "float-credit-line";
+  const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "lifeline-human-verify";
 
   useEffect(() => {
     setInWorldApp(MiniKit.isInWorldApp());
@@ -57,11 +57,10 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
       });
       if (result.executedWith === "fallback") return fail("Open Lifeline inside World App to sign in with your wallet.");
 
-      const linkToken = new URLSearchParams(window.location.search).get("link");
       const res = await fetch("/api/auth/wallet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload: result.data, linkToken }),
+        body: JSON.stringify({ payload: result.data }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.verified) return fail(data.error || "Wallet sign-in failed.");
@@ -71,7 +70,8 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
         return onSignedIn(data.nullifierHash);
       }
 
-      // First time: World ID proves this is one human, once.
+      // First time with this wallet: World ID says which human it belongs to -
+      // the same human if they already signed up in a browser.
       const ctx = await (await fetch("/api/auth/world-rp-context", { cache: "no-store" })).json();
       setRpContext({
         rp_id: ctx.rp_id,
@@ -106,7 +106,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
     haptic("error");
     setError(
       String(code) === "nullifier_replayed"
-        ? "You already have a Lifeline account. Sign in to Lifeline in a browser and choose Open in World App to link this wallet to it."
+        ? "World ID will only verify this action once per person, so it cannot confirm who you are again. The action's max verifications needs raising in the World Developer Portal."
         : `World ID did not complete (${code}).`
     );
   };
@@ -159,7 +159,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
         {step === "prove" ? (
           <>
             <p className="text-[13px] ink-2 leading-relaxed mb-4">
-              First time here. World ID proves you are one unique human - once - and your line is opened.
+              First time in World App. World ID confirms you are you - one human, one line - and this wallet is linked to it.
             </p>
             <button onClick={() => setStep("proving")} className="btn btn-solid w-full justify-center h-12">
               Verify with World ID

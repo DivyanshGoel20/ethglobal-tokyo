@@ -4,7 +4,7 @@
 /// Circle's USDC as it is. But testnet USDC comes from a faucet with a captcha,
 /// which no script or CI run can pass - so the demos lend this instead, minted
 /// in small amounts to anyone who asks. It is worth exactly nothing.
-module float::fusd;
+module lifeline::fusd;
 
 use sui::coin::{Coin, TreasuryCap};
 use sui::coin_registry;
@@ -27,8 +27,8 @@ fun init(otw: FUSD, ctx: &mut TxContext) {
         otw,
         6,
         b"FUSD".to_string(),
-        b"Float Test Dollar".to_string(),
-        b"A worthless 6-decimal dollar for exercising Float on Sui".to_string(),
+        b"Lifeline Test Dollar".to_string(),
+        b"A worthless 6-decimal dollar for exercising Lifeline on Sui".to_string(),
         b"".to_string(),
         ctx,
     );

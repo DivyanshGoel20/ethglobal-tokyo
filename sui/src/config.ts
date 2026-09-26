@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Where Float's Sui rail lives.
+ * Where Lifeline's Sui rail lives.
  *
  * A deployment is written to sui/deployments/<network>.json by the deploy
  * script, so a fresh clone that runs `npm run sui:deploy` is configured without
@@ -50,7 +50,7 @@ export function suiDir(): string {
     path.resolve(process.cwd(), "..", "sui"),
     path.resolve(__dirname, ".."),
   ]) {
-    if (fs.existsSync(path.join(c, "float", "Move.toml"))) return c;
+    if (fs.existsSync(path.join(c, "lifeline", "Move.toml"))) return c;
   }
   return path.resolve(process.cwd(), "sui");
 }
@@ -106,7 +106,7 @@ export const toUnits = (usd: number) => BigInt(Math.round(usd * 10 ** DECIMALS))
 export const fromUnits = (units: bigint | string | number) => Number(units) / 10 ** DECIMALS;
 
 /** How long a parked repayment has before it falls due. */
-export const termMs = () => Number(process.env.FLOAT_TERM_SECONDS || 604_800) * 1000;
+export const termMs = () => Number(process.env.LIFELINE_TERM_SECONDS || 604_800) * 1000;
 
 /** One parked obligation covers draws up to this, then a new one is parked. */
-export const trancheCeilingUsd = () => Number(process.env.FLOAT_TRANCHE_CEILING || 0.5);
+export const trancheCeilingUsd = () => Number(process.env.LIFELINE_TRANCHE_CEILING || 0.5);

@@ -12,7 +12,7 @@ import { writeJsonAtomic } from "./atomicWrite";
  *
  * Two properties this file has to hold:
  *
- * Durability. A payment has already left Float's Gateway balance by the time it
+ * Durability. A payment has already left Lifeline's Gateway balance by the time it
  * lands here, so losing an entry means losing the debt. Entries are persisted
  * before the payment is reported as successful, never after.
  *

@@ -16,7 +16,7 @@ export function suiClient(): SuiGrpcClient {
 }
 
 /**
- * Float's operator on Sui: holds the AdminCap, sponsors agents' gas and runs
+ * Lifeline's operator on Sui: holds the AdminCap, sponsors agents' gas and runs
  * collection when obligations fall due. `suiprivkey…` from `sui keytool`.
  */
 export function operatorKeypair(): Keypair {

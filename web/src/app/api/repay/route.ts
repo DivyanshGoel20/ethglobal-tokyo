@@ -12,7 +12,7 @@ import {
   getAgentsByOwner,
 } from "@/lib/agentStore";
 import { processRepayment, getLoansByAgent } from "@/lib/loanStore";
-import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, FLOAT_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
+import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
 import { executeOnChainRepayment, verifyArcRepayment } from "@/lib/facilityContract";
 import { claimReceipt, releaseReceipt } from "@/lib/receiptStore";
 
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Resolve Beneficiary / Target Agent
-    // In Float, the Human is the actual borrower.
+    // In Lifeline, the Human is the actual borrower.
     // Sibling agents under the same human can repay each other's debt seamlessly.
     let beneficiaryAddress = payingAgent.address;
     if (targetAgentAddress) {
@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
       payingAgentName: payingAgent.name,
       beneficiaryAgentName: updatedBeneficiary?.name || payingAgent.name,
       network: `${ARC_TESTNET_NAME} (${ARC_TESTNET_CHAIN_ID})`,
-      facilityContractAddress: FLOAT_CREDIT_FACILITY_ADDRESS,
+      facilityContractAddress: LIFELINE_CREDIT_FACILITY_ADDRESS,
       message,
     });
   } catch (error: any) {

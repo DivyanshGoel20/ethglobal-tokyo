@@ -1,4 +1,4 @@
-process.env.FLOAT_SESSION_SECRET = "test-secret-that-is-at-least-32-chars-long";
+process.env.LIFELINE_SESSION_SECRET = "test-secret-that-is-at-least-32-chars-long";
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,7 +9,6 @@ import { mintToken, readToken } from "../src/lib/signedToken";
 import { humanForWallet, linkWallet } from "../src/lib/walletLinks";
 import { POST as walletPOST } from "../src/app/api/auth/wallet/route";
 import { POST as linkPOST } from "../src/app/api/auth/wallet/link/route";
-import { POST as linkTokenPOST } from "../src/app/api/auth/wallet/link-token/route";
 import { GET as noncePOST } from "../src/app/api/auth/wallet/nonce/route";
 
 useSandbox();
@@ -17,7 +16,7 @@ const A = "0x" + "aa".repeat(32);
 const B = "0x" + "bb".repeat(32);
 const WALLET = "0x" + "12".repeat(20);
 
-const session = (h: string) => `float_session=${attachSession(NextResponse.json({}), h).cookies.get("float_session")!.value}`;
+const session = (h: string) => `lifeline_session=${attachSession(NextResponse.json({}), h).cookies.get("lifeline_session")!.value}`;
 const req = (url: string, cookie?: string, body?: unknown) =>
   new NextRequest(url, {
     method: "POST",
@@ -59,13 +58,6 @@ test("a wallet cookie cannot be forged from a link token", async () => {
   const forged = `${session(B)}; lifeline_wallet=${mintToken("link", { w: "0x" + "56".repeat(20) }, 60)}`;
   const res = await linkPOST(req("http://t/api/auth/wallet/link", forged));
   assert.equal(res.status, 400);
-});
-
-test("only a signed-in human can mint a link into World App", async () => {
-  assert.equal((await linkTokenPOST(req("http://t/api/auth/wallet/link-token"))).status, 401);
-  const res = await linkTokenPOST(req("http://t/api/auth/wallet/link-token", session(A)));
-  const body = await res.json();
-  assert.match(body.url, /^https:\/\/world\.org\/mini-app\?app_id=.*&path=%2Fmini%3Flink%3D/);
 });
 
 test("wallet sign-in without the nonce it was issued is refused", async () => {

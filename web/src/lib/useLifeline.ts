@@ -213,7 +213,7 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
 
   const activities: ActivityItem[] = railPayments.map((p) => ({
     id: p.paymentId,
-    type: p.fundingSource === "FLOAT_FACILITY" ? "x402_overdraft" : "x402_normal",
+    type: p.fundingSource === "LIFELINE_FACILITY" ? "x402_overdraft" : "x402_normal",
     agentName: nameOf(p.agentAddress),
     agentAddress: p.agentAddress,
     amount: Number(p.requestedAmount),

@@ -13,11 +13,11 @@ import {
 } from "./bcs";
 
 /**
- * Float's Move facility, from TypeScript.
+ * Lifeline's Move facility, from TypeScript.
  *
- * Every transaction an agent signs is sponsored: Float's operator is the gas
+ * Every transaction an agent signs is sponsored: Lifeline's operator is the gas
  * owner, so an agent holding nothing but a debt still transacts - the Sui
- * equivalent of Blocky402 paying fees on Hedera.
+ * equivalent of a facilitator paying the fees.
  */
 
 const target = (d: Deployment, module: string, fn: string) => `${d.packageId}::${module}::${fn}` as const;
@@ -69,7 +69,7 @@ export async function execute(
   try {
     result = await run(tx);
   } catch (err: any) {
-    // The sponsor's gas coin moves whenever a seller submits a payment Float
+    // The sponsor's gas coin moves whenever a seller submits a payment Lifeline
     // signed, in a process this one cannot see. A read that has not caught up
     // yet hands back the old version; waiting a beat and rebuilding fixes it.
     if (!/unavailable for consumption|needs to be rebuilt/i.test(err?.message ?? "")) throw err;
@@ -117,7 +117,7 @@ const createdOf = (r: Executed, suffix: string) => {
   return found.objectId;
 };
 
-// === Underwriter (Float's operator, holding the AdminCap) ===
+// === Underwriter (Lifeline's operator, holding the AdminCap) ===
 
 export async function createProfile(
   operator: Keypair,
@@ -218,7 +218,7 @@ export async function mintDemoDollars(sender: Keypair, to: string, units: bigint
   return execute(tx, sender);
 }
 
-// === Agent (signs, Float sponsors gas) ===
+// === Agent (signs, Lifeline sponsors gas) ===
 
 export async function openPurse(agent: Keypair, sponsor: Keypair, profileId: string): Promise<string> {
   const d = requireDeployment();
@@ -356,7 +356,7 @@ export async function depositToPurse(payer: Keypair, purseId: string, units: big
 }
 
 /**
- * Anyone, once due. Float runs this from reconciliation, but it needs no
+ * Anyone, once due. Lifeline runs this from reconciliation, but it needs no
  * capability - a stranger calling it gets exactly the same outcome.
  */
 export async function collect(caller: Keypair, args: { purseId: string; obligationId: string }) {

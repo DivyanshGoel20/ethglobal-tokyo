@@ -3,7 +3,7 @@
  *
  * These scores are derived from repayment behaviour: an agent that has drawn on
  * a credit line and settled on time scores well, one that has let a parked
- * repayment default does not. In production the inputs are Float's own facility
+ * repayment default does not. In production the inputs are Lifeline's own facility
  * ledger and the obligation events on Sui, both already recorded per drawdown.
  *
  * The sample below is fixed rather than random, so a demo run is reproducible

@@ -1,6 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { MiniKit } from "@worldcoin/minikit-js";
 import { WorldAuthGate } from "@/components/WorldAuthGate";
 import { Header } from "@/components/Header";
 import { Vitals } from "@/components/Vitals";
@@ -14,7 +16,27 @@ import { RepayModal } from "@/components/RepayModal";
 import { LifelineMark } from "@/components/Pulse";
 import { useLifeline } from "@/lib/useLifeline";
 
+const MiniApp = dynamic(() => import("@/components/mini/MiniApp"), { ssr: false });
+
+/**
+ * Opened inside World App, the root is the mini app - so the Developer
+ * Portal's App URL works whether it points here or at /mini.
+ */
 export default function Home() {
+  const [inWorldApp, setInWorldApp] = useState<boolean | null>(null);
+  useEffect(() => setInWorldApp(MiniKit.isInWorldApp()), []);
+
+  if (inWorldApp === null) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <LifelineMark size={22} className="pulse-dot" />
+      </div>
+    );
+  }
+  return inWorldApp ? <MiniApp /> : <Dashboard />;
+}
+
+function Dashboard() {
   const L = useLifeline();
 
   if (L.isLoadingSession) {

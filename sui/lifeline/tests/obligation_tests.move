@@ -1,11 +1,11 @@
-/// The parked repayment, tested the way the Hedera rail was proved on testnet:
+/// The parked repayment, tested end to end:
 /// a borrower signs once, the obligation comes due, and it either collects or
 /// defaults in plain sight - with nobody needing to be trusted to run it.
 #[test_only]
-module float::obligation_tests;
+module lifeline::obligation_tests;
 
-use float::facility::{Self, Facility, AdminCap};
-use float::obligation::{Self, Purse, Obligation};
+use lifeline::facility::{Self, Facility, AdminCap};
+use lifeline::obligation::{Self, Purse, Obligation};
 use sui::clock::{Self, Clock};
 use sui::coin;
 use sui::test_scenario::{Self as ts, Scenario};
@@ -15,7 +15,7 @@ public struct USDC has drop {}
 /// An agent's purse and the obligation parked against it.
 public struct Ids has copy, drop { purse: ID, ob: ID }
 
-const FLOAT: address = @0xF1;
+const OPERATOR: address = @0xF1;
 const HUMAN: address = @0xA1;
 const AGENT: address = @0xA2;
 const IDLER: address = @0xA3;
@@ -28,15 +28,15 @@ const WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
 
 fun pid(): vector<u8> { b"profile-human-1" }
 
-/// Float underwrites HUMAN, authorises both agents and funds the facility.
+/// Lifeline underwrites HUMAN, authorises both agents and funds the facility.
 fun begin(): (Scenario, Clock) {
-    let mut sc = ts::begin(FLOAT);
+    let mut sc = ts::begin(OPERATOR);
     let cap = facility::create<USDC>(sc.ctx());
-    transfer::public_transfer(cap, FLOAT);
+    transfer::public_transfer(cap, OPERATOR);
     let mut clock = clock::create_for_testing(sc.ctx());
     clock.set_for_testing(1_000_000);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.create_credit_profile(&cap, pid(), HUMAN, b"world-root", LIMIT, &clock);
@@ -118,7 +118,7 @@ fun settle_as(sc: &mut Scenario, clock: &Clock, caller: address, ids: Ids) {
 }
 
 fun status_of(sc: &mut Scenario, ob_id: ID): u8 {
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let ob = sc.take_shared_by_id<Obligation<USDC>>(ob_id);
     let s = ob.status();
     ts::return_shared(ob);
@@ -126,7 +126,7 @@ fun status_of(sc: &mut Scenario, ob_id: ID): u8 {
 }
 
 fun purse_state(sc: &mut Scenario, purse_id: ID): (u64, u64) {
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let purse = sc.take_shared_by_id<Purse<USDC>>(purse_id);
     let balance = purse.purse_balance();
     let pledged = purse.purse_pledged();
@@ -135,7 +135,7 @@ fun purse_state(sc: &mut Scenario, purse_id: ID): (u64, u64) {
 }
 
 fun facility_state(sc: &mut Scenario): (u64, u64) {
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let f = sc.take_shared<Facility<USDC>>();
     let debt = f.outstanding_debt(pid());
     let liquidity = f.liquidity();
@@ -173,7 +173,7 @@ fun one_parked_promise_covers_many_payments() {
     buy_on_credit(&mut sc, &clock, AGENT, ids, 5_000);
     buy_on_credit(&mut sc, &clock, AGENT, ids, 5_000);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let ob = sc.take_shared_by_id<Obligation<USDC>>(ids.ob);
     assert!(ob.drawn() == 20_000);
     assert!(ob.ceiling() == 50_000);
@@ -249,7 +249,7 @@ fun a_revoked_agent_cannot_draw_on_an_old_obligation() {
 #[test, expected_failure(abort_code = facility::EInsufficientLiquidity)]
 fun a_draw_needs_liquidity_behind_it() {
     let (mut sc, clock) = begin();
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.withdraw(&cap, LIQUIDITY, sc.ctx()).burn_for_testing();
@@ -325,7 +325,7 @@ fun a_funded_purse_repays_on_its_date_with_nobody_trusted() {
     earn(&mut sc, ids.purse, 20_000);
 
     clock.increment_for_testing(WEEK_MS);
-    // A stranger runs it: collection needs no keeper Float has to trust.
+    // A stranger runs it: collection needs no keeper Lifeline has to trust.
     collect_as(&mut sc, &clock, STRANGER, ids);
 
     assert!(status_of(&mut sc, ids.ob) == obligation::status_settled());

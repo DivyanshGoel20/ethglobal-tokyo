@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { POST as borrowHandler } from "@/app/api/borrow/route";
-import { FLOAT_CREDIT_FACILITY_ADDRESS, ARC_TESTNET_CHAIN_ID } from "@/lib/arc";
+import { LIFELINE_CREDIT_FACILITY_ADDRESS, ARC_TESTNET_CHAIN_ID } from "@/lib/arc";
 
 /**
  * x402 Borrow API
@@ -16,7 +16,7 @@ export async function GET() {
     action: "borrow",
     network: "Arc Testnet",
     chainId: ARC_TESTNET_CHAIN_ID,
-    facilityAddress: FLOAT_CREDIT_FACILITY_ADDRESS,
+    facilityAddress: LIFELINE_CREDIT_FACILITY_ADDRESS,
     method: "POST",
     description: "Draw USDC against the the Lifeline facility on Arc Testnet. Underwritten by verified human World ID.",
     requestSchema: {
@@ -24,6 +24,6 @@ export async function GET() {
       amount: "number (USDC to draw, e.g. 5.0)",
       memo: "optional string (purpose or x402 resource reference)"
     },
-    authorization: "Bearer <FLOAT_AGENT_TOKEN> or World ID session cookie"
+    authorization: "Bearer <LIFELINE_AGENT_TOKEN> or World ID session cookie"
   });
 }

@@ -87,7 +87,7 @@ export function riskCurveSvg(agent: string): string {
   <line x1="${x0}" y1="${yBot}" x2="${x1}" y2="${yBot}" stroke="${INK}" stroke-width="1"/>
   <text class="b" x="${x0}" y="${H - 30}" font-size="9">D-29</text>
   <text class="b" x="${x1}" y="${H - 30}" font-size="9" text-anchor="end">TODAY</text>
-  <text class="m" x="28" y="${H - 14}" font-size="8.5">PEAK ${Math.round(peak * 100)} · CURRENT ${Math.round(last * 100)} · FLOAT ARC RISK FEED</text>
+  <text class="m" x="28" y="${H - 14}" font-size="8.5">PEAK ${Math.round(peak * 100)} · CURRENT ${Math.round(last * 100)} · LIFELINE ARC RISK FEED</text>
 </svg>`;
 }
 
@@ -144,6 +144,6 @@ export function dossierSvg(agent: string): string {
     )
     .join("")}
 
-  <text class="m" x="28" y="${H - 16}" font-size="8">PRICED PER DOCUMENT · SETTLED OVER X402 · FLOAT RISK FEED</text>
+  <text class="m" x="28" y="${H - 16}" font-size="8">PRICED PER DOCUMENT · SETTLED OVER X402 · LIFELINE RISK FEED</text>
 </svg>`;
 }

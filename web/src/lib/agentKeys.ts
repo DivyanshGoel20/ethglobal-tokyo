@@ -17,11 +17,11 @@ import { ARC_RPC_URL } from "./arc";
  * Three properties that plaintext-in-a-file did not have:
  *
  *   Encrypted at rest. AES-256-GCM under a key derived from
- *   FLOAT_KEYSTORE_SECRET. A leaked repository, backup or laptop no longer
+ *   LIFELINE_KEYSTORE_SECRET. A leaked repository, backup or laptop no longer
  *   leaks spending authority - which is not hypothetical here, a key reached
  *   this project's git history exactly that way.
  *
- *   Bounded. A key is stored with a per-payment ceiling and an expiry. Float
+ *   Bounded. A key is stored with a per-payment ceiling and an expiry. Lifeline
  *   may sign payments up to that amount until that date, rather than anything
  *   at all forever.
  *
@@ -54,7 +54,7 @@ interface Keystore {
 }
 
 function secret(): string | null {
-  const s = process.env.FLOAT_KEYSTORE_SECRET;
+  const s = process.env.LIFELINE_KEYSTORE_SECRET;
   return s && s.length >= 16 ? s : null;
 }
 
@@ -117,7 +117,7 @@ function readLegacy(): Record<string, string> {
     }
     if (Object.keys(out).length > 0) {
       console.warn(
-        "[AgentKeys] Plaintext keys found in the keystore. Set FLOAT_KEYSTORE_SECRET " +
+        "[AgentKeys] Plaintext keys found in the keystore. Set LIFELINE_KEYSTORE_SECRET " +
           "and re-add the agent to store them encrypted."
       );
     }
@@ -166,7 +166,7 @@ export interface StoreKeyResult {
  *
  * The key must derive to the address it is being registered for. This used to
  * store a mismatch under both addresses without complaint, which meant a
- * mistyped pair silently pointed Float at somebody else's wallet - repayments
+ * mistyped pair silently pointed Lifeline at somebody else's wallet - repayments
  * would have moved USDC out of the wrong account, and an x402 payment would
  * check one balance and sign with another.
  */
@@ -205,7 +205,7 @@ export function setAgentPrivateKey(
     return {
       ok: false,
       error:
-        "FLOAT_KEYSTORE_SECRET is not set, so the key cannot be stored encrypted. " +
+        "LIFELINE_KEYSTORE_SECRET is not set, so the key cannot be stored encrypted. " +
         "Set it (16+ characters) and try again, or leave the key blank and let Lifeline sign.",
     };
   }
@@ -240,7 +240,7 @@ export function getAgentPrivateKey(address: string): `0x${string}` | null {
     }
     const pass = secret();
     if (!pass) {
-      console.warn("[AgentKeys] FLOAT_KEYSTORE_SECRET is not set; encrypted keys are unreadable.");
+      console.warn("[AgentKeys] LIFELINE_KEYSTORE_SECRET is not set; encrypted keys are unreadable.");
       return null;
     }
     const plain = decrypt(entry, pass);
@@ -252,10 +252,10 @@ export function getAgentPrivateKey(address: string): `0x${string}` | null {
 }
 
 /**
- * Whether Float may sign a payment of this size for this agent.
+ * Whether Lifeline may sign a payment of this size for this agent.
  *
  * A credit limit bounds what the human owes; this bounds what a compromised
- * Float could spend from the agent's own wallet before anyone notices.
+ * Lifeline could spend from the agent's own wallet before anyone notices.
  */
 export function authorizeAgentSpend(
   address: string,
@@ -276,7 +276,7 @@ export function authorizeAgentSpend(
   return { ok: true };
 }
 
-/** Withdraws Float's authority without touching the agent's wallet. */
+/** Withdraws Lifeline's authority without touching the agent's wallet. */
 export function revokeAgentKey(address: string): boolean {
   const target = address.trim().toLowerCase();
   const store = readStore();
@@ -286,7 +286,7 @@ export function revokeAgentKey(address: string): boolean {
   return true;
 }
 
-/** What authority Float holds, for display. Never includes the key. */
+/** What authority Lifeline holds, for display. Never includes the key. */
 export function describeAgentKey(address: string) {
   const target = address.trim().toLowerCase();
   const fromEnv = envKey();

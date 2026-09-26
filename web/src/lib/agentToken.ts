@@ -6,7 +6,7 @@ import { getAgentByAddress } from "./agentStore";
 /**
  * A credential a human issues to their own agent.
  *
- * The question this answers is who is borrowing. Float extends credit to a
+ * The question this answers is who is borrowing. Lifeline extends credit to a
  * World-verified human, and an agent spending that line is the whole product -
  * so the agent does not need to consent to anything. The human already did,
  * when they verified and opened the facility. What was missing was any way for

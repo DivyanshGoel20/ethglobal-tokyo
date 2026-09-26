@@ -14,7 +14,7 @@ import { NextResponse } from "next/server";
 import { attachSession } from "../../src/lib/session";
 import { ensureHumanProfileOnChain } from "../../src/lib/facilityContract";
 
-const APP = process.env.FLOAT_APP_URL || "http://localhost:3000";
+const APP = process.env.LIFELINE_APP_URL || "http://localhost:3000";
 const FEED = process.env.SUI_SERVICE_URL || "http://localhost:4031";
 const HUMAN = "0x" + crypto.randomBytes(32).toString("hex");
 const STRANGER = "0x" + crypto.randomBytes(32).toString("hex");
@@ -26,7 +26,7 @@ function check(label: string, ok: boolean, detail = "") {
 }
 
 const cookieFor = (human: string) =>
-  `float_session=${attachSession(NextResponse.json({}), human).cookies.get("float_session")!.value}`;
+  `lifeline_session=${attachSession(NextResponse.json({}), human).cookies.get("lifeline_session")!.value}`;
 
 function client(headers: Record<string, string>) {
   return async (method: string, route: string, body?: unknown) => {
@@ -59,7 +59,7 @@ async function main() {
   const bought = await call("POST", "/api/sui/pay", { url: `${FEED}/risk?records=4`, agentAddress: agent });
   check(
     "a broke agent buys on credit",
-    bought.status === 200 && bought.body.fundingSource === "FLOAT_CREDIT" && bought.body.borrowed === "0.020000",
+    bought.status === 200 && bought.body.fundingSource === "LIFELINE_CREDIT" && bought.body.borrowed === "0.020000",
     bought.body.error ?? `obligation ${bought.body.obligationId} tx ${bought.body.digest}`
   );
   check("the seller was paid and the records delivered", Array.isArray(bought.body.data?.records) && bought.body.data.records.length === 4);

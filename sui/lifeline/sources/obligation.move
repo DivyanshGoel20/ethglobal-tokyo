@@ -1,9 +1,9 @@
 /// A repayment parked before the money is spent.
 ///
-/// This is the Sui counterpart of Float's Hedera rail. There, a borrower signs
-/// a scheduled transfer (HIP-423) at drawdown and consensus executes it on the
-/// due date. Sui has no scheduled transactions, so the same guarantee is built
-/// from objects instead:
+/// The weakest joint in any credit line is collection: a promise to repay
+/// "on the 30th" is usually a keeper bot with a hot key or an allowance the
+/// borrower can revoke the moment the goods arrive. Sui has no scheduled
+/// transactions, so the promise is built from objects instead:
 ///
 /// - An agent's earnings sit in a `Purse` it owns.
 /// - At drawdown the agent parks an `Obligation`: a claim on that purse, due on
@@ -13,10 +13,10 @@
 /// - When it falls due, anyone may call `collect`. Nobody has to be trusted to
 ///   do it, and the outcome is deterministic: the purse covers the debt and it
 ///   is repaid, or it does not and a default is written on chain for anyone to
-///   read. Nothing moves in the second case, exactly as a Hedera schedule that
-///   runs against an empty account moves nothing.
+///   read. Nothing moves in the second case: a default is a fact anyone can
+///   check, not a number the lender asserts.
 ///
-/// Two things are stronger than on Hedera:
+/// Two more properties:
 ///
 /// - An obligation is a tranche: many draws, one parked promise, up to a
 ///   ceiling. Collection takes what was drawn, not the ceiling, so a tranche
@@ -24,9 +24,9 @@
 /// - While a pledge is outstanding, the purse will not release the coins that
 ///   cover it. Earnings that arrive before the due date are held for the debt
 ///   rather than being free to leave the moment they land.
-module float::obligation;
+module lifeline::obligation;
 
-use float::facility::Facility;
+use lifeline::facility::Facility;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
@@ -39,8 +39,8 @@ const SETTLED: u8 = 1;
 const DEFAULTED: u8 = 2;
 const CLOSED: u8 = 3;
 
-/// Hedera caps a schedule at two months. The same ceiling keeps a parked
-/// promise from outliving anyone's memory of it.
+/// Two months at most, so a parked promise cannot outlive anyone's memory of
+/// it.
 const MAX_TERM_MS: u64 = 60 * 24 * 60 * 60 * 1000;
 
 // === Errors ===

@@ -32,7 +32,7 @@ import { invalidateTelemetryCache } from "./telemetryCache";
 import type { Agent } from "@/types";
 
 /**
- * Float's Sui rail, as the web app sees it.
+ * Lifeline's Sui rail, as the web app sees it.
  *
  * Policy lives here, mechanism in @lifeline/sui: this module decides whose line is
  * being spent and how much of it, then hands the payer a key and a ceiling.
@@ -142,7 +142,7 @@ export async function payOnSui(args: {
   });
 
   const borrowed = Number(result.borrowed);
-  if (result.fundingSource === "FLOAT_CREDIT" && borrowed > 0 && result.obligationId) {
+  if (result.fundingSource === "LIFELINE_CREDIT" && borrowed > 0 && result.obligationId) {
     openRailDebt({
       humanOwner: args.human,
       rail: "sui",
@@ -164,7 +164,7 @@ export async function payOnSui(args: {
       requestedAmount: result.amount,
       agentGatewayBalance: result.ownContribution,
       shortfall: result.borrowed,
-      fundingSource: result.fundingSource === "FLOAT_CREDIT" ? "FLOAT_FACILITY" : "AGENT_WALLET",
+      fundingSource: result.fundingSource === "LIFELINE_CREDIT" ? "LIFELINE_FACILITY" : "AGENT_WALLET",
       drawdownId: result.obligationId ?? null,
       status: "SUCCESS",
       timestamp: Date.now(),
@@ -172,7 +172,7 @@ export async function payOnSui(args: {
       rail: "sui",
       network: network(),
       memo:
-        result.fundingSource === "FLOAT_CREDIT"
+        result.fundingSource === "LIFELINE_CREDIT"
           ? `Drew ${result.borrowed} against obligation ${result.obligationId}, due ${new Date(result.dueMs!).toISOString()}`
           : "Paid from the agent's own coins on Sui",
     });
@@ -256,7 +256,7 @@ export async function settleEarlyFor(human: string, obligationId: string) {
 
 /**
  * Close the books on what the chain has done - and, for anything due and
- * still open, do it: collection is open to anyone, and Float is the party
+ * still open, do it: collection is open to anyone, and Lifeline is the party
  * that bothers to call it.
  */
 export async function reconcileSui(human?: string) {

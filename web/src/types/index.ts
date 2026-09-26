@@ -28,7 +28,7 @@ export interface Agent {
   gatewayBalanceUSDC?: string; // Live Circle Gateway available USDC
   walletUsdc?: string;         // Native USDC held in the agent's Arc wallet
   isAutonomous?: boolean;      // Whether agent private key is bound for autonomous self-signing
-  suiAddress?: string;         // The same key's address on Sui, when Float holds it
+  suiAddress?: string;         // The same key's address on Sui, when Lifeline holds it
   suiWalletUsd?: number;       // Coins of the lent type the agent holds on Sui
   suiDebt?: number;            // Unpaid debt drawn on Sui
   status: "Healthy" | "Active" | "Delinquent" | "Suspended" | "active" | "paused";
@@ -56,7 +56,7 @@ export interface ActivityItem {
   /** Explorer link for txHash, when the network has an explorer. */
   txLink?: string | null;
   endpoint?: string;
-  /** What Float lent, when the agent could not cover it all. */
+  /** What Lifeline lent, when the agent could not cover it all. */
   borrowed?: number;
 }
 

@@ -27,7 +27,7 @@ import {
 } from "../../src/lib/facilityContract";
 import { ARC_TREASURY } from "../../src/lib/browserChain";
 
-const APP = process.env.FLOAT_APP_URL || "http://localhost:3000";
+const APP = process.env.LIFELINE_APP_URL || "http://localhost:3000";
 const PREMIUM = process.env.NEXT_PUBLIC_X402_RESOURCE_BASE || "http://localhost:4402";
 const CENT = `${PREMIUM}/premium-data`; // $0.01
 const DOLLAR = `${PREMIUM}/risk-curve`; // $1.00
@@ -43,7 +43,7 @@ function check(label: string, ok: boolean, detail = "") {
 const heading = (s: string) => console.log(`\n${(section = s)}`);
 const near = (a: number, b: number, eps = 0.0002) => Math.abs(a - b) <= eps;
 
-const cookieFor = (h: string) => `float_session=${attachSession(NextResponse.json({}), h).cookies.get("float_session")!.value}`;
+const cookieFor = (h: string) => `lifeline_session=${attachSession(NextResponse.json({}), h).cookies.get("lifeline_session")!.value}`;
 const client = (headers: Record<string, string>) => async (method: string, route: string, body?: unknown) => {
   const res = await fetch(`${APP}${route}`, {
     method,
@@ -107,7 +107,7 @@ async function main() {
   const broke = await call("POST", "/api/pay", { url: CENT, agentAddress: a });
   check(
     "a cent purchase is covered on credit",
-    broke.body.success && broke.body.fundingSource === "FLOAT_FACILITY" && Number(broke.body.borrowed) === 0.01,
+    broke.body.success && broke.body.fundingSource === "LIFELINE_FACILITY" && Number(broke.body.borrowed) === 0.01,
     broke.body.error ?? `borrowed ${broke.body.borrowed}`
   );
   check("A owes the price plus the 1% fee", near(await debtOf(a), 0.0101), `owes ${await debtOf(a)}`);
@@ -135,7 +135,7 @@ async function main() {
 
   const roomy = (await call("POST", "/api/agent-token", { capUsd: 1, days: 1, label: "roomy" })).body.token;
   const withRoomy = await client({ authorization: `Bearer ${roomy}` })("POST", "/api/pay", { url: CENT, agentAddress: b });
-  check("a $1 mandate spends on credit", withRoomy.body.success && withRoomy.body.fundingSource === "FLOAT_FACILITY", withRoomy.body.error ?? "");
+  check("a $1 mandate spends on credit", withRoomy.body.success && withRoomy.body.fundingSource === "LIFELINE_FACILITY", withRoomy.body.error ?? "");
 
   const overLine = await call("POST", "/api/borrow", { agentAddress: a, amount: 50 });
   check("a draw beyond the whole line is refused", overLine.status === 403, overLine.body.error);
@@ -160,7 +160,7 @@ async function main() {
   heading("an agent with some balance, but not enough");
   const partialBefore = await debtOf(a);
   const partial = await call("POST", "/api/pay", { url: DOLLAR, agentAddress: a });
-  check("a $1 purchase with $0.49 held goes to credit", partial.body.success && partial.body.fundingSource === "FLOAT_FACILITY", partial.body.error ?? "");
+  check("a $1 purchase with $0.49 held goes to credit", partial.body.success && partial.body.fundingSource === "LIFELINE_FACILITY", partial.body.error ?? "");
   // Lifeline's Gateway pays the seller the whole price - one x402 payment
   // has one payer - so the whole price is what the human owes.
   check("the whole price is lent, not only the shortfall", Number(partial.body.borrowed) === 1, `borrowed ${partial.body.borrowed}`);

@@ -10,7 +10,7 @@ import path from "node:path";
  * web/data - and to give each test file a known, empty starting point.
  */
 export function useSandbox(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "float-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lifeline-test-"));
   fs.mkdirSync(path.join(dir, "data"));
   process.chdir(dir);
   return dir;

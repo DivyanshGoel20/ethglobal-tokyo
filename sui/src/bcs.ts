@@ -1,7 +1,7 @@
 import { bcs } from "@mysten/sui/bcs";
 
 /**
- * The Move structs Float reads back, in field order. Parsing BCS rather than
+ * The Move structs Lifeline reads back, in field order. Parsing BCS rather than
  * the JSON view keeps the shape identical across gRPC, GraphQL and JSON-RPC.
  */
 

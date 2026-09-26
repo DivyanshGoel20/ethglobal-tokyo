@@ -7,8 +7,8 @@
   "types": "src/index.ts",
   "scripts": {
     "test": "tsx --test test/*.test.ts",
-    "move:test": "cd float && sui move test",
-    "move:build": "cd float && sui move build"
+    "move:test": "cd lifeline && sui move test",
+    "move:build": "cd lifeline && sui move build"
   },
   "dependencies": {
     "@mysten/sui": "^2.33.1",

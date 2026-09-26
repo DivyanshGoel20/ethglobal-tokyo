@@ -7,7 +7,7 @@ import { getPublicClient } from "./facilityContract";
  * Distinct from its Circle Gateway balance, and the two are routinely different:
  * USDC sitting in the wallet has not been deposited into the Gateway, so it
  * cannot settle an x402 charge. An agent can hold twenty dollars and still be
- * unable to pay a cent, which is precisely the gap Float covers.
+ * unable to pay a cent, which is precisely the gap Lifeline covers.
  *
  * On Arc testnet USDC is the native currency at 18 decimals, so this is a
  * balance read rather than an ERC-20 call.

@@ -9,7 +9,7 @@ import {
 } from "@/lib/agentStore";
 import { createLoan } from "@/lib/loanStore";
 import { shortRef } from "@/lib/paymentRef";
-import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, FLOAT_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
+import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
 import { executeOnChainDrawdown } from "@/lib/facilityContract";
 import { invalidateTelemetryCache } from "@/lib/telemetryCache";
 
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       agentAvailableCredit: updatedFacility.totalAvailableCredit,
       facilityAvailableCredit: updatedFacility.totalAvailableCredit,
       network: `${ARC_TESTNET_NAME} (${ARC_TESTNET_CHAIN_ID})`,
-      facilityContractAddress: FLOAT_CREDIT_FACILITY_ADDRESS,
+      facilityContractAddress: LIFELINE_CREDIT_FACILITY_ADDRESS,
       message: `Successfully disbursed $${borrowAmount.toFixed(
         2
       )} USDC on Arc Testnet (1.0% fee: $${originationFee.toFixed(2)} USDC, 7-day maturity).`,

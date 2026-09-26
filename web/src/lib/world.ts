@@ -7,7 +7,7 @@ export async function verifyWorldSelfieProof(
   signal?: string
 ): Promise<{ success: boolean; error?: string; code?: string; nullifier?: string }> {
   const rpId = process.env.NEXT_PUBLIC_WORLD_RP_ID || "rp_62d19ed87590c550";
-  const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "float-credit-line";
+  const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "lifeline-human-verify";
 
   if (!rpId) {
     return {
@@ -113,42 +113,3 @@ export async function verifyWorldSelfieProof(
   }
 }
 
-/**
- * Verify a World ID 4 session proof.
- *
- * Forwarded to the same RP verify endpoint as every other IDKit result, and
- * unchanged: a session result carries `session_id` and, per credential, a
- * `session_nullifier` of [nullifier, action].
- */
-export async function verifyWorldSessionProof(result: any): Promise<
-  | { success: true; sessionId: string; sessionNullifier: string }
-  | { success: false; error: string; code?: string }
-> {
-  const rpId = process.env.NEXT_PUBLIC_WORLD_RP_ID || "rp_62d19ed87590c550";
-  const sessionId: unknown = result?.session_id;
-  const sessionNullifier: unknown = result?.responses?.[0]?.session_nullifier?.[0];
-  if (typeof sessionId !== "string" || !sessionId.startsWith("session_") || typeof sessionNullifier !== "string") {
-    return { success: false, error: "Not a World ID session proof", code: "malformed_session" };
-  }
-
-  try {
-    const res = await fetch(`https://developer.world.org/api/v4/verify/${rpId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(result),
-    });
-    const data = await res.json().catch(() => ({}));
-    const ok = res.ok && (data.success === true || data.results?.[0]?.success === true);
-    if (!ok) {
-      const item = data.results?.[0];
-      return {
-        success: false,
-        code: item?.code || data.code,
-        error: item?.detail || data.detail || data.message || "World ID session proof was rejected",
-      };
-    }
-    return { success: true, sessionId, sessionNullifier };
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Could not reach World to verify the session" };
-  }
-}

@@ -1,9 +1,9 @@
 /**
- * Tops up Float's Circle Gateway balance, which is what settles x402 payments
+ * Tops up Lifeline's Circle Gateway balance, which is what settles x402 payments
  * on Arc.
  *
  * The Gateway balance is separate from the wallet balance: USDC sitting in the
- * wallet cannot pay a 402, it has to be deposited first. Float paying on an
+ * wallet cannot pay a 402, it has to be deposited first. Lifeline paying on an
  * agent's behalf draws on this, so when it runs dry every drawdown fails at
  * settlement no matter how much headroom the facility says is left.
  *
@@ -29,9 +29,9 @@ async function main() {
   }
 
   const privateKey = (process.env.PRIVATE_KEY ||
-    process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
+    process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
   if (!privateKey) {
-    throw new Error("no PRIVATE_KEY or FLOAT_FUNDING_PRIVATE_KEY (set it in the root .env)");
+    throw new Error("no PRIVATE_KEY or LIFELINE_FUNDING_PRIVATE_KEY (set it in the root .env)");
   }
 
   const client = new GatewayClient({ chain: "arcTestnet", privateKey });

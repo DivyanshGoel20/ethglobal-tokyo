@@ -1,6 +1,6 @@
-/// Float's credit facility, on Sui.
+/// Lifeline's credit facility, on Sui.
 ///
-/// A port of `contracts/src/FloatCreditFacility.sol`: the same ledger of human
+/// A port of `contracts/src/LifelineCreditFacility.sol`: the same ledger of human
 /// credit profiles, authorised agents, drawdowns and repayments, with the same
 /// rules about who may do what. Credit is extended to a human who is unique
 /// because World ID says so; their agents spend against it.
@@ -17,7 +17,7 @@
 ///
 /// Amounts are in the coin's base units. For USDC that is 6 decimals, the same
 /// units the Arc contract uses.
-module float::facility;
+module lifeline::facility;
 
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
@@ -214,7 +214,7 @@ public fun create<T>(ctx: &mut TxContext): AdminCap {
 
 // === Profiles ===
 
-/// Underwriter path. Float onboards every human from one operator identity,
+/// Underwriter path. Lifeline onboards every human from one operator identity,
 /// so the owner address says nothing about uniqueness - the World root does,
 /// and an underwritten profile without one would have no Sybil control.
 public fun create_credit_profile<T>(
@@ -427,7 +427,7 @@ public fun mark_default<T>(
 
 // === Liquidity ===
 
-/// Anyone may fund the facility. Float does, so agents have something to draw.
+/// Anyone may fund the facility. Lifeline does, so agents have something to draw.
 public fun fund<T>(self: &mut Facility<T>, coins: Coin<T>) {
     let amount = coins.value();
     assert!(amount > 0, EZeroAmount);

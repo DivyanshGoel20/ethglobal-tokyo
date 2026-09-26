@@ -12,7 +12,7 @@ import { suiClient } from "./client";
  * that it really pays `payTo` at least `amount` of `asset`, then submits it
  * and serves the resource only once the chain says it succeeded.
  *
- * Gas is the buyer's side's problem: Float sponsors its agents, so a seller
+ * Gas is the buyer's side's problem: Lifeline sponsors its agents, so a seller
  * needs no SUI and an agent needs none either.
  */
 

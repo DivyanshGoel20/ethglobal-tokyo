@@ -5,10 +5,10 @@ import { fromUnits } from "./config";
 /**
  * What became of a parked repayment.
  *
- * On Hedera, consensus executes a schedule on its own and Float has to ask the
- * mirror what happened. Sui runs nothing on its own, so reconciliation is also
- * the keeper: an obligation that is due and still open gets collected here.
- * Float holds no special power to do that - `collect` is open to anyone - it
+ * Sui runs nothing on its own, so reconciliation is also the keeper: an
+ * obligation that is due and still open gets collected here, and one already
+ * collected or defaulted is written down.
+ * Lifeline holds no special power to do that - `collect` is open to anyone - it
  * is simply the party that cares enough to call it.
  */
 export type Outcome =

@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { Instrument, Rail } from "@/types";
 import { LifelineMark } from "./Pulse";
-import { WorldAppLink } from "./WorldAppLink";
 
 interface HeaderProps {
   rail: Rail;
@@ -113,7 +112,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="lab">World ID</span>
             <span className="mono text-[11px]">{copied ? "copied" : short}</span>
           </button>
-          <WorldAppLink />
           <button onClick={onSignOut} className="btn btn-quiet">
             Sign out
           </button>

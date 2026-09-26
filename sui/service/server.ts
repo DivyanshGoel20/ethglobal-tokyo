@@ -1,7 +1,7 @@
 /**
- * Float Sui Feed - an x402-gated service settled on Sui.
+ * Lifeline Sui Feed - an x402-gated service settled on Sui.
  *
- * The Hedera rail's risk feed, on the other network: credit-risk records for
+ * A credit-risk feed for autonomous agents, sold over x402 on Sui: records for
  * autonomous agents, priced by the record. Ask for one and the 402 quotes one;
  * ask for twenty and it quotes twenty.
  *

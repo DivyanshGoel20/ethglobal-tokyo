@@ -8,10 +8,9 @@ import { writeJsonAtomic } from "./atomicWrite";
  * Inside World App, sign-in is the wallet: MiniKit's Sign-In with Ethereum
  * proves the user holds it, every visit, with one tap. But a wallet is not a
  * human - one person can hold several - so it identifies nobody until it is
- * linked here, once, while World ID's one-time uniqueness proof is in hand
- * (or, for someone who signed up in a browser, through a link token that only
- * their signed-in session could mint). A wallet is never moved to a second
- * human.
+ * linked here, once, to the human World ID proves - the same human whether
+ * they first signed up in a browser or in World App. A wallet is never moved
+ * to a second human.
  */
 type Store = Record<string, { human: string; linkedAt: number }>;
 

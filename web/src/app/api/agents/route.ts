@@ -5,7 +5,7 @@ import { Agent } from "@/types";
 import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore } from "@/lib/agentStore";
 import { validateArcAgentWallet } from "@/lib/arc";
 import { resolveAgentBookStatus } from "@/lib/agentKit";
-import { FloatSignerTS } from "@/lib/floatSigner";
+import { LifelineSigner } from "@/lib/lifelineSigner";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
 import { hasAgentPrivateKey, setAgentPrivateKey } from "@/lib/agentKeys";
 import { withSuiState } from "@/lib/suiRail";
@@ -27,19 +27,19 @@ export async function GET(req: NextRequest) {
     const rawAgents = getAgentsByOwner(human);
 
     // Query live Circle Gateway balance for each registered agent
-    let floatSigner: FloatSignerTS | null = null;
+    let lifelineSigner: LifelineSigner | null = null;
     try {
-      floatSigner = new FloatSignerTS();
+      lifelineSigner = new LifelineSigner();
     } catch (e) {
-      console.warn("Could not initialize FloatSignerTS for balance queries:", e);
+      console.warn("Could not initialize LifelineSigner for balance queries:", e);
     }
 
     const enrichedAgents = await Promise.all(
       rawAgents.map(async (agent) => {
         let liveGw = (agent.currentBalance || 0).toFixed(2);
-        if (floatSigner) {
+        if (lifelineSigner) {
           try {
-            const bal = await floatSigner.getAgentGatewayBalance(agent.address);
+            const bal = await lifelineSigner.getAgentGatewayBalance(agent.address);
             liveGw = bal.formattedAvailable;
           } catch (err) {
             // fallback to stored balance
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     const formattedAddress = walletAddress.trim().toLowerCase() as `0x${string}`;
 
     // A key that does not belong to this agent is a hard failure, not a
-    // silently-ignored field: registering it would point Float at a wallet the
+    // silently-ignored field: registering it would point Lifeline at a wallet the
     // operator did not name.
     if (privateKey && typeof privateKey === "string" && privateKey.trim()) {
       const stored = setAgentPrivateKey(formattedAddress, privateKey.trim());

@@ -8,13 +8,13 @@ interface IERC20Minimal {
 }
 
 /**
- * @title FloatCreditFacility
- * @notice Authoritative financial ledger for Float's credit facilities on Arc.
+ * @title LifelineCreditFacility
+ * @notice Authoritative financial ledger for Lifeline's credit facilities on Arc.
  *         Tracks human credit profiles, authorized AI agents, drawdowns, and repayments.
  *         Important: Drawdowns record and authorize credit; actual x402 payment
- *         is executed via Float's Gateway funding balance.
+ *         is executed via Lifeline's Gateway funding balance.
  */
-contract FloatCreditFacility {
+contract LifelineCreditFacility {
     address public owner;
     IERC20Minimal public usdc;
 
@@ -117,7 +117,7 @@ contract FloatCreditFacility {
     event Withdrawn(address indexed to, uint256 amount);
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "FloatCreditFacility: not contract owner");
+        require(msg.sender == owner, "LifelineCreditFacility: not contract owner");
         _;
     }
 
@@ -151,7 +151,7 @@ contract FloatCreditFacility {
         require(humanOwner != address(0), "Invalid human owner");
 
         if (msg.sender == owner) {
-            // Float underwrites every profile from a single operator wallet, so
+            // Lifeline underwrites every profile from a single operator wallet, so
             // the humanOwner address says nothing about uniqueness here. The
             // World nullifier is what makes a human unique, and an underwritten
             // profile without one would have no Sybil control at all.
@@ -263,7 +263,7 @@ contract FloatCreditFacility {
     /**
      * @notice Records an overdraft credit drawdown against the human facility.
      *         Enforces credit limit and authorization.
-     *         Actual payment is made via Float Gateway funding balance.
+     *         Actual payment is made via Lifeline Gateway funding balance.
      */
     /**
      * @notice Record a drawdown against a profile.

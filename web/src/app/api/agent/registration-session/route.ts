@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify agent exists in Float registry
+    // Verify agent exists in Lifeline registry
     const agent = getAgentByAddress(agentAddress);
     if (!agent) {
       return NextResponse.json(

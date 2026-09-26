@@ -43,7 +43,7 @@ import {
 const FEED = process.env.SUI_SERVICE_URL || "http://localhost:4031";
 const TERM_SECONDS = Number(process.env.LIFECYCLE_TERM_SECONDS || 25);
 
-/** Waits for whatever the seller submitted, so Float's next build reads fresh gas. */
+/** Waits for whatever the seller submitted, so Lifeline's next build reads fresh gas. */
 async function settledBy(res: Response) {
   const receipt = res.headers.get("payment-response");
   if (!receipt) return;
@@ -60,7 +60,7 @@ function check(label: string, ok: boolean, detail = "") {
 const newAgentKey = () => "0x" + crypto.randomBytes(32).toString("hex");
 
 async function main() {
-  process.env.FLOAT_TERM_SECONDS = String(TERM_SECONDS);
+  process.env.LIFELINE_TERM_SECONDS = String(TERM_SECONDS);
   const d = requireDeployment();
   const operator = operatorKeypair();
   const profileId = "0x" + crypto.randomBytes(32).toString("hex");
@@ -81,7 +81,7 @@ async function main() {
   const earner = await paySui(`${FEED}/risk?records=3`, ctx(earnerKey));
   check(
     "a broke agent is covered on credit",
-    earner.fundingSource === "FLOAT_CREDIT" && earner.borrowed === "0.015000",
+    earner.fundingSource === "LIFELINE_CREDIT" && earner.borrowed === "0.015000",
     `borrowed ${earner.borrowed} obligation ${earner.obligationId}`
   );
   check("the repayment was parked before the draw", !!earner.parkedDigest, `parked ${earner.parkedDigest}`);
@@ -90,7 +90,7 @@ async function main() {
   check("a second draw reuses the same tranche", again.obligationId === earner.obligationId && !again.parkedDigest, `drawn on ${again.obligationId}`);
 
   const idler = await paySui(`${FEED}/risk?records=2`, ctx(idlerKey));
-  check("the second agent borrows on the same line", idler.fundingSource === "FLOAT_CREDIT", `borrowed ${idler.borrowed}`);
+  check("the second agent borrows on the same line", idler.fundingSource === "LIFELINE_CREDIT", `borrowed ${idler.borrowed}`);
 
   const profile = await readProfile(profileId);
   check("the facility shows one human's debt across both agents", profile?.outstandingDebt === toUnits(0.03), `owes ${fromUnits(profile?.outstandingDebt ?? 0n)}`);

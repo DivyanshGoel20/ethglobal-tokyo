@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAgentByAddress } from "./agentStore";
 
 /**
- * Float's session layer.
+ * Lifeline's session layer.
  *
  * A session says exactly one thing: which World ID nullifier is driving this
  * request. That is the only identity the facility cares about - credit is
@@ -15,7 +15,7 @@ import { getAgentByAddress } from "./agentStore";
  * filesystem.
  */
 
-const COOKIE = "float_session";
+const COOKIE = "lifeline_session";
 const TTL_SECONDS = 60 * 60 * 12;
 
 let cachedSecret: Buffer | null = null;
@@ -23,7 +23,7 @@ let cachedSecret: Buffer | null = null;
 function secret(): Buffer {
   if (cachedSecret) return cachedSecret;
 
-  const configured = process.env.FLOAT_SESSION_SECRET;
+  const configured = process.env.LIFELINE_SESSION_SECRET;
   if (configured && configured.length >= 32) {
     cachedSecret = Buffer.from(configured, "utf8");
     return cachedSecret;
@@ -35,7 +35,7 @@ function secret(): Buffer {
   // would let anyone mint a session for any nullifier they can guess.
   cachedSecret = crypto.randomBytes(32);
   console.warn(
-    "[Session] FLOAT_SESSION_SECRET is unset or shorter than 32 chars. " +
+    "[Session] LIFELINE_SESSION_SECRET is unset or shorter than 32 chars. " +
       "Using an ephemeral key: sessions will not survive a restart, and will not " +
       "work at all across more than one server instance. Set it before deploying."
   );

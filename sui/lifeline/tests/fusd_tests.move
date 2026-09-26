@@ -1,7 +1,7 @@
 #[test_only]
-module float::fusd_tests;
+module lifeline::fusd_tests;
 
-use float::fusd::{Self, Faucet};
+use lifeline::fusd::{Self, Faucet};
 use sui::test_scenario as ts;
 
 #[test]

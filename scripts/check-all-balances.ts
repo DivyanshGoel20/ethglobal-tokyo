@@ -8,8 +8,8 @@
  *                                    what can pay a 402 (wallet USDC cannot)
  *   0x + 64 hex   a Sui address   -> coins of the type the facility lends
  *
- * With no argument it reports Float's funding wallet, the Sui facility, and
- * every agent Float knows about on both rails.
+ * With no argument it reports Lifeline's funding wallet, the Sui facility, and
+ * every agent Lifeline knows about on both rails.
  *
  *   npm run balances
  *   npm run balances -- 0x36e2…077d
@@ -30,8 +30,8 @@ async function suiBalance(address: string): Promise<string> {
 }
 
 function gateway(): GatewayClient {
-  const pk = (process.env.PRIVATE_KEY || process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
-  if (!pk) throw new Error("no PRIVATE_KEY or FLOAT_FUNDING_PRIVATE_KEY (set it in the root .env)");
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  if (!pk) throw new Error("no PRIVATE_KEY or LIFELINE_FUNDING_PRIVATE_KEY (set it in the root .env)");
   return new GatewayClient({ chain: "arcTestnet", privateKey: pk });
 }
 
@@ -77,7 +77,7 @@ async function main() {
   const agents = knownAgents();
 
   console.log(`\nArc - Circle Gateway available\n`);
-  await report("float funding", gateway().address);
+  await report("lifeline funding", gateway().address);
   for (const a of agents) await report(a.label, a.id);
 
   const d = deployment();

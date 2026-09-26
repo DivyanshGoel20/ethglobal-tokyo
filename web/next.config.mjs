@@ -35,6 +35,12 @@ const nextConfig = {
   reactStrictMode: true,
   // @lifeline/sui is the repo's own sui/ workspace, shipped as TypeScript.
   transpilePackages: ["@worldcoin/idkit", "@worldcoin/idkit-core", "@lifeline/sui"],
+
+  // World appends a mini app path to the App URL, so an App URL that already
+  // ends in /mini turns /mini into /mini/mini. Either way lands on the app.
+  async redirects() {
+    return [{ source: "/mini/mini", destination: "/mini", permanent: false }];
+  },
 };
 
 export default nextConfig;

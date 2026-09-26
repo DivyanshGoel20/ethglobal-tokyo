@@ -5,8 +5,8 @@ import {
   getAgentWalletClient,
   hasAgentPrivateKey,
 } from "@/lib/agentKeys";
-import { getPublicClient, arcTestnetChain, FLOAT_CREDIT_FACILITY_ABI } from "@/lib/facilityContract";
-import { FLOAT_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
+import { getPublicClient, arcTestnetChain, LIFELINE_CREDIT_FACILITY_ABI } from "@/lib/facilityContract";
+import { LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
 import { resolveSpender } from "@/lib/agentToken";
 
 export async function GET(req: NextRequest) {

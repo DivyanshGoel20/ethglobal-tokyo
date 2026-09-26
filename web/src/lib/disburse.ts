@@ -5,7 +5,7 @@ import { GatewayClient } from "@circle-fin/x402-batching/client";
  *
  * Drawing on a credit line has to hand the borrower something. Until this
  * existed, `recordDrawdown` booked the debt and nothing moved, so a draw was a
- * liability with no matching asset - the agent owed Float for a payment that
+ * liability with no matching asset - the agent owed Lifeline for a payment that
  * never happened.
  *
  * The deposit goes into the agent's Circle Gateway balance rather than its
@@ -17,9 +17,9 @@ export async function depositToAgentGateway(
   agentAddress: string,
   amountUsdc: number
 ): Promise<{ depositTxHash?: string }> {
-  const key = (process.env.FLOAT_FUNDING_PRIVATE_KEY ||
+  const key = (process.env.LIFELINE_FUNDING_PRIVATE_KEY ||
     process.env.PRIVATE_KEY) as `0x${string}`;
-  if (!key) throw new Error("Missing FLOAT_FUNDING_PRIVATE_KEY for disbursement");
+  if (!key) throw new Error("Missing LIFELINE_FUNDING_PRIVATE_KEY for disbursement");
 
   const client = new GatewayClient({ chain: "arcTestnet", privateKey: key });
 

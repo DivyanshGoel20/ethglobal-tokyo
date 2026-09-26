@@ -1,5 +1,5 @@
 /**
- * Publishes Float to Sui and stands up a funded facility.
+ * Publishes Lifeline to Sui and stands up a funded facility.
  *
  *   SUI_NETWORK=localnet npm run sui:deploy     # against `sui start`
  *   SUI_NETWORK=testnet  npm run sui:deploy
@@ -63,7 +63,7 @@ async function ensureGas(kp: Keypair) {
 }
 
 function compile(): { modules: string[]; dependencies: string[] } {
-  const pkg = path.join(suiDir(), "float");
+  const pkg = path.join(suiDir(), "lifeline");
   const out = execFileSync("sui", ["move", "build", "--dump-bytecode-as-base64", "--path", pkg], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],

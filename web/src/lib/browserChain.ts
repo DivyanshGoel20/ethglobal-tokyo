@@ -3,9 +3,9 @@
  *
  * A wallet sends on whatever chain it happens to be showing. The repay flow
  * asked for accounts and then sent, with nothing in between, so a wallet parked
- * on the wrong chain signed an unsupported transaction to Float's treasury address - an address
+ * on the wrong chain signed an unsupported transaction to Lifeline's treasury address - an address
  * that exists on every EVM chain, so there is no bounce and no error. Real
- * funds left, on a chain nothing in Float is watching, and the repayment was
+ * funds left, on a chain nothing in Lifeline is watching, and the repayment was
  * recorded anyway because the send had returned a hash.
  *
  * Switching first turns a silent wrong-chain payment into a prompt the person
@@ -67,7 +67,7 @@ export async function ensureArcNetwork(ethereum: Eip1193): Promise<void> {
   }
 }
 
-/** Where a browser repayment is sent. Float's operator wallet on Arc. */
+/** Where a browser repayment is sent. Lifeline's operator wallet on Arc. */
 export const ARC_TREASURY =
-  (process.env.NEXT_PUBLIC_FLOAT_TREASURY_ADDRESS ||
+  (process.env.NEXT_PUBLIC_LIFELINE_TREASURY_ADDRESS ||
     "0x5233E4253bC38e8CF517c0768dbC8aCC886F32B3") as `0x${string}`;

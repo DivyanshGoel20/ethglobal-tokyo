@@ -1,5 +1,5 @@
 // A pinned secret, so the test can forge tokens the way an attacker would.
-process.env.FLOAT_SESSION_SECRET = "test-secret-that-is-at-least-32-chars-long";
+process.env.LIFELINE_SESSION_SECRET = "test-secret-that-is-at-least-32-chars-long";
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import { attachSession, getHuman, requireOwnedAgent } from "../src/lib/session";
 import { getAllAgents, saveAllAgents } from "../src/lib/agentStore";
 import { useSandbox } from "./sandbox";
 
-const SECRET = process.env.FLOAT_SESSION_SECRET!;
+const SECRET = process.env.LIFELINE_SESSION_SECRET!;
 const HUMAN = "0x1a4d7ff9847b6b4d616afa1e16ada2c29cf59e4357ce759a87320b539a1b8077";
 const OTHER_HUMAN = "0x" + "ab".repeat(32);
 
@@ -42,13 +42,13 @@ function forge(claims: object, mac?: string) {
 }
 
 const withCookie = (token?: string) =>
-  new NextRequest("http://float.test/api/pay", {
-    headers: token ? { cookie: `float_session=${token}` } : {},
+  new NextRequest("http://lifeline.test/api/pay", {
+    headers: token ? { cookie: `lifeline_session=${token}` } : {},
   });
 
 function issued(nullifier: string): string {
   const res = attachSession(NextResponse.json({}), nullifier);
-  const token = res.cookies.get("float_session")?.value;
+  const token = res.cookies.get("lifeline_session")?.value;
   assert.ok(token, "attachSession set no cookie");
   return token;
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FloatSignerTS } from "@/lib/floatSigner";
+import { LifelineSigner } from "@/lib/lifelineSigner";
 import { getAgentPrivateKey } from "@/lib/agentKeys";
 import { invalidateTelemetryCache } from "@/lib/telemetryCache";
 import { resolveSpender } from "@/lib/agentToken";
@@ -27,19 +27,19 @@ export async function POST(req: NextRequest) {
     // The route used to take humanProfileId from the body, which is the whole
     // ballgame: the resource server named in `url` also dictates the amount and
     // the payee, so an unauthenticated caller could bill any human they liked
-    // and have Float's funding wallet pay an address they controlled. The payer
+    // and have Lifeline's funding wallet pay an address they controlled. The payer
     // is now whoever holds a World session, and they may only spend through
     // their own agents.
     const auth = resolveSpender(req, agentAddress);
     if ("error" in auth) return auth.error;
 
     // Server-custodied keys only. A key supplied in the request body was never
-    // Float's to sign with.
+    // Lifeline's to sign with.
     const effectiveAgentKey = getAgentPrivateKey(agentAddress) || undefined;
 
-    const floatSigner = new FloatSignerTS();
+    const lifelineSigner = new LifelineSigner();
 
-    const result = await floatSigner.pay(
+    const result = await lifelineSigner.pay(
       url,
       {
         agentAddress,
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "FloatSigner payment execution failed",
+        error: error.message || "LifelineSigner payment execution failed",
       },
       { status: 400 }
     );
@@ -86,15 +86,15 @@ export async function GET(req: NextRequest) {
     const auth = resolveSpender(req, agentAddress);
     if ("error" in auth) return auth.error;
 
-    const floatSigner = new FloatSignerTS();
-    const balance = await floatSigner.getAgentGatewayBalance(agentAddress);
+    const lifelineSigner = new LifelineSigner();
+    const balance = await lifelineSigner.getAgentGatewayBalance(agentAddress);
 
     return NextResponse.json({
       agentAddress,
       gatewayAvailableUSDC: balance.formattedAvailable,
       walletUsdc: await getAgentWalletUsdc(agentAddress),
-      floatFundingAddress: floatSigner.fundingAddress,
-      creditFacilityAddress: floatSigner.creditFacilityAddress,
+      fundingAddress: lifelineSigner.fundingAddress,
+      creditFacilityAddress: lifelineSigner.creditFacilityAddress,
     });
   } catch (error: any) {
     console.error("[GET /api/pay] Error:", error);

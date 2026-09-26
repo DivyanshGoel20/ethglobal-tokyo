@@ -9,7 +9,7 @@ import {
   formatUnits,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { FLOAT_CREDIT_FACILITY_ADDRESS, ARC_TESTNET_CHAIN_ID, ARC_RPC_URL } from "./arc";
+import { LIFELINE_CREDIT_FACILITY_ADDRESS, ARC_TESTNET_CHAIN_ID, ARC_RPC_URL } from "./arc";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { depositToAgentGateway } from "./disburse";
 import { refHash } from "./paymentRef";
@@ -25,13 +25,13 @@ export const arcTestnetChain = defineChain({
     },
   },
   contracts: {
-    floatCreditFacility: {
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
+    lifelineCreditFacility: {
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
     },
   },
 });
 
-export const FLOAT_CREDIT_FACILITY_ABI = [
+export const LIFELINE_CREDIT_FACILITY_ABI = [
   {
     type: "function",
     name: "createCreditProfile",
@@ -276,7 +276,7 @@ export function getArcTransport() {
  * The client used to hand up a transaction hash and the server recorded it,
  * skipping its own settlement entirely - so the debt cleared on the strength of
  * a string. A wallet left on another chain produced a perfectly real hash for a
- * transfer Float never received, and any caller could have posted arbitrary hex
+ * transfer Lifeline never received, and any caller could have posted arbitrary hex
  * to the same effect.
  *
  * Verified against Arc's own RPC, so a hash from another chain is simply not
@@ -344,7 +344,7 @@ export function computeProfileId(humanOwnerOrRoot: string): `0x${string}` {
 }
 
 /**
- * Reads credit profile directly from FloatCreditFacility contract on Arc Testnet.
+ * Reads credit profile directly from LifelineCreditFacility contract on Arc Testnet.
  */
 export async function getOnChainProfile(profileIdOrHuman: string) {
   const client = getPublicClient();
@@ -352,8 +352,8 @@ export async function getOnChainProfile(profileIdOrHuman: string) {
 
   try {
     const profile = await client.readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "getProfile",
       args: [profileId],
     });
@@ -382,8 +382,8 @@ export async function getOnChainRemainingCredit(profileIdOrHuman: string): Promi
 
   try {
     const remaining = await client.readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "getRemainingCredit",
       args: [profileId],
     });
@@ -394,7 +394,7 @@ export async function getOnChainRemainingCredit(profileIdOrHuman: string): Promi
 }
 
 /**
- * Submits a real on-chain recordDrawdown transaction on Arc Testnet to FloatCreditFacility.
+ * Submits a real on-chain recordDrawdown transaction on Arc Testnet to LifelineCreditFacility.
  */
 export async function executeOnChainDrawdown(params: {
   agentAddress: string;
@@ -409,13 +409,13 @@ export async function executeOnChainDrawdown(params: {
   /**
    * Whether to hand the agent the money as well as book the debt.
    *
-   * True for a draw the human asked for. False on the x402 path, where Float
+   * True for a draw the human asked for. False on the x402 path, where Lifeline
    * has already paid the seller directly and the drawdown is only the ledger
    * entry for that payment - disbursing there would pay twice.
    */
   disburse?: boolean;
 }): Promise<{ txHash: `0x${string}`; blockNumber: number; depositTxHash?: string }> {
-  const pk = (process.env.PRIVATE_KEY || process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
   if (!pk) throw new Error("Missing PRIVATE_KEY for on-chain Arc Testnet transaction");
 
   const account = privateKeyToAccount(pk);
@@ -435,8 +435,8 @@ export async function executeOnChainDrawdown(params: {
   //    underwrite its own borrower.
   const profile = (await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "getProfile",
       args: [profileId],
     })
@@ -451,8 +451,8 @@ export async function executeOnChainDrawdown(params: {
   // 2. Ensure Agent is authorized for this profile on Arc Testnet
   const isAuth = await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "isAgentAuthorized",
       args: [profileId, params.agentAddress as `0x${string}`],
     })
@@ -469,8 +469,8 @@ export async function executeOnChainDrawdown(params: {
 
   // 3. Record Drawdown on Arc Testnet
   const txHash = await walletClient.writeContract({
-    address: FLOAT_CREDIT_FACILITY_ADDRESS,
-    abi: FLOAT_CREDIT_FACILITY_ABI,
+    address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+    abi: LIFELINE_CREDIT_FACILITY_ABI,
     functionName: "recordDrawdown",
     args: [
       profileId,
@@ -500,8 +500,8 @@ export async function executeOnChainDrawdown(params: {
 
       try {
         const unwind = await walletClient.writeContract({
-          address: FLOAT_CREDIT_FACILITY_ADDRESS,
-          abi: FLOAT_CREDIT_FACILITY_ABI,
+          address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+          abi: LIFELINE_CREDIT_FACILITY_ABI,
           functionName: "recordRepayment",
           args: [
             profileId,
@@ -532,8 +532,8 @@ export async function executeOnChainDrawdown(params: {
 /**
  * Submits a real on-chain repayment on Arc Testnet.
  * If the paying agent is an autonomous agent with a private key, this function
- * executes an actual on-chain native USDC transfer from the agent wallet to the Float facility,
- * and then records the repayment on the FloatCreditFacility contract.
+ * executes an actual on-chain native USDC transfer from the agent wallet to the Lifeline facility,
+ * and then records the repayment on the LifelineCreditFacility contract.
  */
 export async function executeOnChainRepayment(params: {
   humanOwner: string;
@@ -590,7 +590,7 @@ export async function executeOnChainRepayment(params: {
   }
 
   // 2. Submit contract recordRepayment on Arc Testnet
-  const pk = (process.env.PRIVATE_KEY || process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
   if (!pk) throw new Error("Missing PRIVATE_KEY for on-chain Arc Testnet transaction");
 
   const account = privateKeyToAccount(pk);
@@ -606,8 +606,8 @@ export async function executeOnChainRepayment(params: {
 
   const profile = (await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "getProfile",
       args: [profileId],
     })
@@ -623,8 +623,8 @@ export async function executeOnChainRepayment(params: {
   }
 
   const txHash = await walletClient.writeContract({
-    address: FLOAT_CREDIT_FACILITY_ADDRESS,
-    abi: FLOAT_CREDIT_FACILITY_ABI,
+    address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+    abi: LIFELINE_CREDIT_FACILITY_ABI,
     functionName: "recordRepayment",
     args: [
       profileId,
@@ -650,7 +650,7 @@ export async function updateOnChainCreditLimit(
   humanOwner: string,
   newLimitUsdc: number
 ): Promise<string | null> {
-  const pk = (process.env.PRIVATE_KEY || process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
   if (!pk) return null;
 
   try {
@@ -666,8 +666,8 @@ export async function updateOnChainCreditLimit(
     const limitUnits = parseUnits(newLimitUsdc.toString(), 6);
 
     const hash = await walletClient.writeContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "setCreditLimit",
       args: [profileId, limitUnits],
     });
@@ -682,13 +682,13 @@ export async function updateOnChainCreditLimit(
 }
 
 /**
- * Ensures an agent is authorized on the FloatCreditFacility contract on Arc Testnet.
+ * Ensures an agent is authorized on the LifelineCreditFacility contract on Arc Testnet.
  */
 export async function syncAgentToContractOnChain(
   agentAddress: string,
   humanOwner: string
 ): Promise<{ txHash: string; blockNumber: number } | null> {
-  const pk = (process.env.PRIVATE_KEY || process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
   if (!pk) return null;
 
   try {
@@ -704,8 +704,8 @@ export async function syncAgentToContractOnChain(
 
     const existing = await publicClient
       .readContract({
-        address: FLOAT_CREDIT_FACILITY_ADDRESS,
-        abi: FLOAT_CREDIT_FACILITY_ABI,
+        address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+        abi: LIFELINE_CREDIT_FACILITY_ABI,
         functionName: "getProfile",
         args: [profileId],
       })
@@ -723,8 +723,8 @@ export async function syncAgentToContractOnChain(
     }
 
     const authTx = await walletClient.writeContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "authorizeAgent",
       args: [profileId, agentAddress as `0x${string}`],
     });
@@ -745,7 +745,7 @@ export async function ensureHumanProfileOnChain(
   humanOwner: string
 ): Promise<{ txHash?: string; profileId: `0x${string}` }> {
   const profileId = computeProfileId(humanOwner);
-  const pk = (process.env.PRIVATE_KEY || process.env.FLOAT_FUNDING_PRIVATE_KEY) as `0x${string}`;
+  const pk = (process.env.PRIVATE_KEY || process.env.LIFELINE_FUNDING_PRIVATE_KEY) as `0x${string}`;
   if (!pk) return { profileId };
 
   try {
@@ -759,8 +759,8 @@ export async function ensureHumanProfileOnChain(
 
     const existing = (await publicClient
       .readContract({
-        address: FLOAT_CREDIT_FACILITY_ADDRESS,
-        abi: FLOAT_CREDIT_FACILITY_ABI,
+        address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+        abi: LIFELINE_CREDIT_FACILITY_ABI,
         functionName: "getProfile",
         args: [profileId],
       })
@@ -770,8 +770,8 @@ export async function ensureHumanProfileOnChain(
       console.log(`[OnChainProfile] Provisioning $10 on-chain profile on Arc Testnet for World ID operator ${humanOwner}...`);
       const humanRoot = computeProfileId(humanOwner);
       const createTx = await walletClient.writeContract({
-        address: FLOAT_CREDIT_FACILITY_ADDRESS,
-        abi: FLOAT_CREDIT_FACILITY_ABI,
+        address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+        abi: LIFELINE_CREDIT_FACILITY_ABI,
         functionName: "createCreditProfile",
         args: [profileId, account.address, humanRoot, parseUnits("10", 6)],
       });
@@ -791,7 +791,7 @@ export async function ensureHumanProfileOnChain(
 }
 
 /**
- * Fetches complete real-time telemetry directly from the FloatCreditFacility contract on Arc Testnet.
+ * Fetches complete real-time telemetry directly from the LifelineCreditFacility contract on Arc Testnet.
  */
 /**
  * Ledger rows, read once.
@@ -812,7 +812,7 @@ const recordCache: Record<"drawdowns" | "repayments", Map<string, any>> = {
  * redeploy served the previous facility's ledger indefinitely - the new
  * contract's row 1 was never fetched because row 1 was already cached.
  */
-const cacheKeyFor = (id: bigint) => `${FLOAT_CREDIT_FACILITY_ADDRESS.toLowerCase()}:${id}`;
+const cacheKeyFor = (id: bigint) => `${LIFELINE_CREDIT_FACILITY_ADDRESS.toLowerCase()}:${id}`;
 
 async function warmRecordCache(
   publicClient: ReturnType<typeof getPublicClient>,
@@ -831,8 +831,8 @@ async function warmRecordCache(
     missing.map((id) =>
       publicClient
         .readContract({
-          address: FLOAT_CREDIT_FACILITY_ADDRESS,
-          abi: FLOAT_CREDIT_FACILITY_ABI,
+          address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+          abi: LIFELINE_CREDIT_FACILITY_ABI,
           functionName: fn,
           args: [id],
         })
@@ -856,8 +856,8 @@ export async function fetchCompleteContractTelemetry(
 
   const owner = await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "owner",
     })
     .catch(() => "0x5233E4253bC38e8CF517c0768dbC8aCC886F32B3" as `0x${string}`);
@@ -867,8 +867,8 @@ export async function fetchCompleteContractTelemetry(
 
   const profileData = (await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "getProfile",
       args: [profileId],
     })
@@ -876,8 +876,8 @@ export async function fetchCompleteContractTelemetry(
 
   const remainingUnits = await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "getRemainingCredit",
       args: [profileId],
     })
@@ -909,15 +909,15 @@ export async function fetchCompleteContractTelemetry(
         try {
           const [isAuth, authRecord] = await Promise.all([
             publicClient.readContract({
-              address: FLOAT_CREDIT_FACILITY_ADDRESS,
-              abi: FLOAT_CREDIT_FACILITY_ABI,
+              address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+              abi: LIFELINE_CREDIT_FACILITY_ABI,
               functionName: "isAgentAuthorized",
               args: [profileId, agentAddr as `0x${string}`],
             }),
             publicClient
               .readContract({
-                address: FLOAT_CREDIT_FACILITY_ADDRESS,
-                abi: FLOAT_CREDIT_FACILITY_ABI,
+                address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+                abi: LIFELINE_CREDIT_FACILITY_ABI,
                 functionName: "agentAuthorizations",
                 args: [agentAddr as `0x${string}`],
               })
@@ -944,8 +944,8 @@ export async function fetchCompleteContractTelemetry(
   // Query nextLoanId and all drawdowns
   const nextLoanId = (await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "nextLoanId",
     })
     .catch(() => BigInt(1))) as bigint;
@@ -995,8 +995,8 @@ export async function fetchCompleteContractTelemetry(
   // Query nextRepaymentId and all repayments
   const nextRepaymentId = (await publicClient
     .readContract({
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
-      abi: FLOAT_CREDIT_FACILITY_ABI,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+      abi: LIFELINE_CREDIT_FACILITY_ABI,
       functionName: "nextRepaymentId",
     })
     .catch(() => BigInt(1))) as bigint;
@@ -1040,9 +1040,9 @@ export async function fetchCompleteContractTelemetry(
       latestBlock: Number(latestBlock),
     },
     contract: {
-      address: FLOAT_CREDIT_FACILITY_ADDRESS,
+      address: LIFELINE_CREDIT_FACILITY_ADDRESS,
       owner,
-      explorerUrl: `https://testnet.arcscan.app/address/${FLOAT_CREDIT_FACILITY_ADDRESS}`,
+      explorerUrl: `https://testnet.arcscan.app/address/${LIFELINE_CREDIT_FACILITY_ADDRESS}`,
     },
     profile: profileData && Number(profileData.createdAt) > 0
       ? {

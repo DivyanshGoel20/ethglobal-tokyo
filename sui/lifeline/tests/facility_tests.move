@@ -1,19 +1,19 @@
-/// The Arc suite, ported: FloatCreditFacility.t.sol and Exploit.t.sol.
+/// The Arc suite, ported: LifelineCreditFacility.t.sol and Exploit.t.sol.
 ///
 /// Each exploit test names the attack it closes on Arc; the Move facility has
 /// to refuse the same thing, whether by an address check or by not handing out
 /// the capability at all.
 #[test_only]
-module float::facility_tests;
+module lifeline::facility_tests;
 
-use float::facility::{Self, Facility, AdminCap};
+use lifeline::facility::{Self, Facility, AdminCap};
 use sui::clock::{Self, Clock};
 use sui::coin;
 use sui::test_scenario::{Self as ts, Scenario};
 
 public struct USDC has drop {}
 
-const FLOAT: address = @0xF1;
+const OPERATOR: address = @0xF1;
 const HUMAN: address = @0xA1;
 const AGENT: address = @0xA2;
 const AGENT2: address = @0xA3;
@@ -26,9 +26,9 @@ fun pid(): vector<u8> { b"profile-human-1" }
 fun root(): vector<u8> { b"world-nullifier-1" }
 
 fun begin(): (Scenario, Clock) {
-    let mut sc = ts::begin(FLOAT);
+    let mut sc = ts::begin(OPERATOR);
     let cap = facility::create<USDC>(sc.ctx());
-    transfer::public_transfer(cap, FLOAT);
+    transfer::public_transfer(cap, OPERATOR);
     let clock = clock::create_for_testing(sc.ctx());
     (sc, clock)
 }
@@ -38,10 +38,10 @@ fun finish(sc: Scenario, clock: Clock) {
     sc.end();
 }
 
-/// Float underwrites HUMAN at $10 and authorises AGENT, as the web app does on
+/// Lifeline underwrites HUMAN at $10 and authorises AGENT, as the web app does on
 /// World verification and agent registration.
 fun onboard(sc: &mut Scenario, clock: &Clock) {
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.create_credit_profile(&cap, pid(), HUMAN, root(), LIMIT, clock);
@@ -58,21 +58,21 @@ fun draw_as(sc: &mut Scenario, clock: &Clock, sender: address, agent: address, a
 }
 
 fun debt(sc: &mut Scenario): u64 {
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let f = sc.take_shared<Facility<USDC>>();
     let d = f.outstanding_debt(pid());
     ts::return_shared(f);
     d
 }
 
-// === FloatCreditFacility.t.sol ===
+// === LifelineCreditFacility.t.sol ===
 
 #[test]
 fun profile_creation_and_agent_authorization() {
     let (mut sc, clock) = begin();
     onboard(&mut sc, &clock);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let f = sc.take_shared<Facility<USDC>>();
     let p = f.profile(pid());
     assert!(p.human_owner() == HUMAN);
@@ -92,7 +92,7 @@ fun drawdown_records_debt_without_moving_coins() {
     onboard(&mut sc, &clock);
     draw_as(&mut sc, &clock, AGENT, AGENT, 2_500_000);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let f = sc.take_shared<Facility<USDC>>();
     assert!(f.outstanding_debt(pid()) == 2_500_000);
     assert!(f.remaining_credit(pid()) == LIMIT - 2_500_000);
@@ -117,7 +117,7 @@ fun agents_share_one_human_limit() {
     draw_as(&mut sc, &clock, AGENT2, AGENT2, 4_000_000);
     assert!(debt(&mut sc) == LIMIT);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let f = sc.take_shared<Facility<USDC>>();
     assert!(f.remaining_credit(pid()) == 0);
     ts::return_shared(f);
@@ -179,7 +179,7 @@ fun a_capability_from_another_facility_is_refused() {
     let (mut sc, clock) = begin();
     onboard(&mut sc, &clock);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let real_cap = sc.take_from_sender<AdminCap>();
     let real_facility = real_cap.cap_facility();
     sc.return_to_sender(real_cap);
@@ -195,7 +195,7 @@ fun a_capability_from_another_facility_is_refused() {
 fun underwriter_can_still_set_the_limit() {
     let (mut sc, clock) = begin();
     onboard(&mut sc, &clock);
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.set_credit_limit(&cap, pid(), 25_000_000);
@@ -213,7 +213,7 @@ fun defaulter_cannot_borrow_again() {
     onboard(&mut sc, &clock);
     draw_as(&mut sc, &clock, AGENT, AGENT, 1_000_000);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.mark_default(&cap, pid(), &clock);
@@ -274,7 +274,7 @@ fun operator_can_book_an_offchain_repayment() {
     onboard(&mut sc, &clock);
     draw_as(&mut sc, &clock, AGENT, AGENT, 2_000_000);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     let applied = f.record_repayment(&cap, pid(), HUMAN, AGENT, 5_000_000, &clock);
@@ -289,7 +289,7 @@ fun operator_can_book_an_offchain_repayment() {
 fun one_human_root_cannot_open_a_second_profile() {
     let (mut sc, clock) = begin();
     onboard(&mut sc, &clock);
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.create_credit_profile(&cap, b"profile-2", HUMAN, root(), LIMIT, &clock);
@@ -304,7 +304,7 @@ fun a_self_registered_root_cannot_be_underwritten_again() {
     f.self_register(pid(), root(), &clock, sc.ctx());
     ts::return_shared(f);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.create_credit_profile(&cap, b"profile-2", @0xC0, root(), LIMIT, &clock);
@@ -322,14 +322,14 @@ fun one_self_registered_address_cannot_open_a_second_profile() {
 }
 
 #[test]
-fun float_can_onboard_many_humans_from_one_identity() {
+fun lifeline_can_onboard_many_humans_from_one_identity() {
     let (mut sc, clock) = begin();
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
-    f.create_credit_profile(&cap, b"p1", FLOAT, b"root-1", LIMIT, &clock);
-    f.create_credit_profile(&cap, b"p2", FLOAT, b"root-2", LIMIT, &clock);
-    f.create_credit_profile(&cap, b"p3", FLOAT, b"root-3", LIMIT, &clock);
+    f.create_credit_profile(&cap, b"p1", OPERATOR, b"root-1", LIMIT, &clock);
+    f.create_credit_profile(&cap, b"p2", OPERATOR, b"root-2", LIMIT, &clock);
+    f.create_credit_profile(&cap, b"p3", OPERATOR, b"root-3", LIMIT, &clock);
     assert!(f.profile_count() == 3);
     ts::return_shared(f);
     sc.return_to_sender(cap);
@@ -339,7 +339,7 @@ fun float_can_onboard_many_humans_from_one_identity() {
 #[test, expected_failure(abort_code = facility::ENeedsHumanRoot)]
 fun underwritten_profile_must_carry_a_world_root() {
     let (mut sc, clock) = begin();
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     f.create_credit_profile(&cap, pid(), HUMAN, b"", LIMIT, &clock);
@@ -358,7 +358,7 @@ fun repaid_coins_are_withdrawable_by_the_underwriter() {
     change.destroy_zero();
     ts::return_shared(f);
 
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     let out = f.withdraw(&cap, 4_000_000, sc.ctx());
@@ -373,7 +373,7 @@ fun repaid_coins_are_withdrawable_by_the_underwriter() {
 #[test, expected_failure(abort_code = facility::EInsufficientLiquidity)]
 fun cannot_withdraw_more_than_is_held() {
     let (mut sc, _clock) = begin();
-    sc.next_tx(FLOAT);
+    sc.next_tx(OPERATOR);
     let mut f = sc.take_shared<Facility<USDC>>();
     let cap = sc.take_from_sender<AdminCap>();
     let out = f.withdraw(&cap, 1, sc.ctx());

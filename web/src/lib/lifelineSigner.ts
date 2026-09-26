@@ -7,7 +7,7 @@ import {
 } from "./agentStore";
 import { createLoan } from "./loanStore";
 import { recordPayment, PaymentRecord } from "./paymentStore";
-import { FLOAT_CREDIT_FACILITY_ADDRESS } from "./arc";
+import { LIFELINE_CREDIT_FACILITY_ADDRESS } from "./arc";
 import { addPending } from "./pendingLedger";
 import { flushAgent } from "./ledgerFlush";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
@@ -24,9 +24,9 @@ export interface AgentPaymentContext {
   maxCreditUsd?: number;
 }
 
-export interface FloatPayResult {
+export interface LifelinePayResult {
   success: boolean;
-  fundingSource: "AGENT_GATEWAY" | "FLOAT_FACILITY";
+  fundingSource: "AGENT_GATEWAY" | "LIFELINE_FACILITY";
   amount: string;
   borrowed: string;
   drawdownId: string | null;
@@ -44,8 +44,8 @@ export interface FloatPayResult {
   facilityDebt?: number;
 }
 
-export class FloatSignerTS {
-  private floatFundingClient: GatewayClient;
+export class LifelineSigner {
+  private fundingClient: GatewayClient;
   private fundingPrivateKey: `0x${string}`;
   public creditFacilityAddress: string;
 
@@ -56,30 +56,30 @@ export class FloatSignerTS {
   }) {
     this.creditFacilityAddress =
       options?.creditFacilityAddress ||
-      process.env.FLOAT_CREDIT_FACILITY_ADDRESS ||
-      FLOAT_CREDIT_FACILITY_ADDRESS;
+      process.env.LIFELINE_CREDIT_FACILITY_ADDRESS ||
+      LIFELINE_CREDIT_FACILITY_ADDRESS;
 
     // Default to the Circle Gateway-funded account on Arc Testnet
     this.fundingPrivateKey =
       options?.fundingPrivateKey ||
-      (process.env.FLOAT_FUNDING_PRIVATE_KEY as `0x${string}`) ||
+      (process.env.LIFELINE_FUNDING_PRIVATE_KEY as `0x${string}`) ||
       (process.env.PRIVATE_KEY as `0x${string}`);
 
     if (!this.fundingPrivateKey) {
-      throw new Error("Missing FLOAT_FUNDING_PRIVATE_KEY or PRIVATE_KEY in environment");
+      throw new Error("Missing LIFELINE_FUNDING_PRIVATE_KEY or PRIVATE_KEY in environment");
     }
 
-    this.floatFundingClient = new GatewayClient({
+    this.fundingClient = new GatewayClient({
       chain: options?.chain || "arcTestnet",
       privateKey: this.fundingPrivateKey,
     });
   }
 
   /**
-   * Returns Float's funding address used to provide overdraft purchasing capacity.
+   * Returns Lifeline's funding address used to provide overdraft purchasing capacity.
    */
   get fundingAddress(): string {
-    return this.floatFundingClient.address;
+    return this.fundingClient.address;
   }
 
   /**
@@ -88,7 +88,7 @@ export class FloatSignerTS {
   async getAgentGatewayBalance(
     agentAddress: string
   ): Promise<{ available: bigint; formattedAvailable: string }> {
-    const balances = await (this.floatFundingClient as any).getGatewayBalance(
+    const balances = await (this.fundingClient as any).getGatewayBalance(
       agentAddress
     );
     return {
@@ -98,7 +98,7 @@ export class FloatSignerTS {
   }
 
   /**
-   * Wraps the x402 payment flow with Float's autonomous overdraft decision engine.
+   * Wraps the x402 payment flow with Lifeline's autonomous overdraft decision engine.
    */
   async pay(
     rawUrl: string,
@@ -108,7 +108,7 @@ export class FloatSignerTS {
       headers?: Record<string, string>;
       body?: any;
     }
-  ): Promise<FloatPayResult> {
+  ): Promise<LifelinePayResult> {
     const method = options?.method ?? "GET";
     const headers = {
       "Content-Type": "application/json",
@@ -122,7 +122,7 @@ export class FloatSignerTS {
         : undefined;
 
     const url = rawUrl.startsWith("/")
-      ? `${process.env.NEXT_PUBLIC_APP_URL || process.env.FLOAT_APP_URL || "http://localhost:3000"}${rawUrl}`
+      ? `${process.env.NEXT_PUBLIC_APP_URL || process.env.LIFELINE_APP_URL || "http://localhost:3000"}${rawUrl}`
       : rawUrl;
 
     // Step 1: Initial request to resource
@@ -272,7 +272,7 @@ export class FloatSignerTS {
 
       const data = await paidResponse.json();
 
-      // Record normal payment record in Float audit ledger
+      // Record normal payment record in Lifeline audit ledger
       recordPayment({
         paymentId,
         agentAddress: agentContext.agentAddress,
@@ -306,7 +306,7 @@ export class FloatSignerTS {
       };
     } else {
       // ----------------------------------------------------
-      // PATH B: OVERDRAFT DRAWDOWN (Float Credit Facility)
+      // PATH B: OVERDRAFT DRAWDOWN (Lifeline Credit Facility)
       // ----------------------------------------------------
       // An x402 payment has one payer. When the agent cannot cover all of it,
       // Lifeline's Gateway pays the seller the whole price - so the whole
@@ -314,7 +314,7 @@ export class FloatSignerTS {
       // of pocket by whatever the agent happened to hold.
       const shortfallAmount = parseFloat(requestedAmountFormatted);
 
-      // 1. Check Float Credit Facility Limits
+      // 1. Check Lifeline Credit Facility Limits
       const facility = getHumanFacilityStats(humanOwner);
       const agentAvailableLimit = agent
         ? Math.max(0, agent.creditLimit - agent.outstandingDebt)
@@ -335,7 +335,7 @@ export class FloatSignerTS {
           requestedAmount: requestedAmountFormatted,
           agentGatewayBalance: formattedAvailable,
           shortfall: shortfallAmount.toFixed(2),
-          fundingSource: "FLOAT_FACILITY",
+          fundingSource: "LIFELINE_FACILITY",
           drawdownId: null,
           status: "REJECTED_CREDIT",
           timestamp: Date.now(),
@@ -353,20 +353,20 @@ export class FloatSignerTS {
         );
       }
 
-      // 3. Sign x402 Payment Authorization using Float's Gateway-Funded Facility
-      const floatPaymentPayload = await (
-        this.floatFundingClient as any
+      // 3. Sign x402 Payment Authorization using Lifeline's Gateway-Funded Facility
+      const fundingPaymentPayload = await (
+        this.fundingClient as any
       ).batchScheme.createPaymentPayload(x402Version, batchingOption);
 
       const paymentHeader = Buffer.from(
         JSON.stringify({
-          ...floatPaymentPayload,
+          ...fundingPaymentPayload,
           resource: paymentRequired.resource,
           accepted: batchingOption,
         })
       ).toString("base64");
 
-      // 4. Retry request with Float's Payment-Signature
+      // 4. Retry request with Lifeline's Payment-Signature
       const paidResponse = await fetch(url, {
         method,
         headers: {
@@ -387,7 +387,7 @@ export class FloatSignerTS {
           requestedAmount: requestedAmountFormatted,
           agentGatewayBalance: formattedAvailable,
           shortfall: shortfallAmount.toFixed(2),
-          fundingSource: "FLOAT_FACILITY",
+          fundingSource: "LIFELINE_FACILITY",
           drawdownId: null,
           status: "FAILED",
           timestamp: Date.now(),
@@ -469,7 +469,7 @@ export class FloatSignerTS {
         requestedAmount: requestedAmountFormatted,
         agentGatewayBalance: formattedAvailable,
         shortfall: shortfallAmount.toFixed(2),
-        fundingSource: "FLOAT_FACILITY",
+        fundingSource: "LIFELINE_FACILITY",
         drawdownId: loan.loanId,
         status: "SUCCESS",
         timestamp: Date.now(),
@@ -484,7 +484,7 @@ export class FloatSignerTS {
 
       return {
         success: true,
-        fundingSource: "FLOAT_FACILITY",
+        fundingSource: "LIFELINE_FACILITY",
         amount: requestedAmountFormatted,
         borrowed: shortfallAmount.toFixed(2),
         drawdownId: loan.loanId,
@@ -496,7 +496,7 @@ export class FloatSignerTS {
         arcTxHash: arcTxHash || undefined,
         arcTxLink: arcTxHash ? `https://testnet.arcscan.app/tx/${arcTxHash}` : undefined,
         circleSettlementId: settleResponse?.transaction,
-        payer: this.floatFundingClient.address,
+        payer: this.fundingClient.address,
         creditFacilityAddress: this.creditFacilityAddress,
         agentDebt: updatedAgent?.outstandingDebt || shortfallAmount,
         facilityDebt: updatedFacility.totalOutstandingDebt,

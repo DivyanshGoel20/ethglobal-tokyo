@@ -21,12 +21,12 @@ import {
 import { encodeHeader, paymentPayload, suiRequirementsFrom, decodeHeader } from "./x402";
 
 /**
- * Float's payer on Sui: quote, decide, park, settle.
+ * Lifeline's payer on Sui: quote, decide, park, settle.
  *
- * The shape is the Hedera payer's. An agent that can afford a resource pays for
+ * An agent that can afford a resource pays for
  * it. One that cannot has the shortfall drawn from the facility - but only
  * against a repayment it has already parked, and in the same transaction that
- * pays the seller, so there is never a moment where Float has paid and holds
+ * pays the seller, so there is never a moment where Lifeline has paid and holds
  * only a promise, nor a debt without a delivery.
  */
 
@@ -41,7 +41,7 @@ export interface SuiPayContext {
   maxCreditUsd: number;
   /**
    * Called with the price once the 402 has named it, before anything is
-   * signed. A key Float holds for an agent is held under a per-payment ceiling
+   * signed. A key Lifeline holds for an agent is held under a per-payment ceiling
    * and an expiry; this is where they are enforced. Throw to refuse.
    */
   approve?: (amountUsd: number) => void;
@@ -49,7 +49,7 @@ export interface SuiPayContext {
 
 export interface SuiPayResult {
   success: true;
-  fundingSource: "AGENT_WALLET" | "FLOAT_CREDIT";
+  fundingSource: "AGENT_WALLET" | "LIFELINE_CREDIT";
   agent: string;
   payTo: string;
   amount: string;
@@ -67,7 +67,7 @@ export interface SuiPayResult {
 type BookEntry = { purseId?: string; obligations: string[] };
 
 function bookFile(): string {
-  if (process.env.FLOAT_SUI_BOOK) return process.env.FLOAT_SUI_BOOK;
+  if (process.env.LIFELINE_SUI_BOOK) return process.env.LIFELINE_SUI_BOOK;
   for (const c of [
     path.resolve(process.cwd(), "web", "data", "sui-agents.json"),
     path.resolve(process.cwd(), "data", "sui-agents.json"),
@@ -253,14 +253,14 @@ export async function paySui(
 
   // The seller executed it, in another process. Until this node has indexed
   // that, the sponsor's gas coin still reads at its old version, and the next
-  // transaction Float builds is rejected as stale.
+  // transaction Lifeline builds is rejected as stale.
   if (settled.transaction) {
     await suiClient().waitForTransaction({ digest: settled.transaction }).catch(() => undefined);
   }
 
   return {
     success: true,
-    fundingSource: credit ? "FLOAT_CREDIT" : "AGENT_WALLET",
+    fundingSource: credit ? "LIFELINE_CREDIT" : "AGENT_WALLET",
     agent: agentAddr,
     payTo: quote.payTo,
     amount: fromUnits(price).toFixed(6),
