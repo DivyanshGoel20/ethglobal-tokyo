@@ -256,6 +256,28 @@ validation, linking), [`api/pay/holds/[holdId]/approval`](web/src/app/api/pay/ho
 [`api/auth/world-agents/link`](web/src/app/api/auth/world-agents/link/route.ts),
 [`WorldAgentApproval.tsx`](web/src/components/WorldAgentApproval.tsx).
 Live: `npm run e2e:world-agents` (approve) and `npm run e2e:world-agents -- --deny`.
+Both were run against World's sandbox: approved and released ($5 paid on
+credit), denied (declined, nothing paid), and - by accident, while learning the
+sandbox - approved by a different World identity, which was refused.
+
+**Integration debrief**
+
+- *Time to first success:* the client authenticated with the device endpoint
+  on the first call after portal registration. The first end-to-end approval
+  took about fifteen minutes more, all of it spent on the point below.
+- *Friction:* the sandbox gives each browser its own fake identity. We linked
+  in one browser and approved in another, so World returned two different
+  `sub`s and Lifeline (correctly) refused the payment twice before we saw why.
+  Nothing on the approval page says which identity you are.
+- *Missing docs:* the integration guides are only served through the MCP
+  endpoint (`get_idp_guide`); the public `/docs` page is an overview. That a
+  device-only client still needs a callback URL - and that its hostname
+  permanently fixes the pairwise sector - is easy to miss.
+- *Biggest improvement:* let the relying party show what is being approved.
+  The page reads "Authenticate with World ID for Lifeline ... approve sign-in",
+  while the human is really approving "$5 to this seller for this agent". A
+  binding message or `authorization_details` shown on the approval screen would
+  make this a true transaction approval rather than a sign-in.
 
 ## Repaying by Apple Pay, Google Pay or card (Arc)
 

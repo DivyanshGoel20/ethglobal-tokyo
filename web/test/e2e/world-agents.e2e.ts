@@ -82,6 +82,7 @@ async function main() {
   const held = await asAgent("POST", "/api/pay", { url: `${PREMIUM}/dossier`, agentAddress: agent });
   check("the agent's $5 purchase is held for its human", held.status === 202 && !!held.body.hold?.holdId, held.body.screening?.reasons?.[0] ?? held.body.error);
   const holdId = held.body.hold?.holdId;
+  if (!holdId) return finish();
 
   const selfApprove = await asAgent("POST", `/api/pay/holds/${holdId}`, { action: "approve" });
   check("the agent cannot approve its own held payment", selfApprove.status === 401, `status ${selfApprove.status}`);
