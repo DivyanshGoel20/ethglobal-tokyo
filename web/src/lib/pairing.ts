@@ -67,3 +67,24 @@ export function collectPairing(code: string, claim: string): { status: "pending"
   write(all);
   return { status: "approved", human: p.human };
 }
+
+/** Whether a code is still waiting for someone to approve it. */
+export function isWaiting(code: string): boolean {
+  const p = read().find((x) => x.code === code.toUpperCase());
+  return !!p && p.expiresAt > Date.now() && !p.human && !p.collected;
+}
+
+/**
+ * The one code a browser started in the last `withinMs`, if exactly one.
+ *
+ * World App sometimes opens the mini app at the path it was opened with last
+ * time, not the one just scanned, so the code in the URL is stale. The code
+ * on the human's screen is then almost always the newest one waiting; it is
+ * offered for them to match against their screen - and not at all when more
+ * than one is waiting, rather than guess.
+ */
+export function newestWaiting(withinMs = 5 * 60 * 1000): string | null {
+  // Started within the window: expiresAt is start + TTL_MS.
+  const recent = read().filter((p) => !p.human && !p.collected && p.expiresAt > Date.now() && p.expiresAt - TTL_MS > Date.now() - withinMs);
+  return recent.length === 1 ? recent[0].code : null;
+}

@@ -10,7 +10,7 @@ import { GET as sessionFor, POST as proveSession } from "../src/app/api/auth/wor
 import { POST as linkToken } from "../src/app/api/auth/link-token/route";
 import { GET as rpContext } from "../src/app/api/auth/world-rp-context/route";
 import { POST as pairStart, GET as pairPoll } from "../src/app/api/auth/pair/route";
-import { POST as pairApprove } from "../src/app/api/auth/pair/approve/route";
+import { POST as pairApprove, GET as pairCheck } from "../src/app/api/auth/pair/approve/route";
 
 /**
  * Signing in again without World ID's one-time uniqueness proof.
@@ -127,6 +127,8 @@ test("two codes started in one browser each keep their own claim", async () => {
   assert.equal((await pairApprove(post("/api/auth/pair/approve", { code: codeA }, sessionCookie(ALICE)))).status, 200);
   const done = await pairPoll(get(`/api/auth/pair?code=${codeA}`, jar));
   assert.equal((await done.json()).nullifierHash, ALICE);
+  // Leave nothing waiting for the tests after this one.
+  await pairApprove(post("/api/auth/pair/approve", { code: codeB }, sessionCookie(ALICE)));
 });
 
 test("a browser is paired from World App, once, and only by the browser that asked", async () => {
@@ -145,4 +147,22 @@ test("a browser is paired from World App, once, and only by the browser that ask
   assert.equal((await done.json()).nullifierHash, ALICE);
   assert.ok(cookieOf(done, "lifeline_session"));
   assert.equal((await (await poll(claim)).json()).status, "expired", "collected once");
+});
+
+test("World App opened with a stale code is offered the one code waiting, never a guess", async () => {
+  // Earlier pairings in this file are approved or collected by now.
+  const check = async (code: string) => (await pairCheck(get(`/api/auth/pair/approve?code=${code}`, sessionCookie(ALICE)))).json();
+  assert.equal((await pairCheck(get("/api/auth/pair/approve?code=X"))).status, 401, "only a signed-in human may ask");
+
+  const { code: fresh } = await (await pairStart(post("/api/auth/pair", {}))).json();
+  assert.deepEqual(await check(fresh), { code: fresh, waiting: true });
+
+  // The launch path carried an old code: the one waiting is offered instead.
+  const stale = await check("0000000000");
+  assert.equal(stale.waiting, false);
+  assert.equal(stale.code, fresh);
+
+  // Two browsers waiting: no fallback at all.
+  await pairStart(post("/api/auth/pair", {}));
+  assert.equal((await check("0000000000")).code, null);
 });

@@ -50,11 +50,53 @@ export default function MiniApp() {
   const [username, setUsername] = useState<string | null>(null);
   // Opened from a browser's "Sign in from World App" code.
   const [pairCode, setPairCode] = useState<string | null>(null);
+  // Set when the code in the URL was stale and this is the newest one waiting:
+  // the human is asked to match it against their screen.
+  const [pairFallback, setPairFallback] = useState(false);
+  const [pairStale, setPairStale] = useState(false);
   const [pairing, setPairing] = useState(false);
 
+  // World App can open the mini app at the path it was opened with last time
+  // rather than the one just scanned, so the code in the URL is checked before
+  // it is offered - and read again whenever the app comes back into view.
   useEffect(() => {
-    setPairCode(new URLSearchParams(window.location.search).get("pair"));
-  }, []);
+    if (!L.isWorldVerified) return;
+    let last: string | null = null;
+    const check = async () => {
+      const code = new URLSearchParams(window.location.search).get("pair");
+      if (!code || code === last) return;
+      last = code;
+      try {
+        const d = await fetch(`/api/auth/pair/approve?code=${encodeURIComponent(code)}`, { cache: "no-store" }).then((r) => r.json());
+        if (d.waiting) {
+          setPairCode(d.code);
+          setPairFallback(false);
+          setPairStale(false);
+        } else if (d.code) {
+          setPairCode(d.code);
+          setPairFallback(true);
+          setPairStale(false);
+        } else {
+          setPairCode(null);
+          setPairStale(true);
+        }
+      } catch {
+        setPairCode(code);
+      }
+      // Done with it: a later launch at this same path must not offer it again.
+      window.history.replaceState(null, "", window.location.pathname);
+    };
+    check();
+    const onShow = () => document.visibilityState === "visible" && check();
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener("focus", check);
+    window.addEventListener("popstate", check);
+    return () => {
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("popstate", check);
+    };
+  }, [L.isWorldVerified]);
 
   const approvePair = async () => {
     setPairing(true);
@@ -65,6 +107,12 @@ export default function MiniApp() {
         body: JSON.stringify({ code: pairCode }),
       });
       const d = await res.json().catch(() => ({}));
+      if (res.status === 400) {
+        // Expired or already used: say so where the human is looking.
+        haptic("error");
+        setPairStale(true);
+        return;
+      }
       if (!res.ok || !d.success) {
         throw new Error(
           res.status === 400
@@ -80,6 +128,7 @@ export default function MiniApp() {
     } finally {
       setPairing(false);
       setPairCode(null);
+      setPairFallback(false);
     }
   };
 
@@ -114,13 +163,32 @@ export default function MiniApp() {
     <div className="h-[100dvh] flex flex-col">
       {/* Header. World App draws its own controls at the top right, so ours
           stay left and centre. */}
-      {pairCode && (
+      {pairStale && !pairCode && (
         <div className="fixed inset-x-0 bottom-0 z-50 sheet rise px-6 pt-5 space-y-3" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
           <div className="lab">Sign in on a computer</div>
           <p className="text-[14px] leading-snug">
-            A browser showing code <span className="mono">{pairCode}</span> wants to sign in as you. Only approve it if
-            that is your screen.
+            That sign-in code has expired or was already used. Refresh the code on your computer and scan it again.
           </p>
+          <button className="btn btn-solid w-full justify-center h-11" onClick={() => setPairStale(false)}>
+            OK
+          </button>
+        </div>
+      )}
+      {pairCode && (
+        <div className="fixed inset-x-0 bottom-0 z-50 sheet rise px-6 pt-5 space-y-3" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
+          <div className="lab">Sign in on a computer</div>
+          {pairFallback ? (
+            <p className="text-[14px] leading-snug">
+              A browser is waiting to sign in as you with code
+              <span className="mono block text-[22px] tracking-[0.12em] my-2">{pairCode}</span>
+              Approve only if this is the code on your computer&apos;s screen.
+            </p>
+          ) : (
+            <p className="text-[14px] leading-snug">
+              A browser showing code <span className="mono">{pairCode}</span> wants to sign in as you. Only approve it if
+              that is your screen.
+            </p>
+          )}
           <div className="flex gap-2">
             <button className="btn btn-quiet flex-1 justify-center h-11" onClick={() => setPairCode(null)} disabled={pairing}>
               Not me
