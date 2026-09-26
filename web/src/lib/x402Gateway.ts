@@ -52,14 +52,14 @@ async function arcSupport(): Promise<any> {
 
 export const toUnits = (usd: number) => String(Math.round(usd * 1e6));
 
-async function requirements(priceUsd: number, payTo: string = SELLER_WALLET) {
+async function requirements(priceUsd: number, payTo: string = SELLER_WALLET, assetOverride?: string) {
   const kind = await arcSupport();
   const usdc = kind.extra?.assets?.find((a: any) => a.symbol === "USDC")?.address;
   if (!usdc) throw new Error("Circle Gateway lists no USDC on Arc testnet");
   return {
     scheme: SCHEME,
     network: ARC_NETWORK,
-    asset: usdc,
+    asset: assetOverride ?? usdc,
     amount: toUnits(priceUsd),
     payTo,
     maxTimeoutSeconds: MAX_TIMEOUT_SECONDS,
@@ -91,11 +91,12 @@ export async function requirePayment(
   req: NextRequest,
   priceUsd: number,
   description: string,
-  opts: { payTo?: string } = {}
+  /** payTo and asset override the quote - for the demo sellers only. */
+  opts: { payTo?: string; asset?: string } = {}
 ): Promise<{ response: NextResponse } | { settled: Settled }> {
   let reqs;
   try {
-    reqs = await requirements(priceUsd, opts.payTo);
+    reqs = await requirements(priceUsd, opts.payTo, opts.asset);
   } catch (err: any) {
     return {
       response: NextResponse.json(

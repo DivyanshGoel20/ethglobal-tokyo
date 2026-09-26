@@ -36,6 +36,13 @@ export const ARC_USDC = "0x3600000000000000000000000000000000000000";
 export const DEMO_RISKY_PAYTO =
   process.env.INTERCEPTA_DEMO_PAYTO || "0x39308ae43e5dda98db5fb17d005c5c764e5a2fed";
 
+/**
+ * A lookalike "USD Coin" (symbol USDC) on Ethereum, for showing the token
+ * check: Intercepta rates it high risk, malicious, action block - FAKE_TOKEN,
+ * KNOWN_MALICIOUS, SUSPICIOUS_DEPLOYER.
+ */
+export const DEMO_FAKE_USDC = process.env.INTERCEPTA_DEMO_FAKE_TOKEN || "0x740192316891b06aeddF20c741aBFC76d4CbECB0";
+
 /** Clean counterparty: the agent pays on its own up to this much a payment. */
 export const AUTO_APPROVE_USD = Number(process.env.INTERCEPTA_AUTO_APPROVE_USD || 2);
 /** Counterparty with warning signs: capped at this much, above it a human decides. */
@@ -67,7 +74,7 @@ export interface Trait {
 }
 
 export interface Check {
-  subject: "payTo" | "payer" | "token" | "authorization";
+  subject: "payTo" | "payer" | "token" | "authorization" | "history";
   target: string;
   endpoint: string;
   level: Level;
@@ -253,7 +260,10 @@ async function screenToken(asset: string): Promise<Check> {
       check.detectors = r.data.detectors;
       check.cached = r.cached;
       check.ms = r.ms;
-      check.summary += ` - Intercepta: ${r.data.token?.symbol ?? "unknown token"}, ${r.data.riskLevel ?? "?"} risk${r.data.category ? `, ${r.data.category}` : ""}`;
+      const fake = (r.data.detectors ?? []).some((x) => x.code === "FAKE_TOKEN");
+      check.summary = fake
+        ? `Asset ${short(asset)} is a fake ${r.data.token?.symbol ?? "token"} - Intercepta: ${r.data.riskLevel ?? "?"} risk, ${r.data.category ?? "flagged"}, action ${r.data.action ?? "?"}`
+        : `${check.summary} - Intercepta: ${r.data.token?.symbol ?? "unknown token"}, ${r.data.riskLevel ?? "?"} risk${r.data.category ? `, ${r.data.category}` : ""}`;
       break;
     } catch {
       /* the refusal stands without it */

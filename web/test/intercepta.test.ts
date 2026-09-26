@@ -89,6 +89,18 @@ test("a quote in anything but Arc's USDC is refused", async () => {
   assert.match(v.reasons[0], /not Arc's native USDC.*USDC, high risk, malicious/);
 });
 
+test("a lookalike USDC is named as a fake, in Intercepta's words", async () => {
+  answers.token = {
+    riskLevel: "high", category: "malicious", action: "block",
+    token: { chainId: 1, address: "0x7401", symbol: "USDC" },
+    detectors: [{ code: "FAKE_TOKEN", description: "Visual or ticker spoof of a famous coin." }, { code: "KNOWN_MALICIOUS", description: "flagged" }],
+  };
+  const v = await out({ asset: "0x740192316891b06aeddF20c741aBFC76d4CbECB0" });
+  assert.equal(v.decision, "refuse");
+  assert.match(v.reasons[0], /is a fake USDC - Intercepta: high risk, malicious, action block/);
+  assert.deepEqual(v.checks.find((c) => c.subject === "token")!.detectors!.map((d) => d.code), ["FAKE_TOKEN", "KNOWN_MALICIOUS"]);
+});
+
 test("a High-risk authorisation is refused", async () => {
   // The shape the live API returned for an authorisation paying a flagged address.
   answers.message = {

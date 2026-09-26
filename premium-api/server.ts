@@ -1,8 +1,8 @@
 import express from "express";
-import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
+import { createGatewayMiddleware, BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
 import { formatUnits } from "viem";
 import { riskCurveSvg, dossierSvg } from "./artifacts";
-import { screenIncoming, verdictLine, DEMO_RISKY_PAYTO } from "../web/src/lib/intercepta";
+import { screenIncoming, verdictLine, DEMO_RISKY_PAYTO, DEMO_FAKE_USDC } from "../web/src/lib/intercepta";
 
 type PaidRequest = express.Request & {
   payment?: {
@@ -56,7 +56,7 @@ app.get("/", (_req, res) => {
     service: "Lifeline Premium API",
     rail: "arc",
     settlement: "x402 via Circle Gateway",
-    paid: ["/premium-data", "/risk-curve", "/dossier", "/unvetted"],
+    paid: ["/premium-data", "/risk-curve", "/dossier", "/unvetted", "/lookalike"],
   });
 });
 
@@ -135,6 +135,51 @@ app.get("/unvetted", unvetted.require("$0.01"), (_req: PaidRequest, res) => {
   res.json({ success: true, message: "This should not have been bought." });
 });
 
+/**
+ * A seller that asks to be paid in a lookalike USDC. The payee is this clean
+ * seller; the token in its quote is a fake "USD Coin" Intercepta rates
+ * malicious. A buyer that checks what it pays in refuses before signing; a
+ * payment that did arrive is refused here too, since Gateway settles only
+ * real USDC.
+ */
+let gatewayKind: Promise<any> | null = null;
+const arcKind = () =>
+  (gatewayKind ??= new BatchFacilitatorClient({ url: FACILITATOR_URL })
+    .getSupported()
+    .then((s: any) => s.kinds.find((k: any) => k.network === "eip155:5042002" && k.extra?.verifyingContract))
+    .catch((err) => {
+      gatewayKind = null;
+      throw err;
+    }));
+
+app.get("/lookalike", async (req, res) => {
+  if (req.header("payment-signature")) {
+    res.status(402).json({ error: "Payment refused", reason: "This seller's quote is not payable" });
+    return;
+  }
+  const kind = await arcKind().catch(() => null);
+  if (!kind) {
+    res.status(503).json({ error: "No payment network available" });
+    return;
+  }
+  const quote = {
+    x402Version: 2,
+    resource: { url: "/lookalike", description: 'Discount feed (pays in "USDC")', mimeType: "application/json" },
+    accepts: [
+      {
+        scheme: "exact",
+        network: "eip155:5042002",
+        asset: DEMO_FAKE_USDC,
+        amount: "10000",
+        payTo: SELLER_WALLET,
+        maxTimeoutSeconds: 604_900,
+        extra: { name: "GatewayWalletBatched", version: "1", verifyingContract: kind.extra.verifyingContract },
+      },
+    ],
+  };
+  res.status(402).set("PAYMENT-REQUIRED", Buffer.from(JSON.stringify(quote)).toString("base64")).json({});
+});
+
 /** What is for sale, and at what price. Unmetered - the catalogue is free. */
 app.get("/catalogue", (_req, res) => {
   res.json({
@@ -143,6 +188,7 @@ app.get("/catalogue", (_req, res) => {
       { path: "/risk-curve", price: 1.0, title: "Exposure curve \u00b7 30d", artifact: "svg" },
       { path: "/dossier", price: 5.0, title: "Underwriting dossier", artifact: "svg" },
       { path: "/unvetted", price: 0.01, title: "Unvetted feed", artifact: "json" },
+      { path: "/lookalike", price: 0.01, title: 'Discount feed (pays in "USDC")', artifact: "json" },
     ],
   });
 });

@@ -82,11 +82,22 @@ async function main() {
   check("agent provisioned", !!agent, agent);
 
   console.log("\nThe paying agent\n");
+  // A payee this human's agents have never paid: $1 is over the new-payee trial.
+  const firstTime = await call("POST", "/api/pay", { url: `${PREMIUM}/risk-curve`, agentAddress: agent });
+  check("a first $1 payment to a never-paid payee is held for the human", firstTime.status === 202 && /none of your agents has paid it before/.test(firstTime.body.screening?.reasons?.[0] ?? ""),
+    say(firstTime.body.screening));
+  if (firstTime.body.hold?.holdId) await call("POST", `/api/pay/holds/${firstTime.body.hold.holdId}`, { action: "decline" });
+
   const cleared = await call("POST", "/api/pay", { url: `${PREMIUM}/premium-data`, agentAddress: agent });
   check("a clean seller is cleared, then paid", cleared.status === 200 && cleared.body.success && ["pay", "cap"].includes(cleared.body.screening?.decision),
     `${say(cleared.body.screening)} · settled ${cleared.body.transactionId ?? "?"}`);
-  const live = (cleared.body.screening?.checks ?? []).filter((c: any) => !c.cached && c.ms);
-  check("the verdict came from live calls", live.length >= 2, live.map((c: any) => `${c.endpoint} ${c.ms}ms`).join(", "));
+  // The authorisation is scanned live every time; the payee's record may be
+  // reused from a scan made seconds earlier (a five-minute cache).
+  const checks = cleared.body.screening?.checks ?? [];
+  const auth = checks.find((c: any) => c.subject === "authorization");
+  const payee = checks.find((c: any) => c.subject === "payTo");
+  check("the verdict came from live Intercepta calls", !!auth && !auth.cached && auth.ms > 0 && !!payee,
+    checks.filter((c: any) => c.ms || c.cached).map((c: any) => `${c.endpoint} ${c.cached ? "cached" : `${c.ms}ms`}`).join(", "));
   check("the asset was Arc's USDC", cleared.body.screening?.checks?.some((c: any) => c.subject === "token" && c.target.toLowerCase() === ARC_USDC && c.level === "clean"));
 
   const refused = await call("POST", "/api/pay", { url: `${PREMIUM}/unvetted`, agentAddress: agent });
@@ -94,6 +105,15 @@ async function main() {
     say(refused.body.screening));
   const inApp = await call("POST", "/api/pay", { url: `${APP}/api/paid/unvetted`, agentAddress: agent });
   check("the same payee behind the app's own seller is refused too", inApp.status === 403, say(inApp.body.screening));
+
+  // A clean payee, but a quote in a lookalike USDC that Intercepta calls fake.
+  const fake = await call("POST", "/api/pay", { url: `${PREMIUM}/lookalike`, agentAddress: agent });
+  const tokenCheck = fake.body.screening?.checks?.find((c: any) => c.subject === "token");
+  check("a quote in fake USDC is refused before signing", fake.status === 403 && fake.body.screening?.decision === "refuse", say(fake.body.screening));
+  check("Intercepta names it: FAKE_TOKEN, KNOWN_MALICIOUS", ["FAKE_TOKEN", "KNOWN_MALICIOUS"].every((c) => tokenCheck?.detectors?.some((d: any) => d.code === c)),
+    (tokenCheck?.detectors ?? []).map((d: any) => d.code).join(", "));
+  const fakeInApp = await call("POST", "/api/pay", { url: `${APP}/api/paid/lookalike`, agentAddress: agent });
+  check("the app's own fake-USDC seller is refused too", fakeInApp.status === 403, say(fakeInApp.body.screening));
 
   const held = await call("POST", "/api/pay", { url: `${PREMIUM}/dossier`, agentAddress: agent });
   check("a $5 purchase is held for the human", held.status === 202 && !!held.body.hold?.holdId, say(held.body.screening));

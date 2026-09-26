@@ -15,6 +15,7 @@ import { flushAgent } from "./ledgerFlush";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { screenOutgoing, verdictLine, Verdict } from "./intercepta";
 import { createHold } from "./holdStore";
+import { withFirstPayeeRule } from "./payeePolicy";
 import { acquireLedgerLock, syncAgentDebts } from "./ledgerLock";
 
 // What Circle's BatchEvmScheme signs, reproduced so the authorisation
@@ -590,7 +591,7 @@ export class LifelineSigner {
       verifyingContract: getAddress(verifyingContract),
     };
 
-    const verdict = await screenOutgoing({
+    const screened = await screenOutgoing({
       from: account.address,
       payTo: requirements.payTo,
       asset: requirements.asset,
@@ -603,6 +604,11 @@ export class LifelineSigner {
       },
       website: new URL(url).origin,
     });
+    // A payee none of this human's agents has paid before gets a small trial,
+    // and anything more waits for the human.
+    const verdict = ctx.humanProfileId
+      ? withFirstPayeeRule(screened, ctx.humanProfileId, requirements.payTo)
+      : screened;
 
     const approvedByHuman = verdict.decision === "hold" && ctx.humanApproved === true;
     if (verdict.decision === "refuse" || (verdict.decision === "hold" && !approvedByHuman)) {
