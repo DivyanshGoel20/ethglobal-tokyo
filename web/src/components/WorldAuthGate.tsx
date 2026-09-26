@@ -10,7 +10,7 @@ import type {
   IDKitErrorCodes,
   IDKitDebugReport,
 } from "@worldcoin/idkit";
-import { ArrowRight, ShieldCheck, RefreshCw, AlertCircle } from "lucide-react";
+import { LifelineMark } from "./Pulse";
 
 // Dynamically load the widgets to prevent SSR window issues
 const IDKitRequestWidget = dynamic(
@@ -189,7 +189,7 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
       // session. The nullifier cannot be spent twice, so there is no way to
       // sign up again with the same action.
       setErrorMessage(
-        "This World ID has already signed up for Float. Sign in from the browser you signed up on - " +
+        "This World ID has already signed up for Lifeline. Sign in from the browser you signed up on - " +
           "this one has no saved World ID session to prove."
       );
       return;
@@ -206,86 +206,102 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
 
   const isBusy = isPreparing || isVerifyingProof || step !== "idle";
 
+  const label = isPreparing
+    ? "Preparing World ID…"
+    : isVerifyingProof
+      ? "Verifying proof…"
+      : step === "create-session"
+        ? "Approve the session in World App…"
+        : savedSession
+          ? "Sign in with World ID"
+          : "Sign up with World ID";
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#0a0b0e] text-[#f8fafc]">
-      <div className="w-full max-w-sm panel p-8 flex flex-col items-center text-center shadow-2xl border border-[#1e293b]">
-        <div className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center mb-6 shadow-md">
-          <svg viewBox="0 0 24 24" className="w-7 h-7 fill-current">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none" />
-            <circle cx="12" cy="12" r="4" fill="currentColor" />
+    <div className="min-h-screen flex flex-col">
+      <header className="max-w-[1180px] w-full mx-auto px-6 sm:px-10 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <LifelineMark size={18} />
+          <span className="serif text-[25px] leading-none tracking-tight">Lifeline</span>
+        </div>
+        <span className="lab">Arc · Sui · World ID</span>
+      </header>
+
+      <main className="flex-1 flex flex-col justify-center">
+        {/* The line the whole product is named for: flat until a human signs in. */}
+        <div className="w-full" aria-hidden>
+          <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="w-full h-[110px]">
+            <path
+              className="trace draw"
+              style={{ ["--len" as any]: 4000, strokeWidth: 1.6 }}
+              vectorEffect="non-scaling-stroke"
+              d="M0,78 L470,78 Q476,72 482,78 L492,78 L496,84 L502,20 L508,98 L512,78 L524,78 Q534,66 544,78 L610,78 Q616,72 622,78 L632,78 L636,82 L642,44 L648,90 L652,78 L664,78 Q674,70 684,78 L1200,78"
+            />
+            {/* The second beat is one Lifeline paid for: drawn again in red. */}
+            <path
+              className="trace trace-alarm draw"
+              style={{ ["--len" as any]: 260, strokeWidth: 1.8, animationDelay: "1.35s", animationDuration: "0.5s", strokeDashoffset: 260 }}
+              vectorEffect="non-scaling-stroke"
+              d="M610,78 Q616,72 622,78 L632,78 L636,82 L642,44 L648,90 L652,78 L664,78 Q674,70 684,78"
+            />
           </svg>
         </div>
 
-        <h1 className="text-xl font-semibold tracking-tight text-white mb-2">Float Credit Facility</h1>
+        <div className="max-w-[1180px] w-full mx-auto px-6 sm:px-10 pt-10 pb-16 grid gap-12 lg:grid-cols-[1.25fr_1fr] items-end">
+          <div className="rise">
+            <div className="lab mb-5">Credit for autonomous agents</div>
+            <h1 className="serif text-[52px] sm:text-[76px] leading-[0.92] tracking-tight">
+              An agent can hold money.
+              <br />
+              <em className="ink-3">Only a human can hold debt.</em>
+            </h1>
+          </div>
 
-        <p className="text-xs text-[#94a3b8] leading-relaxed mb-6">
-          Undercollateralized credit line for autonomous agents on Arc and Sui, underwritten by World ID Proof of Human.
-        </p>
+          <div className="rise" style={{ animationDelay: "0.15s" }}>
+            <p className="text-[15px] ink-2 leading-relaxed mb-7 max-w-[44ch]">
+              Lifeline gives one World ID-verified human one credit line, and lets their agents spend it on Arc and
+              Sui. When an agent is short at a paywall, Lifeline pays and the human owes. Every payment is a beat on
+              the agent&apos;s line.
+            </p>
 
-        <button
-          id="world-signin-btn"
-          onClick={handleStartSignIn}
-          disabled={isBusy}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-md bg-white hover:bg-zinc-200 text-black font-medium text-xs transition-colors cursor-pointer disabled:opacity-50"
-        >
-          {isPreparing ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin text-black" />
-              <span>Preparing World ID Session...</span>
-            </>
-          ) : isVerifyingProof ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin text-black" />
-              <span>Verifying Proof...</span>
-            </>
-          ) : step === "create-session" ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin text-black" />
-              <span>Approve the session in World App...</span>
-            </>
-          ) : (
-            <>
-              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.8" fill="none" />
+            <button id="world-signin-btn" onClick={handleStartSignIn} disabled={isBusy} className="btn btn-solid h-12 px-6 text-[11.5px]">
+              <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden>
+                <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" fill="none" />
                 <circle cx="12" cy="12" r="3.5" fill="currentColor" />
               </svg>
-              <span>{savedSession ? "Sign in with World ID" : "Sign up with World ID"}</span>
-              <ArrowRight className="w-3.5 h-3.5 ml-1 text-zinc-600" />
-            </>
-          )}
-        </button>
+              {label}
+            </button>
 
-        {savedSession ? (
-          <button
-            onClick={() => {
-              save(null);
-              setSavedSession(null);
-              setErrorMessage(null);
-            }}
-            disabled={isBusy}
-            className="mt-3 text-[11px] text-[#64748b] hover:text-white underline cursor-pointer disabled:opacity-40"
-          >
-            Not you? Sign up with a different World ID
-          </button>
-        ) : (
-          <p className="mt-3 text-[11px] text-[#64748b] leading-relaxed">
-            First time only: World App asks twice - once to prove you are unique, once to open the session you sign in
-            with from then on.
-          </p>
-        )}
+            <div className="mt-4 mono text-[10.5px] ink-3 leading-relaxed max-w-[48ch]">
+              {savedSession ? (
+                <button
+                  onClick={() => {
+                    save(null);
+                    setSavedSession(null);
+                    setErrorMessage(null);
+                  }}
+                  disabled={isBusy}
+                  className="underline underline-offset-2 hover:text-[color:var(--ink)] disabled:opacity-40"
+                >
+                  Not you? Sign up with a different World ID
+                </button>
+              ) : (
+                "First time only: World App asks twice - once to prove you are unique, once to open the session you sign in with from then on."
+              )}
+            </div>
 
-        {errorMessage && (
-          <div className="mt-4 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-left flex items-start space-x-2 font-mono w-full">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
-            <span>{errorMessage}</span>
+            {errorMessage && (
+              <div className="mt-5 mono text-[11px] leading-relaxed px-3 py-2.5" style={{ color: "var(--alarm)", background: "var(--alarm-soft)" }}>
+                {errorMessage}
+              </div>
+            )}
           </div>
-        )}
-
-        <div className="mt-6 pt-4 border-t border-[#232732] w-full flex items-center justify-center space-x-2 text-[11px] text-[#64748b]">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>World ID Verified &bull; Proof of Human</span>
         </div>
-      </div>
+      </main>
+
+      <footer className="max-w-[1180px] w-full mx-auto px-6 sm:px-10 py-5 rule-t flex flex-wrap justify-between gap-2 lab">
+        <span>One human · one line · two rails</span>
+        <span>Proof of human by World ID</span>
+      </footer>
 
       {mounted && rpContext && step === "signup" && (
         <IDKitRequestWidget

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Agent, Rail } from "@/types";
-import { X, RefreshCw, ExternalLink } from "lucide-react";
+import { Sheet, Field, ErrorNote } from "./Sheet";
 
 type Resource = { path: string; price: number; title: string; artifact?: string };
 
@@ -10,6 +10,8 @@ interface PurchaseModalProps {
   isOpen: boolean;
   onClose: () => void;
   agents: Agent[];
+  /** Pre-selects the agent when opened from its lead. */
+  initialAgent?: string | null;
   rail: Rail;
   headroom: number;
   onDone: (message: string) => void;
@@ -17,14 +19,15 @@ interface PurchaseModalProps {
 }
 
 /**
- * An agent hits a paywall. If it holds enough it pays; if not, Float covers the
- * shortfall on the human's line - on Arc through Circle Gateway, on Sui by
+ * An agent hits a paywall. If it holds enough it pays; if not, Lifeline covers
+ * the shortfall on the human's line - on Arc through Circle Gateway, on Sui by
  * drawing against a repayment the agent has already parked.
  */
 export const PurchaseModal: React.FC<PurchaseModalProps> = ({
   isOpen,
   onClose,
   agents,
+  initialAgent,
   rail,
   headroom,
   onDone,
@@ -56,13 +59,15 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
   }, [isOpen, rail]);
 
   useEffect(() => {
-    if (isOpen) setAgentAddress((a) => a || agents[0]?.address || "");
-  }, [isOpen, agents]);
-
-  if (!isOpen) return null;
+    if (isOpen) setAgentAddress(initialAgent || agents[0]?.address || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialAgent]);
 
   const selected = catalogue?.resources.find((r) => r.path === choice);
   const price = choice === "direct" ? parseFloat(directAmount) || 0 : selected?.price ?? 0;
+  const agent = agents.find((a) => a.address === agentAddress);
+  const holds = rail === "arc" ? Number(agent?.gatewayBalanceUSDC ?? 0) : agent?.suiWalletUsd ?? 0;
+  const willBorrow = Math.max(0, price - holds);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,8 +99,8 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
         choice === "direct"
           ? `Drew $${price.toFixed(2)} on Arc`
           : borrowed > 0
-            ? `Bought ${selected?.title} - Float covered $${borrowed.toFixed(3)}`
-            : `Bought ${selected?.title} - the agent paid for itself`
+            ? `${agent?.name ?? "Agent"} bought ${selected?.title} - Lifeline lent $${borrowed.toFixed(3)}`
+            : `${agent?.name ?? "Agent"} bought ${selected?.title} and paid for it`
       );
     } catch (err: any) {
       setError(err.message || "Payment failed.");
@@ -106,122 +111,127 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
 
   const link = result?.explorer ?? result?.arcTxLink ?? null;
   const tx = result?.digest ?? result?.arcTxHash ?? result?.txHash ?? result?.circleSettlementId ?? result?.transactionId;
+  const onCredit = result && (result.fundingSource === "FLOAT_CREDIT" || result.fundingSource === "FLOAT_FACILITY" || choice === "direct");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="panel max-w-md w-full p-6 bg-[#12141a] shadow-xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-[#94a3b8] hover:text-white cursor-pointer">
-          <X className="w-4 h-4" />
-        </button>
+    <Sheet open={isOpen} onClose={onClose} kicker={rail === "arc" ? "Arc · Circle Gateway" : "Sui · parked repayment"} title="x402 purchase">
+      {agents.length === 0 ? (
+        <p className="serif text-[18px]">Authorize an agent first.</p>
+      ) : result ? (
+        <div className="space-y-5">
+          <div className="flex items-baseline justify-between rule-b pb-4">
+            <span className="serif text-[22px]">{onCredit ? "Paid, on credit." : "Paid by the agent."}</span>
+            <span className="readout text-[26px]" style={{ color: onCredit ? "var(--alarm)" : "var(--steady)" }}>
+              ${Number(result.amount ?? price).toFixed(3)}
+            </span>
+          </div>
+          <dl className="grid grid-cols-[120px_1fr] gap-y-2.5 mono text-[11px]">
+            {Number(result.borrowed ?? 0) > 0 && (
+              <>
+                <dt className="ink-3">lent</dt>
+                <dd style={{ color: "var(--alarm)" }}>${Number(result.borrowed).toFixed(3)}</dd>
+              </>
+            )}
+            {result.obligationId && (
+              <>
+                <dt className="ink-3">obligation</dt>
+                <dd className="truncate">{result.obligationId}</dd>
+              </>
+            )}
+            {result.dueMs && (
+              <>
+                <dt className="ink-3">due</dt>
+                <dd>{new Date(result.dueMs).toLocaleString()}</dd>
+              </>
+            )}
+            {tx && (
+              <>
+                <dt className="ink-3">settled</dt>
+                <dd className="truncate">
+                  {link ? (
+                    <a href={link} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                      {String(tx).slice(0, 22)}… ↗
+                    </a>
+                  ) : (
+                    String(tx)
+                  )}
+                </dd>
+              </>
+            )}
+          </dl>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setResult(null)} className="btn btn-quiet">
+              Buy another
+            </button>
+            <button onClick={onClose} className="btn btn-solid">
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Agent">
+            <select className="field" value={agentAddress} onChange={(e) => setAgentAddress(e.target.value)}>
+              {agents.map((a) => (
+                <option key={a.address} value={a.address} disabled={rail === "sui" && !a.suiAddress}>
+                  {a.name}
+                  {rail === "sui" && !a.suiAddress ? " - no Sui key" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-        <h4 className="text-sm font-semibold text-white mb-1">x402 Purchase</h4>
-        <p className="text-xs text-[#94a3b8] mb-4">
-          {rail === "arc"
-            ? "Settled through Circle Gateway on Arc. A shortfall is drawn on your line."
-            : "Settled on Sui. A shortfall is drawn against a repayment the agent parks first, in the same transaction that pays the seller."}
-        </p>
-
-        {agents.length === 0 ? (
-          <div className="py-6 text-center text-xs text-[#64748b] font-mono">Authorize an agent first.</div>
-        ) : (
-          <form onSubmit={submit} className="space-y-3.5 text-xs font-mono">
-            <div>
-              <label className="text-[#94a3b8] block mb-1">Agent</label>
-              <select
-                value={agentAddress}
-                onChange={(e) => setAgentAddress(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-[#0a0b0e] border border-[#232732] text-white focus:outline-none focus:border-zinc-500 font-sans"
-              >
-                {agents.map((a) => (
-                  <option key={a.address} value={a.address} disabled={rail === "sui" && !a.suiAddress}>
-                    {a.name} ({(rail === "arc" ? a.address : a.suiAddress ?? "no Sui key").slice(0, 10)}...)
+          <Field label="Resource" hint={catalogue ? `${catalogue.resources.length} for sale` : "loading…"}>
+            {catalogue && catalogue.resources.length === 0 && rail === "sui" ? (
+              <div className="mono text-[11px] ink-3 py-2">The Sui feed is not running (npm run sui:service).</div>
+            ) : (
+              <select className="field" value={choice} onChange={(e) => setChoice(e.target.value)} disabled={!catalogue}>
+                {catalogue?.resources.map((r) => (
+                  <option key={r.path} value={r.path}>
+                    {r.title} - ${r.price.toFixed(3)}
                   </option>
                 ))}
+                {rail === "arc" && <option value="direct">Direct draw - no purchase</option>}
               </select>
-            </div>
+            )}
+          </Field>
 
+          {choice === "direct" && (
+            <Field label="Amount" hint="USDC">
+              <input type="number" step="0.01" min="0.01" className="field" value={directAmount} onChange={(e) => setDirectAmount(e.target.value)} />
+            </Field>
+          )}
+
+          <div className="grid grid-cols-3 rule-t pt-4">
             <div>
-              <label className="text-[#94a3b8] block mb-1">Resource</label>
-              {!catalogue ? (
-                <div className="text-[#64748b] py-2">loading catalogue...</div>
-              ) : (
-                <select
-                  value={choice}
-                  onChange={(e) => setChoice(e.target.value)}
-                  className="w-full px-3 py-2 rounded bg-[#0a0b0e] border border-[#232732] text-white focus:outline-none focus:border-zinc-500 font-sans"
-                >
-                  {catalogue.resources.map((r) => (
-                    <option key={r.path} value={r.path}>
-                      {r.title} - ${r.price.toFixed(3)}
-                    </option>
-                  ))}
-                  {rail === "arc" && <option value="direct">Direct draw (no purchase)</option>}
-                </select>
-              )}
-              {catalogue && catalogue.resources.length === 0 && (
-                <div className="text-[11px] text-[#64748b] mt-1">
-                  {rail === "arc" ? "The premium API is not running." : "The Sui feed is not running (npm run sui:service)."}
-                </div>
-              )}
+              <div className="lab mb-1.5">price</div>
+              <div className="readout text-[20px]">${price.toFixed(3)}</div>
             </div>
-
-            {choice === "direct" && (
-              <div>
-                <label className="text-[#94a3b8] block mb-1">Amount (USDC)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={directAmount}
-                  onChange={(e) => setDirectAmount(e.target.value)}
-                  className="w-full px-3 py-2 rounded bg-[#0a0b0e] border border-[#232732] text-white focus:outline-none focus:border-zinc-500"
-                />
+            <div>
+              <div className="lab mb-1.5">agent holds</div>
+              <div className="readout text-[20px]">${holds.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="lab mb-1.5">would borrow</div>
+              <div className="readout text-[20px]" style={{ color: willBorrow > 0 ? "var(--alarm)" : "var(--ink-3)" }}>
+                ${willBorrow.toFixed(3)}
               </div>
-            )}
-
-            <div className="flex justify-between text-[11px] text-[#64748b]">
-              <span>Headroom across both rails</span>
-              <span>${headroom.toFixed(2)} USDC</span>
             </div>
+          </div>
+          <div className="mono text-[10.5px] ink-3">${headroom.toFixed(2)} of headroom left across both rails</div>
 
-            {error && <div className="text-[11px] text-red-400">{error}</div>}
+          {error && <ErrorNote>{error}</ErrorNote>}
 
-            {result && (
-              <div className="panel-subtle p-3 text-[11px] space-y-1">
-                <div className="text-emerald-400">Settled</div>
-                {result.fundingSource && <div className="text-[#94a3b8]">paid by {result.fundingSource === "FLOAT_CREDIT" || result.fundingSource === "FLOAT_FACILITY" ? "Float, on credit" : "the agent"}</div>}
-                {Number(result.borrowed ?? 0) > 0 && <div className="text-[#f59e0b]">borrowed ${Number(result.borrowed).toFixed(3)}</div>}
-                {result.obligationId && <div className="text-[#94a3b8] truncate">obligation {result.obligationId}</div>}
-                {tx && (
-                  <div className="text-[#94a3b8] truncate">
-                    {link ? (
-                      <a href={link} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1">
-                        {String(tx).slice(0, 18)}... <ExternalLink className="w-3 h-3" />
-                      </a>
-                    ) : (
-                      `tx ${String(tx).slice(0, 24)}...`
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end space-x-2 pt-2">
-              <button type="button" onClick={onClose} className="px-3 py-1.5 rounded text-xs text-[#94a3b8] hover:text-white cursor-pointer">
-                {result ? "Done" : "Cancel"}
-              </button>
-              <button
-                type="submit"
-                disabled={busy || !choice || price <= 0}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded bg-white hover:bg-zinc-200 text-black font-medium text-xs transition-colors cursor-pointer disabled:opacity-40"
-              >
-                {busy && <RefreshCw className="w-3 h-3 animate-spin" />}
-                <span>{busy ? "Settling..." : choice === "direct" ? "Draw" : "Buy"}</span>
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="btn btn-quiet">
+              Cancel
+            </button>
+            <button type="submit" disabled={busy || !choice || price <= 0} className="btn btn-solid">
+              {busy ? "Settling…" : choice === "direct" ? "Draw" : "Buy"}
+            </button>
+          </div>
+        </form>
+      )}
+    </Sheet>
   );
 };

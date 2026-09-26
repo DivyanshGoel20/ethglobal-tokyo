@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Rail } from "@/types";
-import { LogOut, Copy, Check } from "lucide-react";
+import { LifelineMark } from "./Pulse";
 
 interface HeaderProps {
   rail: Rail;
@@ -13,95 +13,64 @@ interface HeaderProps {
   suiReady?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  rail,
-  setRail,
-  nullifierHash,
-  onSignOut,
-  suiReady = true,
-}) => {
+const RAILS: { id: Rail; name: string; instrument: string }[] = [
+  { id: "arc", name: "Arc", instrument: "strip" },
+  { id: "sui", name: "Sui", instrument: "monitor" },
+];
+
+export const Header: React.FC<HeaderProps> = ({ rail, setRail, nullifierHash, onSignOut, suiReady = true }) => {
   const [copied, setCopied] = useState(false);
-
-  const handleCopyNullifier = () => {
-    if (nullifierHash) {
-      navigator.clipboard.writeText(nullifierHash);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const formattedNullifier = nullifierHash
-    ? (nullifierHash.length > 14
-        ? nullifierHash.slice(0, 6) + "..." + nullifierHash.slice(-4)
-        : nullifierHash)
-    : "Verified Human";
+  const short = nullifierHash ? `${nullifierHash.slice(0, 6)}…${nullifierHash.slice(-4)}` : "verified";
 
   return (
-    <header className="border-b border-[#232732] bg-[#0a0b0e]">
-      <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold tracking-tight text-white text-base">FLOAT</span>
-            <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[#1c202a] text-[#94a3b8]">
-              Credit
-            </span>
+    <header className="rule-b" style={{ background: "var(--ground)" }}>
+      <div className="max-w-[1180px] mx-auto px-6 sm:px-10 h-16 flex items-center justify-between gap-6">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2.5">
+            <LifelineMark size={18} />
+            <span className="serif text-[25px] leading-none tracking-tight">Lifeline</span>
           </div>
 
-          {/* Rail Segmented Toggle */}
-          <div className="flex items-center p-0.5 rounded-md bg-[#181b22] border border-[#232732] text-xs font-mono">
-            <button
-              onClick={() => setRail("arc")}
-              className={`px-3 py-1 rounded transition-colors cursor-pointer ${
-                rail === "arc"
-                  ? "bg-cyan-600 text-white font-medium"
-                  : "text-[#94a3b8] hover:text-white"
-              }`}
-            >
-              Arc (EVM)
-            </button>
-            <button
-              onClick={() => setRail("sui")}
-              disabled={!suiReady}
-              title={suiReady ? undefined : "Float is not deployed on Sui in this environment"}
-              className={`px-3 py-1 rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                rail === "sui"
-                  ? "bg-[#2a82e4] text-white font-medium"
-                  : "text-[#94a3b8] hover:text-white"
-              }`}
-            >
-              Sui (Move)
-            </button>
-          </div>
+          <nav className="flex items-stretch h-8" style={{ border: "1px solid var(--rule)" }} aria-label="Rail">
+            {RAILS.map((r) => {
+              const active = rail === r.id;
+              const disabled = r.id === "sui" && !suiReady;
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => setRail(r.id)}
+                  disabled={disabled}
+                  title={disabled ? "Lifeline is not deployed on Sui here" : `${r.name} - the ${r.instrument}`}
+                  className="px-3.5 flex items-center gap-2 mono text-[10.5px] tracking-[0.08em] uppercase transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                  style={{
+                    background: active ? "var(--solid-bg)" : "transparent",
+                    color: active ? "var(--solid-fg)" : "var(--ink-2)",
+                  }}
+                >
+                  <span>{r.name}</span>
+                  <span style={{ opacity: 0.55 }}>{r.instrument}</span>
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Right Info: Actual True World ID Nullifier */}
-        <div className="flex items-center space-x-3 text-xs font-mono">
-          <div className="flex items-center space-x-2 px-2.5 py-1 rounded bg-[#12141a] border border-[#232732] text-[#94a3b8]">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-            <span className="text-[#64748b]">World ID (Nullifier):</span>
-            <span
-              onClick={handleCopyNullifier}
-              className="text-white hover:text-zinc-200 cursor-pointer flex items-center space-x-1.5"
-              title={nullifierHash ? "App-Scoped ZK Nullifier: " + nullifierHash + "\n(Unique to Float for privacy - click to copy)" : undefined}
-            >
-              <span>{formattedNullifier}</span>
-              {nullifierHash && (
-                copied ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3 h-3 text-zinc-500" />
-                )
-              )}
-            </span>
-          </div>
-
+        <div className="flex items-center gap-5">
           <button
-            onClick={onSignOut}
-            className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#12141a] border border-[#232732] text-[#94a3b8] hover:text-red-400 hover:border-red-900/50 transition-colors cursor-pointer"
+            onClick={() => {
+              if (!nullifierHash) return;
+              navigator.clipboard?.writeText(nullifierHash);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1600);
+            }}
+            className="hidden sm:flex items-center gap-2.5"
+            title="Your World ID nullifier for Lifeline - click to copy"
           >
-            <LogOut className="w-3 h-3" />
-            <span>Sign out</span>
+            <span className="lab">World ID</span>
+            <span className="mono text-[11px]">{copied ? "copied" : short}</span>
+          </button>
+          <button onClick={onSignOut} className="btn btn-quiet">
+            Sign out
           </button>
         </div>
       </div>
