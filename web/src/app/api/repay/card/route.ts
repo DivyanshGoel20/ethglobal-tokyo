@@ -20,9 +20,14 @@ export async function POST(req: NextRequest) {
   if (!human) return unauthenticated();
   if (!cardEnabled()) return NextResponse.json({ success: false, error: "Card repayment is not set up here." }, { status: 503 });
 
-  const { agentAddress, amount } = await req.json().catch(() => ({}));
+  const { agentAddress, amount, obligationId } = await req.json().catch(() => ({}));
   try {
-    const started = await startCardRepayment({ human, agentAddress: String(agentAddress ?? ""), amountUsd: Number(amount) });
+    const started = await startCardRepayment({
+      human,
+      agentAddress: String(agentAddress ?? ""),
+      amountUsd: Number(amount),
+      ...(typeof obligationId === "string" && obligationId ? { obligationId } : {}),
+    });
     if ("error" in started) return NextResponse.json({ success: false, error: started.error }, { status: started.status });
     return NextResponse.json({ success: true, ...started });
   } catch (err: any) {

@@ -78,6 +78,28 @@ async function main() {
   const nothing = await call("POST", "/api/repay/card", { agentAddress: agent, amount: 1 });
   check("with nothing owed, no card payment is started", nothing.status === 400, nothing.body.error);
 
+  console.log("\nSui: a parked repayment, paid by card\n");
+  const SUI_FEED = process.env.SUI_SERVICE_URL || "http://localhost:4031";
+  const suiAgent = (await call("POST", "/api/agent/provision", { rail: "sui", label: "card-sui", capUsd: 1, days: 1 })).body.agent?.address;
+  check("a Sui agent is made", !!suiAgent, suiAgent);
+  const bought = await call("POST", "/api/sui/pay", { url: `${SUI_FEED}/risk?records=20`, agentAddress: suiAgent });
+  check("it buys $0.10 on credit, parked on chain", bought.body.success && Number(bought.body.borrowed) > 0, bought.body.obligationId ?? bought.body.error);
+  const obs = (await call("GET", "/api/sui/obligations")).body.obligations ?? [];
+  const ob = obs.find((o: any) => o.obligationId === bought.body.obligationId);
+  check("the obligation is listed with what is owed", ob && ob.owedUsd > 0, `owes $${ob?.owedUsd} · purse $${ob?.purseUsd}`);
+  const suiIntent = await call("POST", "/api/repay/card", { agentAddress: suiAgent, obligationId: ob.obligationId });
+  check("a card payment is created for the whole obligation", suiIntent.body.success && suiIntent.body.amountUsd >= ob.owedUsd, `$${suiIntent.body.amountUsd}${suiIntent.body.note ? ` · ${suiIntent.body.note}` : ""}`);
+  await stripe.paymentIntents.confirm(suiIntent.body.paymentIntentId, { payment_method: "pm_card_visa", return_url: APP });
+  const suiBooked = await call("POST", "/api/repay/card/confirm", { paymentIntentId: suiIntent.body.paymentIntentId });
+  check("once paid, the agent is funded and settles on Sui", suiBooked.body.success && suiBooked.body.rail === "sui" && !!suiBooked.body.txHash, `settled $${suiBooked.body.amountUsd} · refunded $${suiBooked.body.refundedUsd} · ${suiBooked.body.txHash ?? suiBooked.body.error}`);
+  const suiAgain = await call("POST", "/api/repay/card/confirm", { paymentIntentId: suiIntent.body.paymentIntentId });
+  check("and only once", suiAgain.body.alreadyBooked === true);
+  const obsAfter = (await call("GET", "/api/sui/obligations")).body.obligations ?? [];
+  const obAfter = obsAfter.find((o: any) => o.obligationId === ob.obligationId);
+  check("the obligation is settled on chain", obAfter?.status === "settled" && obAfter.owedUsd === 0, `${obAfter?.status} · owes $${obAfter?.owedUsd}`);
+  const suiNothing = await call("POST", "/api/repay/card", { agentAddress: suiAgent, obligationId: ob.obligationId });
+  check("a settled obligation cannot be charged again", suiNothing.status === 400, suiNothing.body.error);
+
   console.log(failures ? `\n${failures} check(s) failed\n` : "\nall checks passed\n");
   process.exit(failures ? 1 : 0);
 }

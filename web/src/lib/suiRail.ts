@@ -315,3 +315,43 @@ export async function payAgentForWork(agentAddress: string, usd: number) {
   const r = await payOut(operatorKeypair(), to, toUnits(usd));
   return { to, digest: r.digest, link: suiExplorer("tx", r.digest) };
 }
+
+/**
+ * What settling one obligation needs from outside the agent, for a card
+ * repayment: the whole amount owed (settling is all or nothing), and how much
+ * of it the agent's purse and wallet do not already cover - which Lifeline's
+ * operator sends it once the card payment clears.
+ */
+export async function suiShortfall(human: string, obligationId: string) {
+  const row = railDebtsFor(human).find((r) => r.obligationId === obligationId);
+  if (!row) throw new Error("No such obligation on your line");
+  const key = getAgentPrivateKey(row.agentAddress);
+  if (!key) throw new Error("Lifeline holds no key for the agent that owes this");
+
+  const ob = await readObligation(obligationId);
+  const open = ob.status !== "settled" && ob.status !== "closed";
+  const [purse, profile] = await Promise.all([readPurse(ob.purseId), readProfile(ob.profileId)]);
+  const owed = profile && profile.outstandingDebt < ob.drawn ? profile.outstandingDebt : ob.drawn;
+  const agentSui = agentKeypair(key).toSuiAddress();
+  const held = await walletUnits(agentSui);
+  const fromPurse = purse.balance < owed ? purse.balance : owed;
+  const needed = owed - fromPurse - held > 0n ? owed - fromPurse - held : 0n;
+  return { open, agentAddress: row.agentAddress, agentSui, owedUsd: fromUnits(owed), fundUsd: fromUnits(needed), fundUnits: needed };
+}
+
+/** The operator's own USDC on Sui: what card repayments are funded from. */
+export const operatorReserveUsd = async () => fromUnits(await walletUnits(operatorKeypair().toSuiAddress()));
+
+/**
+ * A card repayment has cleared: the operator sends the agent what it is short,
+ * and the agent settles. Safe to retry - it only ever sends what is still
+ * missing, so a failed settle does not send twice.
+ */
+export async function fundAndSettleSui(human: string, obligationId: string) {
+  const s = await suiShortfall(human, obligationId);
+  if (!s.open) return { ...(await settleEarlyFor(human, obligationId)), fundedUsd: 0 };
+  let fundedDigest: string | undefined;
+  if (s.fundUnits > 0n) fundedDigest = (await payOut(operatorKeypair(), s.agentSui, s.fundUnits)).digest;
+  const settled = await settleEarlyFor(human, obligationId);
+  return { ...settled, fundedUsd: s.fundUsd, fundedDigest };
+}

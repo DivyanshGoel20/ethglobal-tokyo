@@ -21,11 +21,18 @@ interface RepayModalProps {
 type Obligation = {
   obligationId: string;
   agentAddress: string;
+  suiAgent: string | null;
   status: string;
   owedUsd: number;
+  drawnUsd: number;
+  ceilingUsd: number | null;
   dueMs: number | null;
   purseUsd: number | null;
+  draws: number;
+  link: string | null;
 };
+
+const shortId = (a?: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
 /**
  * Repaying differs by rail. On Arc the debt can be paid three ways, whichever
@@ -33,7 +40,8 @@ type Obligation = {
  * wallet the human connects - USDC to Lifeline's treasury, checked on chain -
  * or by card. The facility books it either way. On Sui the debt is a parked
  * obligation: settling early moves the agent's coins into its purse and
- * settles in one transaction the agent signs.
+ * settles in one transaction the agent signs - or the human pays it by card,
+ * and Lifeline sends the agent the shortfall to settle with.
  */
 export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, agents, onDone, onSessionExpired }) => {
   const owing = agents.filter((a) => a.outstandingDebt > 0);
@@ -47,6 +55,8 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
   const wallet = useWallet();
   const [card, setCard] = useState<{ enabled: boolean; publishableKey: string | null; minimumUsd: number } | null>(null);
   const [paying, setPaying] = useState(false);
+  // Sui: the obligation being paid by card, if any.
+  const [cardFor, setCardFor] = useState<Obligation | null>(null);
 
   useEffect(() => {
     fetch("/api/repay/card")
@@ -71,6 +81,7 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
     if (!isOpen) return;
     setError(null);
     setPaying(false);
+    setCardFor(null);
     if (rail === "arc") {
       const first = owing[0];
       setAgentAddress(first?.address ?? "");
@@ -232,27 +243,90 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
       ) : obligations.length === 0 ? (
         <p className="serif text-[18px]">Nothing is owed on Sui.</p>
       ) : (
-        <div className="space-y-3">
-          <p className="text-[13px] ink-2 leading-relaxed">
-            The agent moves what its purse is short from its own coins, and settles, in one transaction it signs.
-          </p>
-          {obligations.map((o) => (
-            <div key={o.obligationId} className="flex items-center justify-between gap-4 py-3 hair-b">
-              <div className="min-w-0">
-                <div className="text-[14px]">
-                  {nameOf(o.agentAddress)} owes <span className="mono" style={{ color: "var(--alarm)" }}>${o.owedUsd.toFixed(3)}</span>
+        cardFor && card?.publishableKey ? (
+          <div className="space-y-3">
+            <p className="text-[13px] ink-2 leading-relaxed">
+              {nameOf(cardFor.agentAddress)}&apos;s obligation, settled whole. Once the payment clears, Lifeline sends the agent
+              the USDC it is short and the agent settles on Sui.
+            </p>
+            <CardRepay
+              publishableKey={card.publishableKey}
+              agentAddress={cardFor.agentAddress}
+              amountUsd={cardFor.owedUsd}
+              obligationId={cardFor.obligationId}
+              onBooked={(m) => {
+                onDone(m);
+                onClose();
+              }}
+              onCancel={() => setCardFor(null)}
+            />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-[13px] ink-2 leading-relaxed">
+              Each draw is a parked repayment on Sui, due on its date. Settle one early from the agent&apos;s own coins
+              {card?.enabled ? ", or pay it by Apple Pay, Google Pay or card" : ""}.
+            </p>
+            {obligations.map((o) => (
+              <div key={o.obligationId} className="pb-4 hair-b space-y-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="text-[14px] min-w-0">
+                    {nameOf(o.agentAddress)} owes{" "}
+                    <span className="mono" style={{ color: "var(--alarm)" }}>
+                      ${o.owedUsd.toFixed(3)}
+                    </span>
+                  </div>
+                  <span className="lab shrink-0" style={{ color: o.status === "defaulted" ? "var(--alarm)" : undefined }}>
+                    {o.status}
+                  </span>
                 </div>
-                <div className="mono text-[10px] ink-3 mt-1 truncate">
-                  {o.status} · due {o.dueMs ? new Date(o.dueMs).toLocaleString() : "?"} · purse ${o.purseUsd?.toFixed(3) ?? "?"}
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 mono text-[10.5px]">
+                  <dt className="ink-3">due</dt>
+                  <dd>{o.dueMs ? new Date(o.dueMs).toLocaleString() : "-"}</dd>
+                  <dt className="ink-3">drawn</dt>
+                  <dd>
+                    ${o.drawnUsd.toFixed(3)}
+                    {o.ceilingUsd != null && <span className="ink-3"> of ${o.ceilingUsd.toFixed(2)} ceiling</span>}
+                    <span className="ink-3">
+                      {" "}
+                      · {o.draws} draw{o.draws === 1 ? "" : "s"}
+                    </span>
+                  </dd>
+                  <dt className="ink-3">purse</dt>
+                  <dd>
+                    {o.purseUsd != null ? `$${o.purseUsd.toFixed(3)}` : "-"}
+                    {o.purseUsd != null && o.purseUsd < o.owedUsd && (
+                      <span className="ink-3"> · short ${(o.owedUsd - o.purseUsd).toFixed(3)}</span>
+                    )}
+                  </dd>
+                  <dt className="ink-3">agent</dt>
+                  <dd>{shortId(o.suiAgent)}</dd>
+                  <dt className="ink-3">obligation</dt>
+                  <dd>
+                    {o.link ? (
+                      <a href={o.link} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                        {shortId(o.obligationId)} ↗
+                      </a>
+                    ) : (
+                      shortId(o.obligationId)
+                    )}
+                  </dd>
+                </dl>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {card?.enabled && (
+                    <button onClick={() => setCardFor(o)} disabled={!!busy} className="btn btn-quiet">
+                      Apple Pay · Google Pay
+                    </button>
+                  )}
+                  <button onClick={() => settle(o)} disabled={!!busy} className="btn btn-solid">
+                    {busy === o.obligationId ? "Settling…" : o.status === "defaulted" ? "Cure from agent" : "Settle from agent"}
+                  </button>
                 </div>
               </div>
-              <button onClick={() => settle(o)} disabled={!!busy} className="btn btn-solid shrink-0">
-                {busy === o.obligationId ? "Settling…" : o.status === "defaulted" ? "Cure" : "Settle early"}
-              </button>
-            </div>
-          ))}
-          {error && <ErrorNote>{error}</ErrorNote>}
-        </div>
+            ))}
+            {error && <ErrorNote>{error}</ErrorNote>}
+          </div>
+        )
       )}
     </Sheet>
   );

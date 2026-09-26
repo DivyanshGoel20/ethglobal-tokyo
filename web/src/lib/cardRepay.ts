@@ -5,9 +5,15 @@ import { writeJsonAtomic } from "./atomicWrite";
 import { getAgentByAddress, getHumanFacilityStats } from "./agentStore";
 import { prepareArcRepayment, commitArcRepayment } from "./repayCore";
 import { withLedgerLock } from "./ledgerLock";
+import { fundAndSettleSui, operatorReserveUsd, suiShortfall } from "./suiRail";
 
 /**
- * Repaying Arc debt by card, Apple Pay or Google Pay, through Stripe.
+ * Repaying by card, Apple Pay or Google Pay, through Stripe.
+ *
+ * Arc: the repayment is booked on the facility contract.
+ * Sui: the payment covers one parked obligation, whole. Once it clears,
+ * Lifeline's operator sends the agent the USDC it is short and the agent
+ * settles on chain, as it would from its own earnings.
  *
  * The human pays Lifeline in dollars; once Stripe says the payment succeeded,
  * Lifeline books the repayment on the facility contract, exactly as a USDC
@@ -35,7 +41,15 @@ export const useStripeClient = (c: Stripe | null) => (client = c);
 
 /* ---- which payments have been booked ---------------------------------- */
 
-type Booking = { human: string; status: "booking" | "booked" | "refunded"; amountUsd?: number; txHash?: string; refundedUsd?: number; at: number };
+type Booking = {
+  human: string;
+  status: "booking" | "booked" | "refunded";
+  rail?: "arc" | "sui";
+  amountUsd?: number;
+  txHash?: string;
+  refundedUsd?: number;
+  at: number;
+};
 
 function file(): string {
   const candidates = [
@@ -62,7 +76,14 @@ export const bookingFor = (paymentIntentId: string) => read()[paymentIntentId] ?
 
 /* ---- starting a payment ------------------------------------------------ */
 
-export async function startCardRepayment(p: { human: string; agentAddress: string; amountUsd: number }) {
+export async function startCardRepayment(p: {
+  human: string;
+  agentAddress: string;
+  amountUsd: number;
+  /** Sui: the obligation this pays off, whole. */
+  obligationId?: string;
+}) {
+  if (p.obligationId) return startSuiCardRepayment(p.human, p.obligationId);
   const agent = getAgentByAddress(p.agentAddress);
   if (!agent || agent.humanOwner.toLowerCase() !== p.human.toLowerCase()) {
     return { error: "That agent is not yours.", status: 403 } as const;
@@ -91,10 +112,45 @@ export async function startCardRepayment(p: { human: string; agentAddress: strin
   return { clientSecret: intent.client_secret!, paymentIntentId: intent.id, amountUsd: cents / 100 } as const;
 }
 
+async function startSuiCardRepayment(human: string, obligationId: string) {
+  let s;
+  try {
+    s = await suiShortfall(human, obligationId);
+  } catch (err: any) {
+    return { error: err?.message ?? "No such obligation.", status: 404 } as const;
+  }
+  if (!s.open || s.owedUsd <= 0) return { error: "That obligation is already settled.", status: 400 } as const;
+  const agent = getAgentByAddress(s.agentAddress);
+  if (!agent || agent.humanOwner.toLowerCase() !== human.toLowerCase()) return { error: "That agent is not yours.", status: 403 } as const;
+
+  // All of it, rounded up to the cent: an obligation settles whole.
+  const cents = Math.max(Math.ceil(s.owedUsd * 100 - 1e-6), CARD_MINIMUM_USD * 100);
+  // The operator pays the agent's shortfall once the card clears; make sure it can.
+  const reserve = await operatorReserveUsd().catch(() => 0);
+  if (reserve < s.fundUsd) {
+    return { error: `Lifeline's Sui reserve holds $${reserve.toFixed(2)}, short of the $${s.fundUsd.toFixed(2)} this needs. Try later.`, status: 503 } as const;
+  }
+
+  const intent = await stripe().paymentIntents.create({
+    amount: cents,
+    currency: "usd",
+    payment_method_types: ["card"],
+    description: `Lifeline repayment · ${agent.name} · Sui`,
+    metadata: { purpose: PURPOSE, human, agentAddress: agent.address, rail: "sui", obligationId },
+  });
+  return {
+    clientSecret: intent.client_secret!,
+    paymentIntentId: intent.id,
+    amountUsd: cents / 100,
+    owedUsd: s.owedUsd,
+    note: cents / 100 > s.owedUsd + 0.005 ? `Card payments start at $${CARD_MINIMUM_USD.toFixed(2)}; what is over the debt is refunded.` : undefined,
+  } as const;
+}
+
 /* ---- booking a paid one ----------------------------------------------- */
 
 export type CardBookingResult =
-  | { ok: true; alreadyBooked?: boolean; amountUsd: number; txHash?: string; refundedUsd: number }
+  | { ok: true; alreadyBooked?: boolean; amountUsd: number; txHash?: string; refundedUsd: number; rail?: "arc" | "sui" }
   | { ok: false; status: number; error: string };
 
 export async function bookCardRepayment(paymentIntentId: string, asHuman?: string): Promise<CardBookingResult> {
@@ -115,11 +171,12 @@ async function book(intent: Stripe.PaymentIntent, human: string): Promise<CardBo
   if (existing) {
     return existing.status === "booking"
       ? { ok: false, status: 409, error: "Already being booked." }
-      : { ok: true, alreadyBooked: true, amountUsd: existing.amountUsd ?? 0, txHash: existing.txHash, refundedUsd: existing.refundedUsd ?? 0 };
+      : { ok: true, alreadyBooked: true, amountUsd: existing.amountUsd ?? 0, txHash: existing.txHash, refundedUsd: existing.refundedUsd ?? 0, rail: existing.rail };
   }
   save(intent.id, { human, status: "booking", at: Date.now() });
 
   const paidUsd = (intent.amount_received || intent.amount) / 100;
+  if (intent.metadata.rail === "sui") return bookSui(intent, human, paidUsd);
   try {
     const agent = getAgentByAddress(intent.metadata.agentAddress);
     const prepared = await prepareArcRepayment(human, paidUsd);
@@ -149,5 +206,28 @@ async function book(intent: Stripe.PaymentIntent, human: string): Promise<CardBo
     // Not booked: let it be tried again.
     save(intent.id, null);
     return { ok: false, status: 500, error: err?.message ?? "Could not book the repayment." };
+  }
+}
+
+async function bookSui(intent: Stripe.PaymentIntent, human: string, paidUsd: number): Promise<CardBookingResult> {
+  const obligationId = intent.metadata.obligationId;
+  try {
+    const before = await suiShortfall(human, obligationId);
+    if (!before.open) {
+      // Settled some other way meanwhile: it all goes back.
+      await stripe().refunds.create({ payment_intent: intent.id });
+      save(intent.id, { human, rail: "sui", status: "refunded", amountUsd: 0, refundedUsd: paidUsd, at: Date.now() });
+      return { ok: true, amountUsd: 0, refundedUsd: paidUsd };
+    }
+    const r = await fundAndSettleSui(human, obligationId);
+    const settledUsd = before.owedUsd;
+    const overCents = Math.floor((paidUsd - settledUsd) * 100 + 1e-6);
+    if (overCents > 0) await stripe().refunds.create({ payment_intent: intent.id, amount: overCents });
+    const txHash = "digest" in r ? r.digest : undefined;
+    save(intent.id, { human, rail: "sui", status: "booked", amountUsd: settledUsd, txHash, refundedUsd: overCents / 100, at: Date.now() });
+    return { ok: true, amountUsd: settledUsd, txHash, refundedUsd: overCents / 100, rail: "sui" };
+  } catch (err: any) {
+    save(intent.id, null);
+    return { ok: false, status: 500, error: err?.message ?? "Could not settle on Sui." };
   }
 }

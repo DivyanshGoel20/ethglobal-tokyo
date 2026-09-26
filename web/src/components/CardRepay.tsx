@@ -29,16 +29,18 @@ const getStripe = (key: string) => (stripePromise ??= loadStripe(key));
  * The payment is created on the server for what this agent's human owes;
  * Apple Pay and Google Pay appear where the device offers them, a card form
  * always. Once Stripe takes it, the server checks with Stripe and books the
- * repayment on Arc.
+ * repayment on Arc - or, given a Sui obligation, settles that on chain.
  */
 export const CardRepay: React.FC<{
   publishableKey: string;
   agentAddress: string;
   amountUsd: number;
+  /** Sui: the parked obligation this settles, whole. */
+  obligationId?: string;
   onBooked: (message: string) => void;
   onCancel: () => void;
-}> = ({ publishableKey, agentAddress, amountUsd, onBooked, onCancel }) => {
-  const [intent, setIntent] = useState<{ clientSecret: string; paymentIntentId: string; amountUsd: number } | null>(null);
+}> = ({ publishableKey, agentAddress, amountUsd, obligationId, onBooked, onCancel }) => {
+  const [intent, setIntent] = useState<{ clientSecret: string; paymentIntentId: string; amountUsd: number; note?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // One payment per opening. React runs effects twice in development, and
@@ -47,14 +49,14 @@ export const CardRepay: React.FC<{
 
   useEffect(() => {
     let live = true;
-    const key = `${agentAddress}:${amountUsd}`;
+    const key = `${agentAddress}:${amountUsd}:${obligationId ?? ""}`;
     if (started.current?.key !== key) {
       started.current = {
         key,
         request: fetch("/api/repay/card", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentAddress, amount: amountUsd }),
+          body: JSON.stringify({ agentAddress, amount: amountUsd, ...(obligationId ? { obligationId } : {}) }),
         }).then((r) => r.json()),
       };
     }
@@ -68,7 +70,7 @@ export const CardRepay: React.FC<{
     return () => {
       live = false;
     };
-  }, [agentAddress, amountUsd]);
+  }, [agentAddress, amountUsd, obligationId]);
 
   const options = useMemo(
     () =>
@@ -104,7 +106,7 @@ export const CardRepay: React.FC<{
 };
 
 const Pay: React.FC<{
-  intent: { clientSecret: string; paymentIntentId: string; amountUsd: number };
+  intent: { clientSecret: string; paymentIntentId: string; amountUsd: number; note?: string };
   onBooked: (message: string) => void;
   onCancel: () => void;
 }> = ({ intent, onBooked, onCancel }) => {
@@ -139,7 +141,7 @@ const Pay: React.FC<{
       });
       if (failed) throw new Error(failed.message);
 
-      // Paid. The server checks with Stripe and books it on Arc.
+      // Paid. The server checks with Stripe, then books it on Arc or settles on Sui.
       const res = await fetch("/api/repay/card/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -148,7 +150,9 @@ const Pay: React.FC<{
       const d = await res.json().catch(() => ({}));
       if (!d.success) throw new Error(d.error || "Paid, but not booked yet - it will be, once Stripe confirms.");
       onBooked(
-        `Repaid $${Number(d.amountUsd).toFixed(2)} by card, booked on Arc` +
+        (d.rail === "sui"
+          ? `Repaid $${Number(d.amountUsd).toFixed(3)} by card, settled on Sui`
+          : `Repaid $${Number(d.amountUsd).toFixed(2)} by card, booked on Arc`) +
           (d.refundedUsd > 0 ? ` · $${Number(d.refundedUsd).toFixed(2)} refunded` : "")
       );
     } catch (e: any) {
@@ -164,6 +168,7 @@ const Pay: React.FC<{
         <span className="lab">charged</span>
         <span className="readout text-[22px]">${intent.amountUsd.toFixed(2)}</span>
       </div>
+      {intent.note && <p className="mono text-[10.5px] ink-3">{intent.note}</p>}
 
       {/* Stripe's Apple Pay and Google Pay buttons, wherever this device has them. */}
       <ExpressCheckoutElement

@@ -334,7 +334,7 @@ sandbox - approved by a different World identity, which was refused.
   binding message or `authorization_details` shown on the approval screen would
   make this a true transaction approval rather than a sign-in.
 
-## Repaying by Apple Pay, Google Pay or card (Arc)
+## Repaying by Apple Pay, Google Pay or card
 
 Arc debt can be repaid three ways, and the repay sheet offers whichever apply:
 
@@ -370,6 +370,13 @@ chain; Lifeline books the repayment, and that booking is on chain. This is how
 a lender takes card repayments. On a mainnet, an onramp (MoonPay, Coinbase,
 Stripe's) could deliver USDC straight to the facility instead - none delivers
 testnet USDC.
+
+**On Sui** the card pays off one parked repayment, whole (settling is all or
+nothing), from the Repay sheet on `/sui`. Once Stripe confirms, Lifeline's
+operator sends the agent the USDC it is short and the agent settles on chain,
+as it would from its own earnings; anything over the debt (Stripe's $0.50
+floor) is refunded. A retry only sends what is still missing, so a failed
+settle never funds twice ([`fundAndSettleSui`](web/src/lib/suiRail.ts)).
 
 Test mode: card `4242 4242 4242 4242`, any future date, any CVC. Google Pay
 works in Chrome with a saved card; Apple Pay needs Safari and a domain
@@ -513,7 +520,7 @@ npm run e2e:arc               # the Arc rail through the app, on Arc testnet
 npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
 npm run e2e:sui               # the Sui rail through the app
 npm run e2e:intercepta        # screening, live: cleared, refused, held, approved
-npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc
+npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc, settled on Sui
 npm run e2e:world-agents      # an agent's held payment approved (or --deny) in World ID for Agents
 npm run e2e:mcp               # the MCP server over stdio: connect, approve, buy, revoke, on both rails
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
