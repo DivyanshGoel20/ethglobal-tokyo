@@ -9,6 +9,7 @@ start commands come from there.
 | **web** | the app, the agent APIs, the MCP server's backend | yes | `/app/web/data` | `deploy/web.railway.json` |
 | **premium** | the Arc x402 seller (`/premium-data`, `/risk-curve`, ...) | yes | none | `deploy/premium.railway.json` |
 | **feed** | the Sui x402 seller (`/risk?records=N`) | yes | `/app/sui/data` | `deploy/feed.railway.json` |
+| **sweep** | hourly cron (`curlimages/curl`): `POST /api/standing/sweep` with `LIFELINE_CRON_SECRET`, which suspends, defaults and restores lines | no | none | set in the service: cron `0 * * * *` |
 
 ## Live
 
