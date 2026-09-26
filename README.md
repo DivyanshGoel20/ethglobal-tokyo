@@ -395,7 +395,13 @@ already deployed for this repo or deploy your own:
 ```bash
 npm run deploy:arc            # writes the address to stdout
 npm run deposit               # fund Lifeline's Circle Gateway balance
+npm run withdraw:seller       # what the Arc seller earned, back to the funding wallet
 ```
+
+Payments through Gateway never reach the seller's wallet: they build up as
+the seller's Gateway balance, credited when Circle settles its batch (a few
+minutes). On testnet, `withdraw:seller` then `deposit` puts that money back
+where Lifeline lends from.
 
 **Sui.** Needs the [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install)
 (`brew install sui`) to compile the package.
