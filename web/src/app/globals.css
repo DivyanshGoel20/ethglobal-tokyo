@@ -377,6 +377,32 @@ select.field {
   }
 }
 
+/* ── Sheets ───────────────────────────────────────────────────────────── */
+
+/* Never taller than the screen; the body scrolls under a fixed header. */
+.sheet-panel {
+  max-height: calc(100dvh - 32px);
+}
+
+/* On a phone every sheet is a drawer from the bottom, full width. */
+@media (max-width: 639px) {
+  html:not([data-shell="mini"]) .sheet-wrap {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .sheet-panel {
+    max-width: none !important;
+    max-height: 92dvh;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+  .sheet-body {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+}
+
 /* ── The World App shell ──────────────────────────────────────────────── */
 
 /* Inside the mini app every sheet is a drawer: it rises from the bottom and
@@ -388,7 +414,6 @@ select.field {
 [data-shell="mini"] .sheet-panel {
   max-width: none !important;
   max-height: 88dvh;
-  overflow-y: auto;
   border-left: 0;
   border-right: 0;
   box-shadow: none;

@@ -70,11 +70,11 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="rule-b" style={{ background: "var(--ground)" }}>
-      <div className="max-w-[1180px] mx-auto px-6 sm:px-10 h-16 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2.5">
-            <LifelineMark size={18} />
-            <span className="serif text-[25px] leading-none tracking-tight">Lifeline</span>
+      <div className="max-w-[1180px] mx-auto px-4 sm:px-10 h-16 flex items-center justify-between gap-3 sm:gap-6">
+        <div className="flex items-center gap-3 sm:gap-8 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <LifelineMark size={16} />
+            <span className="serif text-[21px] sm:text-[25px] leading-none tracking-tight">Lifeline</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -88,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-5 shrink-0">
           <button
             onClick={() => {
               if (!nullifierHash) return;
@@ -102,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="lab">World ID</span>
             <span className="mono text-[11px]">{copied ? "copied" : short}</span>
           </button>
-          <button onClick={onSignOut} className="btn btn-quiet">
+          <button onClick={onSignOut} className="btn btn-quiet" style={{ paddingInline: 10 }}>
             Sign out
           </button>
         </div>

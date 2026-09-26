@@ -4,6 +4,21 @@ import React, { useEffect, useMemo, useState } from "react";
 import { loadStripe, Stripe } from "@stripe/stripe-js";
 import { Elements, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { ErrorNote } from "./Sheet";
+import { ApplePayMark, GooglePayMark } from "./WalletMarks";
+
+type Wallet = "applePay" | "googlePay";
+const WALLETS: { id: Wallet; mark: React.ReactNode; needs: string }[] = [
+  {
+    id: "applePay",
+    mark: <ApplePayMark />,
+    needs: "Apple Pay works in Safari on an iPhone, iPad or Mac with a card in Wallet, on a site registered with Stripe. Inside World App, pay by card below.",
+  },
+  {
+    id: "googlePay",
+    mark: <GooglePayMark />,
+    needs: "Google Pay works in Chrome, signed in to a Google account with a saved card. Or pay by card below.",
+  },
+];
 
 let stripePromise: Promise<Stripe | null> | null = null;
 const getStripe = (key: string) => (stripePromise ??= loadStripe(key));
@@ -87,7 +102,17 @@ const Pay: React.FC<{
   const elements = useElements();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wallets, setWallets] = useState<string[] | null>(null);
+  // Which wallets this browser can actually use - Stripe's own buttons show
+  // for those - and which one's requirements the human asked about.
+  const [available, setAvailable] = useState<Record<string, boolean> | null>(null);
+  const [why, setWhy] = useState<Wallet | null>(null);
+  const missing = WALLETS.filter((w) => !available?.[w.id]);
+  // Stripe says nothing at all when no wallet is available; after a moment,
+  // take the silence as "none".
+  useEffect(() => {
+    const t = setTimeout(() => setAvailable((a) => a ?? {}), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   const pay = async () => {
     if (!stripe || !elements) return;
@@ -130,26 +155,56 @@ const Pay: React.FC<{
         <span className="readout text-[22px]">${intent.amountUsd.toFixed(2)}</span>
       </div>
 
+      {/* Stripe's Apple Pay and Google Pay buttons, wherever this device has them. */}
       <ExpressCheckoutElement
-        options={{ buttonType: { applePay: "plain", googlePay: "plain" }, paymentMethods: { applePay: "always", googlePay: "always", link: "never" } }}
-        onReady={(e) => setWallets(Object.entries(e.availablePaymentMethods ?? {}).filter(([, on]) => on).map(([k]) => k))}
+        options={{
+          buttonType: { applePay: "plain", googlePay: "plain" },
+          buttonTheme: { applePay: "black", googlePay: "black" },
+          buttonHeight: 44,
+          paymentMethods: { applePay: "always", googlePay: "always", link: "never", amazonPay: "never", paypal: "never" },
+          layout: { maxColumns: 2, maxRows: 1, overflow: "never" },
+        }}
+        onReady={(e) => setAvailable({ ...(e.availablePaymentMethods ?? {}) })}
         onConfirm={pay}
       />
-      {wallets && wallets.length === 0 && (
-        <p className="mono text-[10.5px] ink-3">
-          No Apple Pay or Google Pay on this browser. Apple Pay needs Safari; Google Pay needs Chrome with a saved card.
-        </p>
+
+      {/* The ones it does not have, so both are always on the page: dimmed,
+          and a tap says what that wallet needs. */}
+      {missing.length > 0 && (
+        <div className={`grid gap-2 ${missing.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+          {missing.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => setWhy(why === w.id ? null : w.id)}
+              className="h-11 flex items-center justify-center rounded-[4px]"
+              style={{ background: "#000", color: "#fff" }}
+              aria-label={`${w.id === "applePay" ? "Apple Pay" : "Google Pay"} - not available here`}
+            >
+              {w.mark}
+            </button>
+          ))}
+        </div>
       )}
+      {available && missing.length > 0 &&
+        (why ? (
+          <p className="text-[12px] ink-2 leading-snug">{WALLETS.find((w) => w.id === why)!.needs}</p>
+        ) : (
+          <p className="mono text-[10px] ink-3">
+            {missing.length === 2 ? "Apple Pay and Google Pay are" : missing[0].id === "applePay" ? "Apple Pay is" : "Google Pay is"} not set up on
+            this browser - tap for how.
+          </p>
+        ))}
 
       <div className="lab pt-1">or card</div>
-      <PaymentElement options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never" } }} />
+      <PaymentElement options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never", link: "never" } }} />
 
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="btn btn-quiet" disabled={busy}>
           Back
         </button>
-        <button onClick={pay} className="btn btn-solid" disabled={busy || !stripe}>
+        <button onClick={pay} className="btn btn-solid flex-1 sm:flex-none justify-center" disabled={busy || !stripe}>
           {busy ? "Paying…" : `Pay $${intent.amountUsd.toFixed(2)}`}
         </button>
       </div>

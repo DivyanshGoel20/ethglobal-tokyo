@@ -11,13 +11,25 @@ interface SheetProps {
   width?: number;
 }
 
-/** Every dialog: a sheet on the strip, square, one hard shadow. */
+/**
+ * Every dialog: a sheet on the strip, square, one hard shadow.
+ *
+ * Never taller than the screen: the header stays put and the body scrolls, so
+ * a long form (a card payment) is never cut off at the top or the bottom. On
+ * a phone - and always inside World App - it is a drawer from the bottom.
+ */
 export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, kicker, children, width = 460 }) => {
   useEffect(() => {
     if (!open) return;
+    // The page behind does not scroll while a sheet is open.
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -28,8 +40,14 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, kicker, chil
       style={{ background: "var(--scrim)" }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="sheet sheet-panel rise w-full" style={{ maxWidth: width }} role="dialog" aria-modal="true" aria-label={title}>
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 rule-b">
+      <div
+        className="sheet sheet-panel rise w-full flex flex-col"
+        style={{ maxWidth: width }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="shrink-0 flex items-start justify-between gap-4 px-5 sm:px-6 pt-5 pb-4 rule-b">
           <div>
             {kicker && <div className="lab mb-1.5">{kicker}</div>}
             <h2 className="serif text-[26px] leading-none">{title}</h2>
@@ -38,7 +56,7 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, kicker, chil
             close
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="sheet-body min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 py-5">{children}</div>
       </div>
     </div>
   );

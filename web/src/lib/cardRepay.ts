@@ -81,7 +81,9 @@ export async function startCardRepayment(p: { human: string; agentAddress: strin
   const intent = await stripe().paymentIntents.create({
     amount: cents,
     currency: "usd",
-    automatic_payment_methods: { enabled: true },
+    // Cards only - Apple Pay and Google Pay are card wallets, so they are
+    // included; Link and the rest are not, which keeps the form short.
+    payment_method_types: ["card"],
     description: `Lifeline repayment · ${agent.name}`,
     metadata: { purpose: PURPOSE, human: p.human, agentAddress: agent.address },
   });

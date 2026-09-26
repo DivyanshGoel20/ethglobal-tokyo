@@ -446,7 +446,7 @@ function OwedTab({ L, owedHere }: { L: ReturnType<typeof useLifeline>; owedHere:
       </div>
       <p className="text-[13px] ink-2 leading-relaxed mt-3">
         {L.rail === "arc"
-          ? "An agent repays from its own Arc wallet, and the facility books it."
+          ? "Repay from an agent's Arc wallet, or yourself by Apple Pay, Google Pay or card. The facility books it."
           : "Each Sui debt is a repayment the agent parked before it drew. Settle it early, or on its date anyone can collect it."}
       </p>
       <button onClick={() => L.setIsRepayOpen(true)} disabled={owedHere <= 0} className="btn btn-solid w-full justify-center h-12 mt-5">
