@@ -1,0 +1,31 @@
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  return NextResponse.json({
+    network: "Arc Testnet (5042002)",
+    settlement: "Circle Gateway / Float Overdraft Facility",
+    resources: [
+      {
+        path: "/api/paid/signal",
+        price: 0.01,
+        title: "Alpha Signal Intelligence",
+        artifact: "json",
+        description: "Low-cost high-frequency alpha data. Easily payable with agent Gateway balance."
+      },
+      {
+        path: "/api/paid/risk-curve",
+        price: 1.00,
+        title: "Exposure curve · 30d",
+        artifact: "svg",
+        description: "Visual credit waterline SVG. Tests moderate drawdown against the credit line."
+      },
+      {
+        path: "/api/paid/dossier",
+        price: 5.00,
+        title: "Underwriting dossier",
+        artifact: "svg",
+        description: "Comprehensive risk report SVG. Tests significant overdraft and fails closed if credit limit exceeded."
+      }
+    ]
+  });
+}

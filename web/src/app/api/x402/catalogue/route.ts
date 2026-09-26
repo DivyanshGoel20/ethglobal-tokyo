@@ -3,10 +3,8 @@ import { getHuman, unauthenticated } from "@/lib/session";
 
 /**
  * What a resource server is selling.
- *
- * Proxied rather than fetched from the browser: the resource servers are plain
- * local services with no CORS headers, and hardcoding the catalogue in the UI
- * would let the listed price drift from the price the 402 actually quotes.
+ * Returns the active catalogue of x402 pay-per-call services.
+ * Queries external port 4402 if running, or falls back to native /api/paid endpoints.
  */
 export async function GET(req: NextRequest) {
   if (!getHuman(req)) return unauthenticated();
@@ -19,18 +17,27 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(`${base.replace(/\/$/, "")}/catalogue`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(2000),
     });
-    if (!res.ok) throw new Error(`catalogue returned ${res.status}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.resources) && data.resources.length > 0) {
+        return NextResponse.json({
+          base,
+          resources: data.resources,
+        });
+      }
+    }
+  } catch {}
 
-    const { resources } = await res.json();
-    return NextResponse.json({
-      base,
-      resources: Array.isArray(resources) ? resources : [],
-    });
-  } catch (err: any) {
-    // A resource server being down is not an error in Float; it just means
-    // there is nothing to buy from it right now.
-    return NextResponse.json({ base, resources: [], error: err?.message ?? "unreachable" });
-  }
+  // Native internal catalogue fallback
+  const appBase = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return NextResponse.json({
+    base: appBase,
+    resources: [
+      { path: "/api/paid/signal", price: 0.01, title: "Alpha Signal Intelligence", artifact: "json" },
+      { path: "/api/paid/risk-curve", price: 1.0, title: "Exposure curve · 30d", artifact: "svg" },
+      { path: "/api/paid/dossier", price: 5.0, title: "Underwriting dossier", artifact: "svg" },
+    ],
+  });
 }

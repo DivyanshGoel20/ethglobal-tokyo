@@ -101,7 +101,7 @@ export class FloatSignerTS {
    * Wraps the x402 payment flow with Float's autonomous overdraft decision engine.
    */
   async pay(
-    url: string,
+    rawUrl: string,
     agentContext: AgentPaymentContext,
     options?: {
       method?: "GET" | "POST";
@@ -120,6 +120,10 @@ export class FloatSignerTS {
           ? options.body
           : JSON.stringify(options.body)
         : undefined;
+
+    const url = rawUrl.startsWith("/")
+      ? `${process.env.NEXT_PUBLIC_APP_URL || process.env.FLOAT_APP_URL || "http://localhost:3000"}${rawUrl}`
+      : rawUrl;
 
     // Step 1: Initial request to resource
     const initialResponse = await fetch(url, {
