@@ -124,7 +124,6 @@ Sign-in follows World's guidance that World ID is not a login:
 | back, same browser | the browser remembers the account; prove its session |
 | back, another browser | "Sign in from World App": scan, approve on the phone |
 | joined in a browser, first time in World App | dashboard's "Open in World App" link; the phone proves the saved session and its wallet is linked |
-| joined before sessions existed | the dashboard asks, once, to save one |
 
 Code: [`WorldAuthGate.tsx`](web/src/components/WorldAuthGate.tsx),
 [`mini/MiniGate.tsx`](web/src/components/mini/MiniGate.tsx),
