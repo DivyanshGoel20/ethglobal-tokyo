@@ -20,7 +20,11 @@ export async function verifyWorldSelfieProof(
     console.log(`[World-Verify v4] Attempting RP verification at https://developer.world.org/api/v4/verify/${rpId}`);
 
     let v4Payload: any;
-    if (proof.protocol_version && Array.isArray(proof.responses)) {
+    if (proof.session_id) {
+      // A session proof has no action, and must reach the portal as IDKit
+      // produced it.
+      v4Payload = proof;
+    } else if (proof.protocol_version && Array.isArray(proof.responses)) {
       v4Payload = {
         ...proof,
         action: proof.action || action,

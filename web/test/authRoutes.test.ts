@@ -39,7 +39,7 @@ test("a bare world_session cookie is not a session", async () => {
 });
 
 test("signing out voids the cookie", async () => {
-  const header = (await sessionDELETE()).headers.get("set-cookie") || "";
+  const header = (await sessionDELETE(new NextRequest("http://localhost/api/auth/session", { method: "DELETE" }))).headers.get("set-cookie") || "";
   assert.match(header, /lifeline_session=;/);
   assert.match(header, /Max-Age=0/i);
 });
@@ -60,7 +60,7 @@ test("the RP context refuses to sign without a configured key", async () => {
   delete process.env.WORLD_RP_SIGNING_KEY;
   delete process.env.WORLD_API_KEY;
   try {
-    const res = await rpContextGET();
+    const res = await rpContextGET(new NextRequest("http://localhost/api/auth/world-rp-context"));
     assert.equal(res.status, 500);
   } finally {
     if (saved.a !== undefined) process.env.WORLD_RP_SIGNING_KEY = saved.a;

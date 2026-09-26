@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { proofOfHuman, setDebug } from "@worldcoin/idkit";
 import type { RpContext, IDKitResult, IDKitErrorCodes, IDKitDebugReport } from "@worldcoin/idkit";
 import { LifelineMark } from "./Pulse";
+import { WorldSessionProof } from "./WorldSessionProof";
+import { PairPanel } from "./PairPanel";
 
 // Dynamically load the widget to prevent SSR window issues
 const IDKitRequestWidget = dynamic(
@@ -20,9 +22,14 @@ interface WorldAuthGateProps {
 /**
  * Sign in with World ID.
  *
- * One proof of human per sign-in. Its nullifier is the same for the same
- * person every time - here or in World App - so it is the human's identity
- * and the key to their one credit line.
+ * Joining takes World ID's uniqueness proof - once per person, ever. Its
+ * nullifier is the human's identity and the key to their one credit line. In
+ * the same sitting a World ID session is created for them, and every later
+ * sign-in proves that session instead, as often as they like.
+ *
+ *   new here:              uniqueness proof -> session created -> in
+ *   back, same browser:    session proof -> in
+ *   back, other browser:   approve from World App (their wallet) -> in
  */
 export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSignIn }) => {
   const [mounted, setMounted] = useState(false);
@@ -34,6 +41,10 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
   // Set in handleVerify, read in onSuccess - which fires before a state update
   // from handleVerify would be visible.
   const human = useRef("");
+  // The account this browser remembers, and its World ID session.
+  const [savedSession, setSavedSession] = useState<string | null | undefined>(undefined);
+  const [sessionStep, setSessionStep] = useState<"create" | "prove" | null>(null);
+  const [pairing, setPairing] = useState(false);
 
   const appId = (process.env.NEXT_PUBLIC_WORLD_APP_ID || "app_6ad9b6ef952f1c2a9a70a58e05aa9878") as `app_${string}`;
   const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "lifeline-human-verify";
@@ -46,7 +57,16 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
       // ignore
     }
     setMounted(true);
+    fetch("/api/auth/world-session", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setSavedSession(d.sessionId ?? null))
+      .catch(() => setSavedSession(null));
   }, []);
+
+  const signedIn = (hash: string) => {
+    onVerified?.(hash);
+    onSignIn?.(hash);
+  };
 
   const handleStartSignIn = async () => {
     setIsPreparing(true);
@@ -93,16 +113,31 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
   const handleError = (errorCode: IDKitErrorCodes, debugReport?: IDKitDebugReport) => {
     console.error("[WorldAuthGate] IDKit error:", errorCode, debugReport);
     setOpen(false);
-    setErrorMessage(
-      String(errorCode) === "nullifier_replayed"
-        ? "World ID will only verify this action once per person. Raise the action's max verifications in the World Developer Portal."
-        : `World ID Error (${errorCode}). Check browser console for debug report.`
-    );
+    const code = String(errorCode);
+    if (code === "nullifier_replayed" || code === "max_verifications_reached") {
+      // World ID proves uniqueness once. This person has joined already; this
+      // browser just does not know them. Their World App does.
+      setErrorMessage("You have already joined Lifeline - World ID proves that only once. Sign in from World App instead.");
+      setPairing(true);
+      return;
+    }
+    setErrorMessage(`World ID Error (${errorCode}). Check browser console for debug report.`);
   };
 
-  const isBusy = isPreparing || isVerifyingProof || open;
+  const isBusy = isPreparing || isVerifyingProof || open || sessionStep !== null;
+  const returning = !!savedSession;
 
-  const label = isPreparing ? "Preparing World ID…" : isVerifyingProof ? "Verifying proof…" : "Sign in with World ID";
+  const label = isPreparing
+    ? "Preparing World ID…"
+    : isVerifyingProof
+      ? "Verifying proof…"
+      : sessionStep === "create"
+        ? "Remembering you…"
+        : sessionStep === "prove"
+          ? "Waiting for World ID…"
+          : returning
+            ? "Continue with World ID"
+            : "Join with World ID";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -151,7 +186,12 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
               the agent&apos;s line.
             </p>
 
-            <button id="world-signin-btn" onClick={handleStartSignIn} disabled={isBusy} className="btn btn-solid h-12 px-6 text-[11.5px]">
+            <button
+              id="world-signin-btn"
+              onClick={returning ? () => { setErrorMessage(null); setSessionStep("prove"); } : handleStartSignIn}
+              disabled={isBusy || savedSession === undefined}
+              className="btn btn-solid h-12 px-6 text-[11.5px]"
+            >
               <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden>
                 <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" fill="none" />
                 <circle cx="12" cy="12" r="3.5" fill="currentColor" />
@@ -160,8 +200,16 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
             </button>
 
             <div className="mt-4 mono text-[10.5px] ink-3 leading-relaxed max-w-[48ch]">
-              Scan with World App. The same World ID is the same line here and in Lifeline&apos;s World App version.
+              {returning
+                ? "Welcome back. World ID confirms it is you - no new verification."
+                : "Scan with World App. The same World ID is the same line here and in Lifeline's World App version."}
             </div>
+            {!pairing && (
+              <button onClick={() => setPairing(true)} className="mt-2 mono text-[10.5px] ink-3 underline underline-offset-2">
+                {returning ? "Someone else? Sign in from World App" : "Already joined? Sign in from World App"}
+              </button>
+            )}
+            {pairing && <PairPanel onSignedIn={signedIn} onClose={() => setPairing(false)} />}
 
             {errorMessage && (
               <div className="mt-5 mono text-[11px] leading-relaxed px-3 py-2.5" style={{ color: "var(--alarm)", background: "var(--alarm-soft)" }}>
@@ -190,12 +238,34 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
           handleVerify={verify}
           onSuccess={() => {
             setOpen(false);
-            if (human.current) {
-              onVerified?.(human.current);
-              onSignIn?.(human.current);
-            }
+            // Joined. Now a session, so coming back never needs this proof again.
+            if (human.current) setSessionStep("create");
           }}
           onError={handleError}
+        />
+      )}
+
+      {mounted && sessionStep && (
+        <WorldSessionProof
+          sessionId={sessionStep === "prove" ? savedSession : null}
+          onDone={(h) => {
+            setSessionStep(null);
+            signedIn(h || human.current);
+          }}
+          onError={(msg) => {
+            setSessionStep(null);
+            if (sessionStep === "create" && human.current) {
+              // Verified and signed in regardless; the dashboard offers to
+              // finish setting up sign-in.
+              signedIn(human.current);
+              return;
+            }
+            setErrorMessage(msg);
+          }}
+          onCancel={() => {
+            setSessionStep(null);
+            if (sessionStep === "create" && human.current) signedIn(human.current);
+          }}
         />
       )}
     </div>

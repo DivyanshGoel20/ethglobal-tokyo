@@ -17,6 +17,11 @@ import { getAgentByAddress } from "./agentStore";
 
 const COOKIE = "lifeline_session";
 const TTL_SECONDS = 60 * 60 * 12;
+// Which account this browser belongs to, kept after the session ends so the
+// next sign-in knows which World ID session to ask for. It authorises nothing:
+// signing in still takes a fresh World ID session proof.
+const ACCOUNT_COOKIE = "lifeline_account";
+const ACCOUNT_TTL_SECONDS = 60 * 60 * 24 * 365;
 
 let cachedSecret: Buffer | null = null;
 
@@ -64,6 +69,26 @@ export function attachSession(res: NextResponse, nullifier: string): NextRespons
     path: "/",
     maxAge: TTL_SECONDS,
   });
+  const account = Buffer.from(
+    JSON.stringify({ n: nullifier, exp: Math.floor(Date.now() / 1000) + ACCOUNT_TTL_SECONDS }),
+    "utf8"
+  ).toString("base64url");
+  res.cookies.set(ACCOUNT_COOKIE, `${account}.${sign(account)}`, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: ACCOUNT_TTL_SECONDS,
+  });
+  return res;
+}
+
+/** The account this browser last signed in as, if any. Not a session. */
+export const rememberedAccount = (req: NextRequest): string | null => readClaims(req.cookies.get(ACCOUNT_COOKIE)?.value);
+
+/** Forget the account too, for "not you?". */
+export function forgetAccount(res: NextResponse): NextResponse {
+  res.cookies.set(ACCOUNT_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
   return res;
 }
 
@@ -74,7 +99,10 @@ export function clearSession(res: NextResponse): NextResponse {
 
 /** The verified World nullifier behind this request, or null. */
 export function getHuman(req: NextRequest): string | null {
-  const token = req.cookies.get(COOKIE)?.value;
+  return readClaims(req.cookies.get(COOKIE)?.value);
+}
+
+function readClaims(token?: string): string | null {
   if (!token) return null;
 
   const cut = token.lastIndexOf(".");

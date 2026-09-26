@@ -6,6 +6,7 @@ import { MiniKit } from "@worldcoin/minikit-js";
 import { proofOfHuman } from "@worldcoin/idkit";
 import type { IDKitResult, IDKitErrorCodes, RpContext } from "@worldcoin/idkit";
 import { LifelineMark } from "../Pulse";
+import { WorldSessionProof } from "../WorldSessionProof";
 
 const IDKitRequestWidget = dynamic(() => import("@worldcoin/idkit").then((m) => m.IDKitRequestWidget), { ssr: false });
 
@@ -19,15 +20,24 @@ const IDKitRequestWidget = dynamic(() => import("@worldcoin/idkit").then((m) => 
  * That is the same human, with the same line, whether they signed up here or
  * in a browser. Inside World App the proof is native; there is no QR code.
  *
- *   returning wallet:  wallet -> in
- *   new wallet:        wallet -> World ID -> linked -> in
+ * World ID proves uniqueness once per person, ever. So a person who joined in
+ * a browser cannot prove it again here; they open Lifeline in World App from
+ * the dashboard's link, which names their account, and prove the World ID
+ * session saved to it instead.
+ *
+ *   returning wallet:           wallet -> in
+ *   new person:                 wallet -> World ID -> linked -> session saved -> in
+ *   joined in a browser:        dashboard link -> wallet -> World ID session -> linked -> in
  */
 export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (k: "success" | "error") => void }> = ({
   onSignedIn,
   haptic,
 }) => {
   const [inWorldApp, setInWorldApp] = useState<boolean | null>(null);
-  const [step, setStep] = useState<"start" | "signing" | "prove" | "proving">("start");
+  const [step, setStep] = useState<"start" | "signing" | "prove" | "proving" | "session">("start");
+  // Opened from the dashboard's "Open in World App": which account, and its session.
+  const [link, setLink] = useState<string | null>(null);
+  const [linkSession, setLinkSession] = useState<string | null>(null);
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const human = useRef("");
@@ -37,6 +47,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
 
   useEffect(() => {
     setInWorldApp(MiniKit.isInWorldApp());
+    setLink(new URLSearchParams(window.location.search).get("link"));
   }, []);
 
   const fail = (message: string) => {
@@ -70,6 +81,15 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
         return onSignedIn(data.nullifierHash);
       }
 
+      if (link) {
+        // Joined elsewhere: prove the session saved to that account.
+        const saved = await (await fetch(`/api/auth/world-session?link=${encodeURIComponent(link)}`, { cache: "no-store" })).json();
+        if (!saved.sessionId) return fail(saved.error || "That account has no World ID sign-in yet. Finish setting it up on the dashboard.");
+        setLinkSession(saved.sessionId);
+        setStep("session");
+        return;
+      }
+
       // First time with this wallet: World ID says which human it belongs to -
       // the same human if they already signed up in a browser.
       const ctx = await (await fetch("/api/auth/world-rp-context", { cache: "no-store" })).json();
@@ -95,23 +115,27 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.verified) throw new Error(data.error || "World ID verification failed.");
 
-    const link = await fetch("/api/auth/wallet/link", { method: "POST" });
-    const linked = await link.json().catch(() => ({}));
-    if (!link.ok || !linked.success) throw new Error(linked.error || "Could not link your wallet.");
+    await linkWallet();
     human.current = String(data.nullifierHash);
+  };
+
+  const linkWallet = async () => {
+    const res = await fetch("/api/auth/wallet/link", { method: "POST" });
+    const linked = await res.json().catch(() => ({}));
+    if (!res.ok || !linked.success) throw new Error(linked.error || "Could not link your wallet.");
   };
 
   const proofError = (code: IDKitErrorCodes) => {
     setStep("start");
     haptic("error");
     setError(
-      String(code) === "nullifier_replayed"
-        ? "World ID will only verify this action once per person, so it cannot confirm who you are again. The action's max verifications needs raising in the World Developer Portal."
+      String(code) === "nullifier_replayed" || String(code) === "max_verifications_reached"
+        ? "You have already joined Lifeline, in a browser - World ID proves that only once. On the dashboard there, choose \"Open in World App\" and this wallet is added to your account."
         : `World ID did not complete (${code}).`
     );
   };
 
-  const busy = step === "signing" || step === "proving";
+  const busy = step === "signing" || step === "proving" || step === "session";
 
   return (
     <div className="min-h-[100dvh] flex flex-col" style={{ paddingTop: "env(safe-area-inset-top)" }}>
@@ -176,7 +200,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
           </>
         ) : (
           <button onClick={signIn} disabled={busy || inWorldApp === null} className="btn btn-solid w-full justify-center h-12">
-            {step === "signing" ? "Waiting for World App…" : step === "proving" ? "Verifying…" : "Sign in with World App"}
+            {step === "signing" ? "Waiting for World App…" : step === "proving" || step === "session" ? "Verifying…" : "Sign in with World App"}
           </button>
         )}
       </div>
@@ -193,10 +217,36 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
           preset={proofOfHuman()}
           handleVerify={verifyProof}
           onSuccess={() => {
-            haptic("success");
-            onSignedIn(human.current);
+            // Joined. Save a World ID session too, so a browser - or this app
+            // after a new wallet - can sign in again without it.
+            setLinkSession(null);
+            setStep("session");
           }}
           onError={proofError}
+        />
+      )}
+
+      {step === "session" && (
+        <WorldSessionProof
+          sessionId={linkSession}
+          onDone={async (h) => {
+            try {
+              if (linkSession) await linkWallet();
+              haptic("success");
+              onSignedIn(h || human.current);
+            } catch (err: any) {
+              fail(err?.message || "Could not link your wallet.");
+            }
+          }}
+          onError={(msg) => {
+            // A new member is in regardless; the session can be set up later.
+            if (!linkSession && human.current) return onSignedIn(human.current);
+            fail(msg);
+          }}
+          onCancel={() => {
+            if (!linkSession && human.current) return onSignedIn(human.current);
+            setStep("start");
+          }}
         />
       )}
     </div>

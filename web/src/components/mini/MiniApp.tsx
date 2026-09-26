@@ -48,6 +48,34 @@ export default function MiniApp() {
   const [adding, setAdding] = useState(false);
   const [account, setAccount] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  // Opened from a browser's "Sign in from World App" code.
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairing, setPairing] = useState(false);
+
+  useEffect(() => {
+    setPairCode(new URLSearchParams(window.location.search).get("pair"));
+  }, []);
+
+  const approvePair = async () => {
+    setPairing(true);
+    try {
+      const res = await fetch("/api/auth/pair/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: pairCode }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) throw new Error(d.error || "Could not sign that browser in.");
+      haptic("success");
+      L.showToast("Your browser is signed in.");
+    } catch (err: any) {
+      haptic("error");
+      L.showToast(err.message);
+    } finally {
+      setPairing(false);
+      setPairCode(null);
+    }
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute("data-shell", "mini");
@@ -80,6 +108,23 @@ export default function MiniApp() {
     <div className="h-[100dvh] flex flex-col">
       {/* Header. World App draws its own controls at the top right, so ours
           stay left and centre. */}
+      {pairCode && (
+        <div className="fixed inset-x-0 bottom-0 z-50 sheet rise px-6 pt-5 space-y-3" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
+          <div className="lab">Sign in on a computer</div>
+          <p className="text-[14px] leading-snug">
+            A browser showing code <span className="mono">{pairCode}</span> wants to sign in as you. Only approve it if
+            that is your screen.
+          </p>
+          <div className="flex gap-2">
+            <button className="btn btn-quiet flex-1 justify-center h-11" onClick={() => setPairCode(null)} disabled={pairing}>
+              Not me
+            </button>
+            <button className="btn btn-solid flex-1 justify-center h-11" onClick={approvePair} disabled={pairing}>
+              {pairing ? "Approving…" : "Approve"}
+            </button>
+          </div>
+        </div>
+      )}
       <header className="shrink-0 hair-b" style={{ paddingTop: "env(safe-area-inset-top)", background: "var(--ground)" }}>
         <div className="px-6 h-14 flex items-center justify-between gap-3" style={{ paddingRight: 96 }}>
           <div className="flex items-center gap-2">

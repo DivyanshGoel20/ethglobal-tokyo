@@ -9,6 +9,7 @@ import { Vitals } from "@/components/Vitals";
 import { Monitor } from "@/components/Monitor";
 import { EventTape } from "@/components/EventTape";
 import { Underwriting } from "@/components/Underwriting";
+import { AccountLinks } from "@/components/AccountLinks";
 import { Counterparties } from "@/components/Counterparties";
 import { FacilityRecord } from "@/components/FacilityRecord";
 import { ParkedRepayments } from "@/components/ParkedRepayments";
@@ -70,6 +71,7 @@ function Dashboard() {
       )}
 
       <main className="max-w-[1180px] mx-auto px-6 sm:px-10">
+        <AccountLinks onToast={L.showToast} />
         <Vitals
           creditLimit={L.creditLimit}
           arcDebt={L.arcDebt}

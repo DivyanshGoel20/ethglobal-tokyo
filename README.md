@@ -108,17 +108,29 @@ World username instead of an address, and a haptic tap when money moves.
 Sign-in follows World's guidance that World ID is not a login:
 
 - **The wallet is the login.** MiniKit's Sign-In with Ethereum, one tap, every
-  visit, verified server-side against a nonce this server issued.
-- **World ID runs once per wallet.** The first time a wallet is seen, World ID
-  - native in World App, no QR code - says which human is holding it, and the
-  wallet is linked to them for good. It is the same human, with the same line,
-  whether they first signed up in a browser or here. A wallet is never moved
-  to a second human.
+  visit, verified server-side against a nonce this server issued. A linked
+  wallet goes straight in.
+- **World ID proves uniqueness once, to join.** A World ID 4 uniqueness proof
+  can be made once per person per action - that is what makes it proof of one
+  human, and no portal setting changes it. Its nullifier becomes the human's
+  identity and their one credit line.
+- **Sessions bring them back.** In the same sitting a World ID *session* is
+  created and saved to the human. Every later sign-in proves that session - as
+  often as needed, no action, no limit - with each proof accepted once.
 
-The World ID action must allow more than one verification per person (its
-*max verifications* in the Developer Portal), since the same person verifies
-once in the browser and once per World App wallet - and the proof's nullifier
-is what makes them the same human every time.
+| who | how they get in |
+|---|---|
+| new, anywhere | uniqueness proof, then a session is saved |
+| back, same browser | the browser remembers the account; prove its session |
+| back, another browser | "Sign in from World App": scan, approve on the phone |
+| joined in a browser, first time in World App | dashboard's "Open in World App" link; the phone proves the saved session and its wallet is linked |
+| joined before sessions existed | the dashboard asks, once, to save one |
+
+Code: [`WorldAuthGate.tsx`](web/src/components/WorldAuthGate.tsx),
+[`mini/MiniGate.tsx`](web/src/components/mini/MiniGate.tsx),
+[`api/auth/world-session`](web/src/app/api/auth/world-session/route.ts),
+[`lib/worldSessions.ts`](web/src/lib/worldSessions.ts),
+[`api/auth/pair`](web/src/app/api/auth/pair/route.ts).
 
 To try it on a phone, expose the app over HTTPS (`ngrok http 3000`), set the
 mini app URL in the World Developer Portal to `https://<tunnel>` (the root
@@ -286,7 +298,7 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (41) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds |
+| web tests (51) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing) |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |

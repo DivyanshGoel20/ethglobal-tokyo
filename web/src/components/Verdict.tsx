@@ -2,7 +2,18 @@
 
 import React from "react";
 
-type Check = { subject: string; target: string; endpoint: string; level: string; summary: string; cached?: boolean; ms?: number };
+type Check = {
+  subject: string;
+  target: string;
+  endpoint: string;
+  level: string;
+  summary: string;
+  score?: number;
+  traits?: { name: string; risk: number; description: string }[];
+  detectors?: { code: string; description: string }[];
+  cached?: boolean;
+  ms?: number;
+};
 export type ScreeningVerdict = {
   decision: "pay" | "cap" | "hold" | "refuse";
   reasons: string[];
@@ -63,5 +74,30 @@ export const Verdict: React.FC<{ verdict: ScreeningVerdict }> = ({ verdict }) =>
         </React.Fragment>
       ))}
     </dl>
+    {/* Intercepta's own words, verbatim - the verdict above is Lifeline's
+        policy applied to exactly this. */}
+    {verdict.checks.some((c) => c.traits?.length || c.detectors?.length) && (
+      <div className="space-y-1.5">
+        <div className="lab">Intercepta says</div>
+        {verdict.checks.flatMap((c) => [
+          ...(c.traits ?? []).map((t) => (
+            <p key={`${c.subject}-${t.name}`} className="text-[12px] ink-2 leading-snug">
+              <span className="mono text-[10.5px]" style={{ color: "var(--alarm)" }}>
+                {t.name} · {t.risk}
+              </span>{" "}
+              {t.description}
+            </p>
+          )),
+          ...(c.detectors ?? []).map((d, i) => (
+            <p key={`${c.subject}-d${i}`} className="text-[12px] ink-2 leading-snug">
+              <span className="mono text-[10.5px]" style={{ color: "var(--alarm)" }}>
+                {d.code}
+              </span>{" "}
+              {d.description}
+            </p>
+          )),
+        ])}
+      </div>
+    )}
   </div>
 );

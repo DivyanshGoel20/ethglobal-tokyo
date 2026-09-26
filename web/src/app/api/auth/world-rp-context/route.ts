@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { signRequest } from "@worldcoin/idkit-core/signing";
 
 // A GET that reads no request is prerendered by `next build`, which froze one
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * never meant to offer. There is no fallback key either: a signing key in
  * source is a signing key everyone has.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "lifeline-human-verify";
     const rpId = process.env.NEXT_PUBLIC_WORLD_RP_ID || "rp_62d19ed87590c550";
@@ -27,7 +27,10 @@ export async function GET() {
       );
     }
 
-    const sig = signRequest({ action, signingKeyHex });
+    // Session proofs - how a human who has joined signs in again - are signed
+    // without an action; only the one-time uniqueness proof carries it.
+    const session = new URL(req.url).searchParams.get("kind") === "session";
+    const sig = signRequest(session ? { signingKeyHex } : { action, signingKeyHex });
 
     return NextResponse.json({
       rp_id: rpId,
