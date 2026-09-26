@@ -7,7 +7,7 @@ const TITLE = "Unvetted feed";
 
 /**
  * A seller Lifeline should never pay: its quote names a payee with a record on
- * mainnet (by default an OFAC-listed exploiter's wallet). It exists so the
+ * mainnet (by default a known scammer's wallet from Intercepta's test list). It exists so the
  * refusal can be seen - Intercepta's verdict stops the agent before it signs,
  * so nothing is ever sent to this address.
  */

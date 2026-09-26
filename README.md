@@ -192,9 +192,25 @@ scores, each trait with its description, and Summarize Address
 
 **Seeing it** - `npm run e2e:intercepta`, live against the API and Arc
 testnet: a clean seller cleared and paid; the "Unvetted feed" seller, whose
-payee is the Ronin bridge exploiter's wallet (OFAC-listed), refused before
+payee is a known scammer's wallet from Intercepta's test list (score 100), refused before
 signing; a $5 dossier held and declined; and both sellers turning away a
 flagged payer. In the dashboard, buy the Alpha signal, then the Unvetted feed.
+
+**Feedback on the API**
+
+- Time to first call: minutes. One header, and the address scans answered at
+  once (the first cold call took ~5s, then 0.4-1.3s).
+- What confused us: Scan Message is documented as taking the EIP-712 data as a
+  JSON *string*. Sent that way it is not parsed and comes back `riskGroup: Low`
+  with nothing read, a silent false negative. Sent as an *object* it reads the
+  authorisation and flags the payee `KNOWN_MALICIOUS`, High. We now treat an
+  unparsed answer as no answer.
+- Also undocumented: `chainId` must be a string (`"8453"`), per-address
+  `detectors` are bare codes rather than `{code, description}`, and the scale
+  of `toxicScore` and of a trait's `risk` (they look like 0-100).
+- What was missing: Arc. Its chain id is not in any enum, so addresses are
+  screened on mainnet data and the Gateway authorisation under Base's id. A
+  batch address scan would also help a seller screening many payers.
 
 ## Layout
 
@@ -262,7 +278,7 @@ npm run lint
 npm run e2e:arc               # the Arc rail through the app, on Arc testnet
 npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
 npm run e2e:sui               # the Sui rail through the app
-npm run e2e:intercepta        # screening, live: cleared, refused, held
+npm run e2e:intercepta        # screening, live: cleared, refused, held, approved
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
 
@@ -270,10 +286,11 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (40) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds |
+| web tests (41) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
+| `e2e:intercepta` (17) | live against Intercepta and Arc testnet: a clean seller cleared and settled, a known scammer's payee refused before signing (by the address and the authorisation scans both), a $5 purchase held, declined, and held again and approved, and both sellers turning away a flagged payer |
 | `e2e:sui` (20) | credit on Sui, Arc refusing what Sui drew, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
 | `sui:lifecycle` (18) | both endings on chain: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
 

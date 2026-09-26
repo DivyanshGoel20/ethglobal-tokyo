@@ -28,7 +28,7 @@ beforeEach(() => {
   calls = [];
   answers = {
     address: { toxicScore: 0, traits: [] },
-    message: { messageType: "TransferWithAuthorization", riskGroup: "Low", detectors: [] },
+    message: { messageType: "TransferWithAuthorization", domain: { name: "GatewayWalletBatched" }, riskGroup: "Low", detectors: [] },
   };
   globalThis.fetch = (async (url: string) => {
     calls.push(String(url));
@@ -90,10 +90,25 @@ test("a quote in anything but Arc's USDC is refused", async () => {
 });
 
 test("a High-risk authorisation is refused", async () => {
-  answers.message = { riskGroup: "High", detectors: [{ code: "WALLET_DRAINER", description: "Known drainer" }] };
+  // The shape the live API returned for an authorisation paying a flagged address.
+  answers.message = {
+    domain: { name: "GatewayWalletBatched", chainId: "8453" },
+    messageType: "TransferWithAuthorization",
+    riskGroup: "High",
+    detectors: [{ code: "KNOWN_MALICIOUS", description: "Spender address flagged in phishing list." }],
+    addresses: [{ address: PAYEE, type: "eoa", detectors: ["KNOWN_MALICIOUS"] }],
+  };
   const v = await out();
   assert.equal(v.decision, "refuse");
-  assert.match(v.reasons[0], /Known drainer/);
+  assert.match(v.reasons[0], /phishing list.*known malicious \(0xabab/);
+});
+
+test("an authorisation Intercepta did not read is not a pass", async () => {
+  // What comes back when the typed data is sent as a string: nothing parsed, "Low".
+  answers.message = { domain: { name: null, chainId: "8453" }, messageType: null, riskGroup: "Low", detectors: [], addresses: [] };
+  const v = await out();
+  assert.equal(v.decision, "hold");
+  assert.match(v.reasons[0], /could not read the authorisation/);
 });
 
 test("no answer from Intercepta is a hold, never a pass", async () => {

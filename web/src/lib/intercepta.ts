@@ -30,11 +30,11 @@ const MESSAGE_CHAIN_ID = Number(process.env.INTERCEPTA_MESSAGE_CHAIN_ID || 8453)
 export const ARC_USDC = "0x3600000000000000000000000000000000000000";
 
 /**
- * A payee with a known record, for showing a refusal. Defaults to the Ronin
- * bridge exploiter's wallet, on OFAC's list since April 2022.
+ * A payee with a known record, for showing a refusal: one of Intercepta's
+ * pinned test addresses, scored 100 as a known scammer holding attack money.
  */
 export const DEMO_RISKY_PAYTO =
-  process.env.INTERCEPTA_DEMO_PAYTO || "0x098B716B8Aaf21512996dC57EB0615e2383E2f96";
+  process.env.INTERCEPTA_DEMO_PAYTO || "0x39308ae43e5dda98db5fb17d005c5c764e5a2fed";
 
 /** Clean counterparty: the agent pays on its own up to this much a payment. */
 export const AUTO_APPROVE_USD = Number(process.env.INTERCEPTA_AUTO_APPROVE_USD || 2);
@@ -167,19 +167,32 @@ export const scanToken = (address: string, chainId: number) =>
   call<TokenRisk>("GET", `/api/public/v2/extension/token-intelligence/token/${address}/risks?chainId=${chainId}`);
 
 export type MessageRisk = {
-  messageType?: string;
+  domain?: { name?: string | null; chainId?: string | null; verifyingContract?: string | null };
+  messageType?: string | null;
   riskGroup?: "Low" | "Medium" | "High";
   detectors?: { code: string; description: string }[];
-  addresses?: { address: string; type?: string; detectors?: { code: string; description: string }[] }[];
+  // Per-address detectors come back as bare codes, not {code, description}.
+  addresses?: { address: string; type?: string; detectors?: (string | { code: string; description?: string })[] }[];
 };
 
+/**
+ * Two things the reference does not say, found against the live API: the
+ * typed data goes in as an object - sent as the JSON string the docs
+ * describe, it is not parsed and comes back "Low" with nothing read - and
+ * chainId is a string.
+ */
 export const scanMessage = (from: string, typedData: unknown, website: string) =>
-  call<MessageRisk>("POST", "/api/public/v2/extension/analysis/signature", {
-    from,
-    website,
-    message: JSON.stringify(typedData, (_k, v) => (typeof v === "bigint" ? v.toString() : v)),
-    chainId: MESSAGE_CHAIN_ID,
-  }, { fresh: true }); // what is being signed is always read live
+  call<MessageRisk>(
+    "POST",
+    "/api/public/v2/extension/analysis/signature",
+    {
+      from,
+      website,
+      message: JSON.parse(JSON.stringify(typedData, (_k, v) => (typeof v === "bigint" ? v.toString() : v))),
+      chainId: String(MESSAGE_CHAIN_ID),
+    },
+    { fresh: true } // what is being signed is always read live
+  );
 
 /* ------------------------------------------------------------------------ */
 /* Reading the answers                                                      */
@@ -252,8 +265,17 @@ async function screenToken(asset: string): Promise<Check> {
 async function screenAuthorization(from: string, typedData: unknown, website: string): Promise<Check> {
   try {
     const r = await scanMessage(from, typedData, website);
+    // An answer about a message it did not read is no answer.
+    if (!r.data.messageType && !r.data.domain?.name) {
+      return failedCheck("authorization", from, "analysis/signature", new InterceptaError("Intercepta could not read the authorisation"));
+    }
     const detectors = r.data.detectors ?? [];
-    const flagged = (r.data.addresses ?? []).flatMap((a) => (a.detectors ?? []).map((d) => ({ ...d, code: `${d.code} (${short(a.address)})` })));
+    const flagged = (r.data.addresses ?? []).flatMap((a) =>
+      (a.detectors ?? []).map((d) => {
+        const code = typeof d === "string" ? d : d.code;
+        return { code, description: `${human(code.toLowerCase())} (${short(a.address)})` };
+      })
+    );
     const all = [...detectors, ...flagged];
     const level: Level = r.data.riskGroup === "High" ? "severe" : r.data.riskGroup === "Medium" || all.length ? "elevated" : "clean";
     return {
@@ -299,7 +321,7 @@ function decide(checks: Check[], amountUsd: number, autoApproveUsd: number): Ver
     reasons.push(
       ...(elevated.length
         ? [...elevated.map((c) => c.summary), `Allowed up to $${capUsd.toFixed(2)} a payment.`]
-        : ["No known risk on the payee, the asset or the authorisation."])
+        : [checks.some((c) => c.subject === "payer") ? "No known risk on the payer." : "No known risk on the payee, the asset or the authorisation."])
     );
   }
   return { decision, reasons, capUsd, amountUsd, checks, screenedAt: Date.now(), provider: "intercepta" };

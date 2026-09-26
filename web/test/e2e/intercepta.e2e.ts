@@ -84,7 +84,7 @@ async function main() {
   console.log("\nThe paying agent\n");
   const cleared = await call("POST", "/api/pay", { url: `${PREMIUM}/premium-data`, agentAddress: agent });
   check("a clean seller is cleared, then paid", cleared.status === 200 && cleared.body.success && ["pay", "cap"].includes(cleared.body.screening?.decision),
-    say(cleared.body.screening));
+    `${say(cleared.body.screening)} · settled ${cleared.body.transactionId ?? "?"}`);
   const live = (cleared.body.screening?.checks ?? []).filter((c: any) => !c.cached && c.ms);
   check("the verdict came from live calls", live.length >= 2, live.map((c: any) => `${c.endpoint} ${c.ms}ms`).join(", "));
   check("the asset was Arc's USDC", cleared.body.screening?.checks?.some((c: any) => c.subject === "token" && c.target.toLowerCase() === ARC_USDC && c.level === "clean"));
@@ -103,6 +103,15 @@ async function main() {
   check("the human declines it", declined.status === 200 && declined.body.declined);
   const again = await call("POST", `/api/pay/holds/${held.body.hold?.holdId}`, { action: "approve" });
   check("a declined hold cannot then be approved", again.status === 409, again.body.error);
+
+  const heldAgain = await call("POST", "/api/pay", { url: `${PREMIUM}/risk-curve`, agentAddress: agent });
+  // $1 is under the $2 auto-approve line, so this one should simply clear.
+  check("a clean $1 purchase on credit clears on its own", heldAgain.status === 200 && heldAgain.body.screening?.decision === "pay",
+    `${say(heldAgain.body.screening)} · lent $${heldAgain.body.borrowed}`);
+  const second = await call("POST", "/api/pay", { url: `${PREMIUM}/dossier`, agentAddress: agent });
+  const approved = await call("POST", `/api/pay/holds/${second.body.hold?.holdId}`, { action: "approve" });
+  check("an approved hold is screened again, then paid on credit", approved.status === 200 && approved.body.success && approved.body.screening?.approvedByHuman === true,
+    approved.body.error ?? `lent $${approved.body.borrowed} · settled ${approved.body.circleSettlementId ?? approved.body.transactionId}`);
 
   const payments = await call("GET", "/api/payments");
   const statuses = (payments.body.payments ?? []).map((p: any) => p.status);
