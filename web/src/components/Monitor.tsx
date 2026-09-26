@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Agent, Rail } from "@/types";
+import { Agent, Instrument, Rail } from "@/types";
 import { Lead } from "./Pulse";
 import { Sheet, Field, ErrorNote } from "./Sheet";
 import { describeSpan, rate, type Beat } from "@/lib/ecg";
@@ -16,6 +16,7 @@ export type LeadData = {
 interface MonitorProps {
   leads: LeadData[];
   rail: Rail;
+  instrument: Instrument;
   window: { from: number; to: number; span: number };
   suiNetwork?: string | null;
   onAddAgent: (input: { name: string; address: string; privateKey: string; capUsd: number }) => Promise<void>;
@@ -37,6 +38,7 @@ function condition(owed: number, lead: LeadData): { label: string; tone: "alarm"
 export const Monitor: React.FC<MonitorProps> = ({
   leads,
   rail,
+  instrument,
   window: win,
   suiNetwork,
   onAddAgent,
@@ -85,7 +87,7 @@ export const Monitor: React.FC<MonitorProps> = ({
       {leads.length === 0 ? (
         <div className="py-16 grid place-items-center text-center">
           <div className="w-full max-w-[520px] mb-6">
-            <Lead beats={[]} from={win.from} to={win.to} rail={rail} height={56} />
+            <Lead beats={[]} from={win.from} to={win.to} instrument={instrument} height={56} />
           </div>
           <p className="serif text-[22px] leading-snug max-w-[30ch]">
             No agents on this line yet. <em className="ink-3">Authorize one and it can start spending.</em>
@@ -108,7 +110,7 @@ export const Monitor: React.FC<MonitorProps> = ({
               <div className="lead-who">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span
-                    className={c.tone === "alarm" && rail === "sui" ? "pulse-dot" : ""}
+                    className={c.tone === "alarm" && instrument === "monitor" ? "pulse-dot" : ""}
                     style={{
                       width: 6,
                       height: 6,
@@ -135,7 +137,7 @@ export const Monitor: React.FC<MonitorProps> = ({
                   defaults={lead.defaults}
                   from={win.from}
                   to={win.to}
-                  rail={rail}
+                  instrument={instrument}
                   idle={lead.beats.length === 0}
                 />
               </div>

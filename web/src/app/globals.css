@@ -11,17 +11,18 @@
    colour - the only colour on the page that means anything - and a repayment
    that fell due and collected nothing is an arrhythmia.
 
-   The two rails are two instruments. Arc is the printed strip: warm chart
-   paper, a millimetre grid, ink. Sui is the bedside monitor: the same strip
-   after dark, the trace lit from behind, because Sui's argument is a
-   repayment that waits on chain for its date with nobody watching.
+   Two instruments. The printed strip: warm chart paper, a millimetre grid,
+   ink. The bedside monitor: the same strip after dark, the trace lit from
+   behind. Arc opens on the strip and Sui on the monitor - Sui's argument is a
+   repayment that waits on chain for its date with nobody watching - but
+   either rail can be read on either instrument.
 
    Both are held to the same rules: square corners, hairline rules, no
    gradients, no soft shadows, three typefaces, numbers in the readout face.
    ────────────────────────────────────────────────────────────────────────── */
 
 :root,
-[data-rail="arc"] {
+[data-instrument="strip"] {
   color-scheme: light;
 
   /* Chart paper. The grid is the ruling of a real ECG strip: 1 mm minor,
@@ -51,10 +52,9 @@
   --scrim: rgba(27, 22, 19, 0.42);
   --shadow: 6px 6px 0 rgba(27, 22, 19, 0.12);
 
-  --rail-label: "Arc · printed strip";
-}
+  }
 
-[data-rail="sui"] {
+[data-instrument="monitor"] {
   color-scheme: dark;
 
   /* The bedside monitor. Not black - a deep blue-green glass - and the grid
@@ -83,8 +83,7 @@
   --scrim: rgba(2, 5, 6, 0.7);
   --shadow: 0 0 0 1px #1d292e;
 
-  --rail-label: "Sui · bedside monitor";
-}
+  }
 
 :root {
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
@@ -187,7 +186,7 @@ body {
   box-shadow: var(--shadow);
 }
 
-[data-rail="sui"] .sheet {
+[data-instrument="monitor"] .sheet {
   border-color: var(--rule);
 }
 
@@ -287,27 +286,37 @@ select.field {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-[data-rail="sui"] .trace {
+[data-instrument="monitor"] .trace {
   filter: drop-shadow(0 0 3px var(--trace-glow));
 }
 .trace-alarm {
   stroke: var(--alarm);
 }
-[data-rail="sui"] .trace-alarm {
+[data-instrument="monitor"] .trace-alarm {
   filter: drop-shadow(0 0 3px rgba(255, 91, 77, 0.6));
 }
 
-/* The erase bar a monitor sweeps across the trace, and the dot at "now". */
+/* The monitor's scan head: a lit line crossing the trace, and the dot at
+   "now". It lights the line as it passes rather than cutting a gap in it - a
+   dark erase bar read as a black break in the trace. */
 @keyframes sweep {
   from {
-    transform: translateX(-24px);
+    left: 0%;
   }
   to {
-    transform: translateX(100%);
+    left: 100%;
   }
 }
-.sweep {
+.scan-head {
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  width: 1px;
+  background: var(--trace);
+  opacity: 0.55;
+  box-shadow: 0 0 10px 3px var(--trace-glow);
   animation: sweep 6s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes pulse-dot {
@@ -355,7 +364,7 @@ select.field {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sweep,
+  .scan-head,
   .pulse-dot,
   .draw,
   .rise {

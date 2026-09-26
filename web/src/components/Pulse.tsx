@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { buildTrace, TRACE_H, TRACE_W, type Beat } from "@/lib/ecg";
-import type { Rail } from "@/types";
+import type { Instrument } from "@/types";
 
 /** The mark: one complex, drawn once. */
 export const LifelineMark: React.FC<{ size?: number; className?: string }> = ({ size = 22, className }) => (
@@ -23,7 +23,7 @@ interface LeadProps {
   defaults?: number[];
   from: number;
   to: number;
-  rail: Rail;
+  instrument: Instrument;
   /** Flatline, rendered with a note, when the agent has never paid for anything. */
   idle?: boolean;
   height?: number;
@@ -32,11 +32,11 @@ interface LeadProps {
 /**
  * One agent's lead.
  *
- * On the printed strip (Arc) the paper has stopped at "now" and the pen rests
- * there. On the monitor (Sui) the trace is lit and an erase bar sweeps it, as a
- * bedside screen redraws.
+ * On the printed strip the paper has stopped at "now" and the pen rests there.
+ * On the monitor the trace is lit and a scan head crosses it, as a bedside
+ * screen redraws.
  */
-export const Lead: React.FC<LeadProps> = ({ beats, defaults, from, to, rail, idle, height = TRACE_H }) => {
+export const Lead: React.FC<LeadProps> = ({ beats, defaults, from, to, instrument, idle, height = TRACE_H }) => {
   const trace = useMemo(() => buildTrace(beats, { from, to, defaults }), [beats, from, to, defaults]);
   const [hover, setHover] = useState<number | null>(null);
   const base = TRACE_H * 0.64;
@@ -75,27 +75,20 @@ export const Lead: React.FC<LeadProps> = ({ beats, defaults, from, to, rail, idl
         style={{ paddingTop: `${(base / TRACE_H) * 100}%` }}
       >
         <span
-          className={rail === "sui" ? "pulse-dot" : ""}
+          className={instrument === "monitor" ? "pulse-dot" : ""}
           style={{
             width: 5,
             height: 5,
             marginTop: -2.5,
-            background: rail === "sui" ? "var(--trace)" : "var(--ink)",
-            boxShadow: rail === "sui" ? "0 0 8px var(--trace-glow)" : "none",
-            borderRadius: rail === "sui" ? 999 : 0,
+            background: instrument === "monitor" ? "var(--trace)" : "var(--ink)",
+            boxShadow: instrument === "monitor" ? "0 0 8px var(--trace-glow)" : "none",
+            borderRadius: instrument === "monitor" ? 999 : 0,
             display: "block",
           }}
         />
       </div>
 
-      {rail === "sui" && (
-        <div
-          className="sweep absolute top-0 bottom-0 left-0 w-full pointer-events-none"
-          aria-hidden
-        >
-          <div className="h-full" style={{ width: 22, background: "linear-gradient(90deg, transparent, var(--ground) 60%)" }} />
-        </div>
-      )}
+      {instrument === "monitor" && <span className="scan-head" aria-hidden />}
 
       {idle && (
         <span className="lab absolute left-1 top-1" style={{ opacity: 0.8 }}>

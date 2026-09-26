@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Rail, Agent, ActivityItem } from "@/types";
+import { Rail, Agent, ActivityItem, Instrument } from "@/types";
 import { WorldAuthGate } from "@/components/WorldAuthGate";
 import { Header } from "@/components/Header";
 import { Vitals } from "@/components/Vitals";
@@ -39,6 +39,10 @@ export default function Home() {
   const [nullifierHash, setNullifierHash] = useState("");
 
   const [rail, setRail] = useState<Rail>("arc");
+  // Arc opens on the strip and Sui on the monitor; either can be read on
+  // either, and the choice is remembered per rail.
+  const [instruments, setInstruments] = useState<Record<Rail, Instrument>>({ arc: "strip", sui: "monitor" });
+  const instrument = instruments[rail];
   const [sui, setSui] = useState<{ ready: boolean; network: string | null }>({ ready: false, network: null });
 
   const [creditLimit, setCreditLimit] = useState(10.0);
@@ -91,11 +95,35 @@ export default function Home() {
     void load();
   };
 
-  // The rail is stamped on the document: every colour is a token, so the
-  // strip and the monitor are the same components under different ink.
+  // The instrument is stamped on the document: every colour is a token, so
+  // the strip and the monitor are the same components under different ink.
   useEffect(() => {
-    document.documentElement.setAttribute("data-rail", rail);
-  }, [rail]);
+    document.documentElement.setAttribute("data-instrument", instrument);
+  }, [instrument]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("lifeline_instruments") || "{}");
+      setInstruments((cur) => ({
+        arc: saved.arc === "monitor" || saved.arc === "strip" ? saved.arc : cur.arc,
+        sui: saved.sui === "monitor" || saved.sui === "strip" ? saved.sui : cur.sui,
+      }));
+    } catch {
+      /* a display preference */
+    }
+  }, []);
+
+  const chooseInstrument = (next: Instrument) => {
+    setInstruments((cur) => {
+      const updated = { ...cur, [rail]: next };
+      try {
+        localStorage.setItem("lifeline_instruments", JSON.stringify(updated));
+      } catch {
+        /* a display preference */
+      }
+      return updated;
+    });
+  };
 
   // The session cookie is httpOnly, so who we are is a question for the server.
   useEffect(() => {
@@ -266,7 +294,15 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Header rail={rail} setRail={chooseRail} nullifierHash={nullifierHash} onSignOut={handleSignOut} suiReady={sui.ready} />
+      <Header
+        rail={rail}
+        setRail={chooseRail}
+        nullifierHash={nullifierHash}
+        onSignOut={handleSignOut}
+        suiReady={sui.ready}
+        instrument={instrument}
+        setInstrument={chooseInstrument}
+      />
 
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 sheet rise px-4 py-3 max-w-sm flex items-center gap-3">
@@ -290,6 +326,7 @@ export default function Home() {
         <Monitor
           leads={leads}
           rail={rail}
+          instrument={instrument}
           window={win}
           suiNetwork={sui.network}
           onAddAgent={handleAddAgent}
