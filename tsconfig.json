@@ -8,7 +8,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // Operator scripts reuse the web app's stores, which import through its alias.
+    "paths": { "@/*": ["./web/src/*"] }
   },
   // web/ owns its own config; this covers what runs through tsx, which
   // transpiles without checking.

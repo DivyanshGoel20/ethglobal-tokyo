@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { signRequest } from "@worldcoin/idkit-core/signing";
 
+// A GET that reads no request is prerendered by `next build`, which froze one
+// signature and nonce into the build and served it to every sign-in until it
+// expired. Every request needs a fresh one.
+export const dynamic = "force-dynamic";
+
 /**
  * Signs the RP context for a World ID request.
  *

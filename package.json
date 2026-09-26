@@ -17,14 +17,15 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p sui/tsconfig.json",
     "premium": "tsx --env-file-if-exists=.env premium-api/server.ts",
     "deposit": "tsx --env-file-if-exists=.env scripts/deposit-gateway.ts",
-    "balances": "tsx --env-file-if-exists=.env scripts/check-all-balances.ts",
+    "balances": "tsx --env-file-if-exists=.env --tsconfig web/tsconfig.json scripts/check-all-balances.ts",
     "deploy:arc": "cd contracts && forge script script/DeployArc.s.sol --rpc-url arc_testnet --broadcast",
     "e2e:arc": "npm --workspace=web run e2e:arc",
     "test:move": "cd sui/float && sui move test",
     "sui:deploy": "tsx --env-file-if-exists=.env sui/scripts/deploy.ts",
     "sui:service": "tsx --env-file-if-exists=.env sui/service/server.ts",
     "sui:lifecycle": "tsx --env-file-if-exists=.env sui/scripts/lifecycle.ts",
-    "e2e:sui": "npm --workspace=web run e2e:sui"
+    "e2e:sui": "npm --workspace=web run e2e:sui",
+    "sui:reconcile": "tsx --env-file-if-exists=.env --tsconfig web/tsconfig.json sui/scripts/reconcile.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
