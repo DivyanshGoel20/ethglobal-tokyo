@@ -8,6 +8,7 @@ import { resolveAgentBookStatus } from "@/lib/agentKit";
 import { FloatSignerTS } from "@/lib/floatSigner";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
 import { hasAgentPrivateKey, setAgentPrivateKey } from "@/lib/agentKeys";
+import { withSuiState } from "@/lib/suiRail";
 
 function sanitizeAgentForClient(agent: Agent): Agent {
   // Strip out internal agentBookHumanId to protect human privacy in UI
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    const agents = enrichedAgents.map(sanitizeAgentForClient);
+    // The same agents on Sui: their address there, what they hold, what they owe.
+    const agents = (await withSuiState(enrichedAgents as Agent[], human)).map(sanitizeAgentForClient);
 
     return NextResponse.json({
       agents,

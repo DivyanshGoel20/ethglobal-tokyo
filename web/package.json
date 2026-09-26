@@ -8,10 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "test": "tsx --test test/*.test.ts",
-    "e2e:arc": "tsx --env-file-if-exists=../.env test/e2e/arc.e2e.ts"
+    "e2e:arc": "tsx --env-file-if-exists=../.env test/e2e/arc.e2e.ts",
+    "e2e:sui": "tsx --env-file-if-exists=../.env test/e2e/sui.e2e.ts"
   },
   "dependencies": {
     "@circle-fin/x402-batching": "^3.5.0",
+    "@float/sui": "*",
     "@types/qrcode": "^1.5.6",
     "@worldcoin/agentkit": "^0.2.1",
     "@worldcoin/agentkit-cli": "^0.2.0",

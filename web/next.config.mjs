@@ -33,7 +33,8 @@ if (fs.existsSync(rootEnvPath)) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@worldcoin/idkit", "@worldcoin/idkit-core"],
+  // @float/sui is the repo's own sui/ workspace, shipped as TypeScript.
+  transpilePackages: ["@worldcoin/idkit", "@worldcoin/idkit-core", "@float/sui"],
 };
 
 export default nextConfig;

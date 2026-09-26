@@ -5,6 +5,7 @@ import { getHumanFacilityStats, addAgentToStore } from "@/lib/agentStore";
 import { provisionArcAgentWallet } from "@/lib/arc";
 import { setAgentPrivateKey } from "@/lib/agentKeys";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
+import { suiAddressFor } from "@/lib/suiRail";
 
 /**
  * Provisions a fresh autonomous agent wallet on Arc Testnet for a verified human.
@@ -77,6 +78,8 @@ export async function POST(req: NextRequest) {
     success: true,
     agent: {
       address: wallet.address,
+      // The same key on Sui: one agent on two rails, not two agents.
+      suiAddress: suiAddressFor(wallet.address),
       apiKey: wallet.apiKey,
       label,
       network: "Arc Testnet (5042002)",

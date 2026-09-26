@@ -3,6 +3,7 @@ import { writeJsonAtomic } from "./atomicWrite";
 import path from "path";
 import { Agent } from "@/types";
 import { getHumanCreditTier } from "./reputationStore";
+import { railDebtTotal } from "./railDebt";
 
 function getAgentsFilePath(): string {
   const candidates = [
@@ -114,6 +115,8 @@ export function getHumanFacilityStats(
   agentCount: number;
   totalCreditLimit: number;
   totalOutstandingDebt: number;
+  arcOutstandingDebt: number;
+  suiOutstandingDebt: number;
   totalAvailableCredit: number;
   totalBorrowed: number;
   totalRepaid: number;
@@ -121,9 +124,14 @@ export function getHumanFacilityStats(
   const humanAgents = getAgentsByOwner(humanOwner, agentBookHumanId);
   const tier = getHumanCreditTier(humanOwner);
   const totalCreditLimit = tier.creditLimit;
-  const totalOutstandingDebt = Math.round(
+  const arcOutstandingDebt = Math.round(
     humanAgents.reduce((sum, a) => sum + (a.outstandingDebt || 0), 0) * 10000
   ) / 10000;
+  // Debt drawn on Sui counts against the same limit. Without it a human could
+  // exhaust the line on Arc and borrow it again on Sui, because headroom was
+  // computed only from Arc agents.
+  const suiOutstandingDebt = railDebtTotal(humanOwner);
+  const totalOutstandingDebt = Math.round((arcOutstandingDebt + suiOutstandingDebt) * 10000) / 10000;
   const totalBorrowed = Math.round(
     humanAgents.reduce((sum, a) => sum + (a.totalBorrowed || 0), 0) * 10000
   ) / 10000;
@@ -140,6 +148,8 @@ export function getHumanFacilityStats(
     agentCount: humanAgents.length,
     totalCreditLimit,
     totalOutstandingDebt,
+    arcOutstandingDebt,
+    suiOutstandingDebt,
     totalAvailableCredit,
     totalBorrowed,
     totalRepaid,

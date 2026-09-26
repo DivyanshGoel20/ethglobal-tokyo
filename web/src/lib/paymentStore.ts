@@ -11,7 +11,9 @@ export interface PaymentRecord {
   requestedAmount: string; // e.g. "0.01"
   agentGatewayBalance: string; // e.g. "0.00"
   shortfall: string; // e.g. "0.01"
-  fundingSource: "AGENT_GATEWAY" | "FLOAT_FACILITY";
+  fundingSource: "AGENT_GATEWAY" | "AGENT_WALLET" | "FLOAT_FACILITY";
+  /** Arc when absent: every payment before Sui was an Arc payment. */
+  rail?: "arc" | "sui";
   drawdownId: string | null;
   status: "SUCCESS" | "FAILED" | "REJECTED_CREDIT";
   timestamp: number;

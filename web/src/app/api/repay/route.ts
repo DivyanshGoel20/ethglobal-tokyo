@@ -104,7 +104,9 @@ export async function POST(req: NextRequest) {
     await flushAgent(payingAgent.humanOwner, payingAgent.address, { force: true });
 
     const humanFacility = getHumanFacilityStats(payingAgent.humanOwner);
-    if (humanFacility.totalOutstandingDebt <= 0.0001) {
+    // Arc debt only: what is owed on Sui is repaid on Sui, by the obligation
+    // that collects it, and must not be cleared by an Arc transfer.
+    if (humanFacility.arcOutstandingDebt <= 0.0001) {
       return NextResponse.json(
         {
           success: false,
@@ -118,7 +120,7 @@ export async function POST(req: NextRequest) {
     // Floating-point safety: Clamp repayAmount to total debt with epsilon tolerance
     const effectiveRepayAmount = Math.min(
       repayAmount,
-      Math.round((humanFacility.totalOutstandingDebt + 0.0001) * 10000) / 10000
+      Math.round((humanFacility.arcOutstandingDebt + 0.0001) * 10000) / 10000
     );
 
     // 4. Real On-Chain Arc Testnet Settlement

@@ -39,6 +39,12 @@ export interface SuiPayContext {
   creditLimitUsd: number;
   /** The tightest of headroom across both rails and any mandate cap. */
   maxCreditUsd: number;
+  /**
+   * Called with the price once the 402 has named it, before anything is
+   * signed. A key Float holds for an agent is held under a per-payment ceiling
+   * and an expiry; this is where they are enforced. Throw to refuse.
+   */
+  approve?: (amountUsd: number) => void;
 }
 
 export interface SuiPayResult {
@@ -195,6 +201,7 @@ export async function paySui(
   }
 
   const price = BigInt(quote.amount);
+  ctx.approve?.(fromUnits(price));
   const own = await walletUnits(agentAddr);
   const operator = operatorKeypair();
   const reference = crypto.createHash("sha256").update(url).digest();
