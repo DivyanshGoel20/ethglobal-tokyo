@@ -203,7 +203,7 @@ export default function MiniApp() {
         ))}
       </nav>
 
-      <AuthorizeSheet open={adding} onClose={() => setAdding(false)} onAddAgent={L.handleAddAgent} />
+      <AuthorizeSheet open={adding} rail={L.rail} onClose={() => setAdding(false)} onAddAgent={L.handleAddAgent} />
 
       <PurchaseModal
         isOpen={L.purchaseFor !== undefined}
@@ -276,13 +276,14 @@ function Segment({
 }
 
 function PulseTab({ L, onBuy, onAdd }: { L: ReturnType<typeof useLifeline>; onBuy: (a: Agent) => void; onAdd: () => void }) {
-  const drawn = L.arcDebt + L.suiDebt;
+  // The selected rail's line only: the rails are separate.
   const here = L.rail === "arc" ? L.arcDebt : L.suiDebt;
+  const drawn = here;
   const credit = L.beats24h.filter((p) => (Number(p.shortfall) || 0) > 0).length;
 
   return (
     <>
-      <div className="lab mb-2">Your line</div>
+      <div className="lab mb-2">Your {L.rail === "arc" ? "Arc" : "Sui"} line</div>
       <h1 className="serif text-[34px] leading-[0.98] tracking-tight">
         {drawn === 0 ? (
           <>
@@ -298,7 +299,7 @@ function PulseTab({ L, onBuy, onAdd }: { L: ReturnType<typeof useLifeline>; onBu
       <div className="grid grid-cols-2 mt-6 rule-t">
         {[
           { lab: "Headroom", val: usd(L.headroom), note: `${L.rail === "arc" ? "Arc" : "Sui"} line` },
-          { lab: `Drawn · ${L.rail === "arc" ? "Arc" : "Sui"}`, val: usd(here), note: `${usd(L.rail === "arc" ? L.suiDebt : L.arcDebt)} on ${L.rail === "arc" ? "Sui" : "Arc"}`, alarm: here > 0 },
+          { lab: `Drawn · ${L.rail === "arc" ? "Arc" : "Sui"}`, val: usd(here), note: here > 0 ? "owed on this line" : "nothing owed", alarm: here > 0 },
           { lab: "Line", val: usd(L.creditLimit), note: "grows as you repay" },
           { lab: "Beats · 24h", val: String(L.beats24h.length), note: credit ? `${credit} on credit` : "all self-paid" },
         ].map((v, i) => (

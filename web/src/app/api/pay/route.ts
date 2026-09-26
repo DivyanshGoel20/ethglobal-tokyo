@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     // and have Lifeline's funding wallet pay an address they controlled. The payer
     // is now whoever holds a World session, and they may only spend through
     // their own agents.
-    const auth = resolveSpender(req, agentAddress);
+    const auth = resolveSpender(req, agentAddress, "arc");
     if ("error" in auth) return auth.error;
 
     // Server-custodied keys only. A key supplied in the request body was never
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const auth = resolveSpender(req, agentAddress);
+    const auth = resolveSpender(req, agentAddress, "arc");
     if ("error" in auth) return auth.error;
 
     const lifelineSigner = new LifelineSigner();

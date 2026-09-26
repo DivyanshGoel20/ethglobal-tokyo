@@ -52,7 +52,7 @@ async function main() {
   const anon = await client({})("POST", "/api/sui/pay", { url: `${FEED}/risk`, agentAddress: "0x" + "1".repeat(40) });
   check("paying on Sui without a session is refused", anon.status === 401, `status ${anon.status}`);
 
-  const provisioned = await call("POST", "/api/agent/provision", { label: "e2e-sui", capUsd: 8 });
+  const provisioned = await call("POST", "/api/agent/provision", { label: "e2e-sui", capUsd: 8, rail: "sui" });
   const agent = provisioned.body.agent?.address as string;
   check("provisioning returns the agent's Sui address", /^0x[0-9a-f]{64}$/.test(provisioned.body.agent?.suiAddress ?? ""), provisioned.body.agent?.suiAddress);
 
@@ -68,10 +68,14 @@ async function main() {
   const mine = agents.body.agents?.find((a: any) => a.address.toLowerCase() === agent.toLowerCase());
   check("the dashboard sees the agent's Sui debt", mine?.suiDebt === 0.02, `suiDebt ${mine?.suiDebt}`);
 
-  // Separate lines: what Sui drew is Sui's alone, and Arc's line is whole.
-  const credit = await call("GET", `/api/agent/credit?agentAddress=${agent}`);
+  // Separate lines and separate agents: what Sui drew is Sui's alone, Arc's
+  // line is whole, and a Sui agent cannot be spent on Arc.
+  const arcAgent = (await call("POST", "/api/agent/provision", { label: "e2e-sui-arc", capUsd: 8 })).body.agent?.address as string;
+  const credit = await call("GET", `/api/agent/credit?agentAddress=${arcAgent}`);
   const available = credit.body.humanFacility?.totalAvailableCredit;
   check("Arc's line is untouched by what Sui drew", available === 10, `Arc available ${available}`);
+  const crossed = await call("POST", "/api/borrow", { agentAddress: agent, amount: 0.5 });
+  check("a Sui agent cannot borrow on Arc", crossed.status === 400 && crossed.body.code === "wrong_rail", crossed.body.error);
 
   const obligations = await call("GET", "/api/sui/obligations");
   const ob = obligations.body.obligations?.[0];
@@ -108,7 +112,7 @@ async function main() {
   const suiRows = (payments.body.payments ?? []).filter((p: any) => p.rail === "sui");
   check("both Sui purchases are on the payment trail", suiRows.length === 2, `${suiRows.length} rows`);
 
-  const other = await call("POST", "/api/agent/provision", { label: "e2e-sui-idle", capUsd: 8 });
+  const other = await call("POST", "/api/agent/provision", { label: "e2e-sui-idle", capUsd: 8, rail: "sui" });
   await call("POST", "/api/sui/pay", { url: `${FEED}/risk?records=1`, agentAddress: other.body.agent.address });
   const reconciled = await call("POST", "/api/sui/reconcile");
   check("reconciliation leaves an undue obligation open", reconciled.body.success && reconciled.body.pending === 1, JSON.stringify({ checked: reconciled.body.checked, pending: reconciled.body.pending }));

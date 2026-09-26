@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "url and agentAddress are required" }, { status: 400 });
   }
 
-  const auth = resolveSpender(req, agentAddress);
+  const auth = resolveSpender(req, agentAddress, "sui");
   if ("error" in auth) return auth.error;
 
   try {

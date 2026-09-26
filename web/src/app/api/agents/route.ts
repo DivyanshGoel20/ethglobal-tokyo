@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getHuman, unauthenticated } from "@/lib/session";
 import { getAgentWalletUsdc } from "@/lib/walletBalance";
 import { Agent } from "@/types";
-import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore } from "@/lib/agentStore";
+import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore, agentRail } from "@/lib/agentStore";
 import { validateArcAgentWallet } from "@/lib/arc";
 import { resolveAgentBookStatus } from "@/lib/agentKit";
 import { LifelineSigner } from "@/lib/lifelineSigner";
@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
 
     const enrichedAgents = await Promise.all(
       rawAgents.map(async (agent) => {
+        // Each agent is read on its own rail only.
+        if (agentRail(agent) === "sui") return { ...agent, rail: "sui" as const, isAutonomous: hasAgentPrivateKey(agent.address) };
         let liveGw = (agent.currentBalance || 0).toFixed(2);
         if (lifelineSigner) {
           try {
@@ -51,6 +53,7 @@ export async function GET(req: NextRequest) {
 
         return {
           ...agent,
+          rail: "arc" as const,
           currentBalance: parseFloat(liveGw) || 0,
           gatewayBalanceUSDC: liveGw,
           walletUsdc,
@@ -59,7 +62,7 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    // The same agents on Sui: their address there, what they hold, what they owe.
+    // Sui agents: their address there, what they hold, what they owe.
     const agents = (await withSuiState(enrichedAgents as Agent[], human)).map(sanitizeAgentForClient);
 
     return NextResponse.json({
@@ -126,6 +129,9 @@ export async function POST(req: NextRequest) {
       address: formattedAddress,
       name: name.trim(),
       humanOwner: human,
+      // A wallet registered by address is an Arc agent; Sui agents are
+      // provisioned, so Lifeline holds the key that signs on Sui.
+      rail: "arc",
       network: "Arc Testnet (5042002)",
       creditLimit: 10,
       outstandingDebt: 0,

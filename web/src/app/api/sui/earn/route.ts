@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAgentByAddress, agentRail } from "@/lib/agentStore";
 import { requireOwnedAgent } from "@/lib/session";
 import { payAgentForWork } from "@/lib/suiRail";
 
@@ -15,6 +16,10 @@ export async function POST(req: NextRequest) {
 
   const owned = requireOwnedAgent(req, agentAddress);
   if ("error" in owned) return owned.error;
+  const agent = getAgentByAddress(agentAddress);
+  if (agent && agentRail(agent) !== "sui") {
+    return NextResponse.json({ success: false, code: "wrong_rail", error: "That agent is on the Arc line." }, { status: 400 });
+  }
 
   const usd = Math.min(Math.max(Number(amount) || 0, 0), 5);
   if (!(usd > 0)) return NextResponse.json({ success: false, error: "amount must be between 0 and 5" }, { status: 400 });

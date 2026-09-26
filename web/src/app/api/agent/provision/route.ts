@@ -17,13 +17,14 @@ export async function POST(req: NextRequest) {
   if (!human) return unauthenticated();
 
   const body = await req.json().catch(() => ({}));
-  const label = typeof body.label === "string" && body.label.trim() ? body.label.trim() : "arc-agent";
+  // An agent belongs to one rail: Arc or Sui, never both.
+  const rail: "arc" | "sui" = body.rail === "sui" ? "sui" : "arc";
+  const label = typeof body.label === "string" && body.label.trim() ? body.label.trim() : `${rail}-agent`;
   const days = Number.isFinite(body.days) ? Math.min(Math.max(Number(body.days), 1), 90) : 7;
 
-  // The agent can spend on either rail, and each rail enforces its own line
-  // on every payment. Its cap can be at most the larger line's headroom.
-  const facility = getHumanFacilityStats(human);
-  const available = Math.max(facility.totalAvailableCredit, getSuiFacilityStats(human).availableCredit);
+  // Capped by the headroom of its own rail's line.
+  const available =
+    rail === "arc" ? getHumanFacilityStats(human).totalAvailableCredit : getSuiFacilityStats(human).availableCredit;
   const asked = Number.isFinite(body.capUsd) ? Number(body.capUsd) : available;
   const capUsd = Math.min(Math.max(asked, 0), available);
 
@@ -34,7 +35,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Provision native Arc Testnet agent wallet
+  // One secp256k1 key: on Arc it is the agent's address; on Sui the same key
+  // gives its Sui address. Either way the agent lives on one rail only.
   const wallet = provisionArcAgentWallet();
 
   // Securely store agent private key for autonomous self-signing
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
     address: wallet.address,
     name: label,
     humanOwner: human,
+    rail,
     creditLimit: capUsd,
     outstandingDebt: 0,
     totalBorrowed: 0,
@@ -62,7 +65,8 @@ export async function POST(req: NextRequest) {
   // and be refused by the facility.
   let authorizedOnChain = true;
   let authorizationError: string | undefined;
-  try {
+  // Only an Arc agent is authorised on the Arc contract.
+  if (rail === "arc") try {
     authorizedOnChain = !!(await syncAgentToContractOnChain(wallet.address, human));
     if (!authorizedOnChain) authorizationError = "Arc Testnet authorization did not complete.";
   } catch (err: any) {
@@ -81,18 +85,18 @@ export async function POST(req: NextRequest) {
     success: true,
     agent: {
       address: wallet.address,
-      // The same key on Sui: one agent on two rails, not two agents.
-      suiAddress: suiAddressFor(wallet.address),
+      rail,
+      ...(rail === "sui" ? { suiAddress: suiAddressFor(wallet.address) } : {}),
       apiKey: wallet.apiKey,
       label,
-      network: "Arc Testnet (5042002)",
+      network: rail === "arc" ? "Arc Testnet (5042002)" : `Sui ${process.env.SUI_NETWORK ?? ""}`.trim(),
     },
     authorizedOnChain,
     ...(authorizationError ? { authorizationError } : {}),
     grant,
     token,
     notice:
-      "The token is shown once and not stored. This agent borrows against your line up to " +
-      "the cap on Arc Testnet, and its own wallet is what the repayment debits.",
+      `The token is shown once and not stored. This agent borrows against your ${rail === "arc" ? "Arc" : "Sui"} line up to ` +
+      "the cap, and only there; its own wallet is what the repayment debits.",
   });
 }

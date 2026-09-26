@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getHuman, signPayload, unauthenticated } from "./session";
-import { getAgentByAddress } from "./agentStore";
+import { getAgentByAddress, agentRail } from "./agentStore";
 
 /**
  * A credential a human issues to their own agent.
@@ -133,7 +133,9 @@ export type Spender = {
  */
 export function resolveSpender(
   req: NextRequest,
-  agentAddress: string
+  agentAddress: string,
+  /** The rail this route spends on. An agent belongs to one rail only. */
+  rail?: "arc" | "sui"
 ): { spender: Spender } | { error: NextResponse } {
   const grant = verifyAgentToken(bearerFrom(req.headers.get("authorization")));
   const sessionHuman = getHuman(req);
@@ -163,6 +165,18 @@ export function resolveSpender(
       error: NextResponse.json(
         { error: "That agent belongs to a different human.", code: "not_your_agent" },
         { status: 403 }
+      ),
+    };
+  }
+
+  if (rail && agentRail(agent) !== rail) {
+    return {
+      error: NextResponse.json(
+        {
+          error: `That agent is on the ${agentRail(agent) === "sui" ? "Sui" : "Arc"} line; it cannot spend or repay on ${rail === "sui" ? "Sui" : "Arc"}.`,
+          code: "wrong_rail",
+        },
+        { status: 400 }
       ),
     };
   }

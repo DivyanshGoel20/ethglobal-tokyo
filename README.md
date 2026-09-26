@@ -49,9 +49,11 @@ paid; Sui charges no fee, so its record grows on repayments and time.
 [`getSuiFacilityStats`](web/src/lib/agentStore.ts) is Sui's, and the records
 are kept apart in [`reputationStore.ts`](web/src/lib/reputationStore.ts).
 
-One key is one agent on both rails: an agent's secp256k1 key is its Arc
-address and, unchanged, its Sui address. The agent that borrows is the agent
-that signs its own repayment, on either rail.
+Agents are separate too: each agent belongs to one rail. An Arc agent borrows,
+pays and repays on Arc only; a Sui agent on Sui only, and a request to use one
+on the other rail is refused (`wrong_rail`). The dashboard shows the selected
+rail's agents, and authorising an agent creates it on that rail. The agent
+that borrows is the agent that signs its own repayment.
 
 ## On Sui
 
@@ -392,7 +394,7 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (81) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release), the ledger (no-key repayments refused, interest charged once, debt from loans, one change at a time), separate Arc and Sui lines and records |
+| web tests (84) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release), the ledger (no-key repayments refused, interest charged once, debt from loans, one change at a time), separate Arc and Sui lines, records and agents |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |

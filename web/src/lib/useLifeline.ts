@@ -47,7 +47,7 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
 
   // Arc and Sui are separate lines, each with its own limit.
   const [limits, setLimits] = useState<Record<Rail, number>>({ arc: 10, sui: 10 });
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [allAgents, setAgents] = useState<Agent[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -152,8 +152,12 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
     }
   };
 
-  const arcDebt = agents.reduce((n, a) => n + (a.outstandingDebt || 0), 0);
-  const suiDebt = agents.reduce((n, a) => n + (a.suiDebt || 0), 0);
+  // Each agent belongs to one rail; the screen shows the selected rail's.
+  const arcAgents = useMemo(() => allAgents.filter((a) => a.rail !== "sui"), [allAgents]);
+  const suiAgents = useMemo(() => allAgents.filter((a) => a.rail === "sui"), [allAgents]);
+  const agents = rail === "arc" ? arcAgents : suiAgents;
+  const arcDebt = arcAgents.reduce((n, a) => n + (a.outstandingDebt || 0), 0);
+  const suiDebt = suiAgents.reduce((n, a) => n + (a.suiDebt || 0), 0);
   // The selected rail's line only: nothing owed on the other rail touches it.
   const creditLimit = limits[rail];
   const headroom = Math.max(0, creditLimit - (rail === "arc" ? arcDebt : suiDebt));
@@ -233,7 +237,7 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
     if (input.address) {
       await post("/api/agents", { action: "add", name: input.name, walletAddress: input.address, privateKey: input.privateKey || undefined });
     } else {
-      const data = await post("/api/agent/provision", { label: input.name, capUsd: input.capUsd });
+      const data = await post("/api/agent/provision", { label: input.name, capUsd: input.capUsd, rail });
       if (data.authorizedOnChain === false) showToast(`Agent created, but Arc authorization failed: ${data.authorizationError}`);
     }
     showToast(`${input.name} is on the line`);

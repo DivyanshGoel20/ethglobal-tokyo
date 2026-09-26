@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAgentByAddress, getHumanFacilityStats } from "@/lib/agentStore";
+import { getAgentByAddress, getHumanFacilityStats, agentRail } from "@/lib/agentStore";
 import { resolveAgentReader } from "@/lib/agentToken";
 import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
 
@@ -32,6 +32,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { error: `Agent ${agentAddress} not found in Lifeline registry.` },
         { status: 404 }
+      );
+    }
+
+    if (agentRail(agent) !== "arc") {
+      return NextResponse.json(
+        { error: "That agent is on the Sui line; its credit is on Sui.", code: "wrong_rail" },
+        { status: 400 }
       );
     }
 

@@ -100,6 +100,8 @@ export async function withSuiState(agents: Agent[], human: string): Promise<Agen
   const configured = suiConfigured();
   return Promise.all(
     agents.map(async (a) => {
+      // Arc agents have no Sui state: an agent belongs to one rail.
+      if (a.rail !== "sui") return a;
       const suiAddress = suiAddressFor(a.address) ?? undefined;
       const suiDebt =
         Math.round(

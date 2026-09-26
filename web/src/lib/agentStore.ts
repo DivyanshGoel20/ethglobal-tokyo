@@ -112,6 +112,9 @@ export function getAgentByAddress(address: string): Agent | null {
  * separate debt, separate repayment records - so what is drawn on Sui never
  * touches Arc's headroom, and the other way round (see getSuiFacilityStats).
  */
+/** The rail an agent belongs to. Agents from before rails were separate are Arc's. */
+export const agentRail = (agent: Pick<Agent, "rail">): "arc" | "sui" => (agent.rail === "sui" ? "sui" : "arc");
+
 export function getHumanFacilityStats(
   humanOwner: string,
   agentBookHumanId?: string
@@ -125,7 +128,8 @@ export function getHumanFacilityStats(
   totalBorrowed: number;
   totalRepaid: number;
 } {
-  const humanAgents = getAgentsByOwner(humanOwner, agentBookHumanId);
+  // Arc's agents only: a Sui agent is on the Sui line.
+  const humanAgents = getAgentsByOwner(humanOwner, agentBookHumanId).filter((a) => agentRail(a) === "arc");
   const tier = getHumanCreditTier(humanOwner, "arc");
   const totalCreditLimit = tier.creditLimit;
   const arcOutstandingDebt = Math.round(

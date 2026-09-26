@@ -185,16 +185,18 @@ export const Monitor: React.FC<MonitorProps> = ({
         })
       )}
 
-      <AuthorizeSheet open={adding} onClose={() => setAdding(false)} onAddAgent={onAddAgent} />
+      <AuthorizeSheet open={adding} rail={rail} onClose={() => setAdding(false)} onAddAgent={onAddAgent} />
     </section>
   );
 };
 
 export const AuthorizeSheet: React.FC<{
   open: boolean;
+  /** The rail the agent is created on. It lives there, and only there. */
+  rail: Rail;
   onClose: () => void;
   onAddAgent: MonitorProps["onAddAgent"];
-}> = ({ open, onClose, onAddAgent }) => {
+}> = ({ open, rail, onClose, onAddAgent }) => {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [privateKey, setPrivateKey] = useState("");
@@ -210,8 +212,8 @@ export const AuthorizeSheet: React.FC<{
     try {
       await onAddAgent({
         name: name.trim(),
-        address: address.trim(),
-        privateKey: privateKey.trim(),
+        address: rail === "arc" ? address.trim() : "",
+        privateKey: rail === "arc" ? privateKey.trim() : "",
         capUsd: parseFloat(limit) || 5,
       });
       setName("");
@@ -226,20 +228,23 @@ export const AuthorizeSheet: React.FC<{
   };
 
   return (
-    <Sheet open={open} onClose={onClose} kicker="New lead" title="Authorize an agent">
+    <Sheet open={open} onClose={onClose} kicker={rail === "arc" ? "New lead · Arc" : "New lead · Sui"} title="Authorize an agent">
       <form onSubmit={submit} className="space-y-4">
         <p className="text-[13px] ink-2 leading-relaxed">
-          Leave the address empty and Lifeline mints the agent a wallet - one key that is its identity on Arc and on
-          Sui. It can spend on your line from the moment it is authorized on chain.
+          {rail === "arc"
+            ? "An Arc agent, spending on your Arc line and only there. Leave the address empty and Lifeline mints it a wallet."
+            : "A Sui agent, spending on your Sui line and only there. Lifeline mints it a wallet and holds the key that signs its payments and repayments."}
         </p>
         <Field label="Name">
           <input className="field" autoFocus required placeholder="scraper-01" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="Existing Arc address" hint="optional">
-          <input className="field" placeholder="empty mints a new wallet" value={address} onChange={(e) => setAddress(e.target.value)} />
-        </Field>
-        {address.trim() ? (
-          <Field label="Its private key" hint="optional · needed to sign on Sui">
+        {rail === "arc" && (
+          <Field label="Existing Arc address" hint="optional">
+            <input className="field" placeholder="empty mints a new wallet" value={address} onChange={(e) => setAddress(e.target.value)} />
+          </Field>
+        )}
+        {rail === "arc" && address.trim() ? (
+          <Field label="Its private key" hint="optional · needed to repay from its wallet">
             <input type="password" className="field" value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} />
           </Field>
         ) : (

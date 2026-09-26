@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     // Drawing on a credit line is the human's call, not anyone who knows an
     // agent address. This is the same hole as /api/pay, reachable by a
     // different door.
-    const auth = resolveSpender(req, agentAddress);
+    const auth = resolveSpender(req, agentAddress, "arc");
     if ("error" in auth) return auth.error;
     release = await acquireLedgerLock(auth.spender.human);
 

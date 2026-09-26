@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Verify Paying Agent
     // Gated so one human cannot write entries into another's ledger.
-    const auth = resolveSpender(req, agentAddress);
+    const auth = resolveSpender(req, agentAddress, "arc");
     if ("error" in auth) return auth.error;
     release = await acquireLedgerLock(auth.spender.human);
 
