@@ -38,7 +38,10 @@ export async function provisionAgent(
   // One secp256k1 key: on Arc it is the agent's address; on Sui the same key
   // gives its Sui address. Either way the agent lives on one rail only.
   const wallet = provisionArcAgentWallet();
-  setAgentPrivateKey(wallet.address, wallet.privateKey);
+  // No stored key, no agent: registered without one, it would be handed a
+  // mandate and credit for a wallet nobody can sign for.
+  const stored = setAgentPrivateKey(wallet.address, wallet.privateKey);
+  if (!stored.ok) return { error: stored.error ?? "Lifeline could not store the agent's key.", code: "keystore_unavailable" };
 
   addAgentToStore({
     address: wallet.address,

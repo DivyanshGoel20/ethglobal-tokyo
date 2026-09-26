@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { displayCode, startConnect } from "@/lib/agentConnect";
+import { allow, clientIp } from "@/lib/rateLimit";
 
 /**
  * An agent asks for a line of its own. No credential: this is how an agent
  * with nothing starts. It gets a link for its human and a secret to poll with;
  * nothing is issued until the human, signed in with World ID, approves.
  */
-const recent: number[] = [];
-
 export async function POST(req: NextRequest) {
-  const now = Date.now();
-  while (recent.length && recent[0] < now - 10 * 60_000) recent.shift();
-  if (recent.length >= 60) {
+  // Per caller, so one noisy client cannot lock every other agent out, and
+  // an overall ceiling so the request file stays small.
+  if (!allow(`connect:${clientIp(req)}`, 20, 10 * 60_000) || !allow("connect:all", 600, 10 * 60_000)) {
     return NextResponse.json({ error: "Too many connect requests. Try again in a few minutes." }, { status: 429 });
   }
-  recent.push(now);
 
   const body = await req.json().catch(() => ({}));
   const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, max) : "");

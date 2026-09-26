@@ -4,6 +4,7 @@ import { bearerFrom } from "@/lib/agentToken";
 import { claimForApproval, denyConnect, displayCode, finishApproval, getConnect, pollConnect } from "@/lib/agentConnect";
 import { headroomFor, provisionAgent } from "@/lib/provisionAgent";
 import { getAgentByAddress } from "@/lib/agentStore";
+import { suiConfigured } from "@/lib/suiRail";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,8 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
     status: c.status,
     createdAt: new Date(c.createdAt).toISOString(),
     expiresAt: new Date(c.expiresAt).toISOString(),
-    headroom: { arc: headroomFor(human, "arc"), sui: headroomFor(human, "sui") },
+    headroom: { arc: headroomFor(human, "arc"), sui: suiConfigured() ? headroomFor(human, "sui") : 0 },
+    suiReady: suiConfigured(),
     ...(agent ? { agent: { address: agent.address, name: agent.name, rail: agent.rail ?? "arc" } } : {}),
   });
 }
@@ -62,6 +64,10 @@ export async function POST(req: NextRequest, { params }: { params: { code: strin
   if (!c) return NextResponse.json({ success: false, error: "Already answered, or expired." }, { status: 409 });
 
   const rail = body.rail === "sui" || body.rail === "arc" ? body.rail : c.rail;
+  if (rail === "sui" && !suiConfigured()) {
+    finishApproval(params.code, null);
+    return NextResponse.json({ success: false, error: "Lifeline is not deployed on Sui here. Pick Arc." }, { status: 409 });
+  }
   const days = Number.isFinite(body.days) ? Math.min(Math.max(Number(body.days), 1), 90) : 7;
   const capUsd = Number.isFinite(body.capUsd) ? Number(body.capUsd) : c.capUsd;
 

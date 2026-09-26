@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useRef, useEffect, useMemo, useState } from "react";
 import type { Rail, Agent, ActivityItem } from "@/types";
 import type { LeadData } from "@/components/Monitor";
 
@@ -63,9 +63,12 @@ export function useLifeline(
   const [purchaseFor, setPurchaseFor] = useState<string | null | undefined>(undefined);
   const [isRepayOpen, setIsRepayOpen] = useState(false);
 
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (message: string) => {
     setToast(message);
-    setTimeout(() => setToast(null), 4200);
+    // A new toast gets its full time; the last one's timer must not cut it short.
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4200);
   };
 
   /** Back to the gate: the cookie expired, was voided, or never existed. */
@@ -132,7 +135,8 @@ export function useLifeline(
       .then((r) => r.json())
       .then((d) => {
         const ready = !!d.configured;
-        setSui({ ready, network: d.network ?? null, checked: true });
+        // "Could not tell" is not "not deployed": only a real answer counts as checked.
+        setSui({ ready, network: d.network ?? null, checked: !d.unreachable });
         if (opts.rail) return;
         if (!ready) setRail("arc");
         else {
@@ -143,7 +147,7 @@ export function useLifeline(
           }
         }
       })
-      .catch(() => setSui({ ready: false, network: null, checked: true }));
+      .catch(() => setSui({ ready: false, network: null }));
 
     // The trace moves: re-read every half minute so the strip keeps feeding.
     const tick = setInterval(() => void load(), 30_000);

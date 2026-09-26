@@ -97,6 +97,8 @@ export const Counterparties: React.FC<{
             : `Still not paid: ${data.screening?.reasons?.[0] ?? data.error ?? "refused"}`
       );
       setHolds((h) => h.filter((x) => x.holdId !== hold.holdId));
+    } catch (err: any) {
+      onChanged(`Could not reach Lifeline: ${err?.message ?? "network error"}. Nothing was changed.`);
     } finally {
       setBusy(null);
     }

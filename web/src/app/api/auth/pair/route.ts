@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { attachSession } from "@/lib/session";
 import { collectPairing, startPairing } from "@/lib/pairing";
+import { allow, clientIp } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,13 @@ const claimCookie = (code: string) => `lifeline_pair_${code.toUpperCase().replac
 const TTL_SECONDS = 10 * 60;
 
 /** Start: a code to show, and a claim kept in this browser's cookie. */
-export async function POST() {
-  const { code, claim, expiresAt } = startPairing();
+export async function POST(req: NextRequest) {
+  if (!allow(`pair:${clientIp(req)}`, 20, 10 * 60_000)) {
+    return NextResponse.json({ error: "Too many sign-in codes. Try again in a few minutes." }, { status: 429 });
+  }
+  const started = startPairing();
+  if (!started) return NextResponse.json({ error: "Sign-in is busy. Try again in a minute." }, { status: 503 });
+  const { code, claim, expiresAt } = started;
   const appId = process.env.NEXT_PUBLIC_MINIAPP_ID || process.env.NEXT_PUBLIC_WORLD_APP_ID || "app_6ad9b6ef952f1c2a9a70a58e05aa9878";
   const url = `https://world.org/mini-app?app_id=${appId}&path=${encodeURIComponent(`/?pair=${code}`)}`;
   const res = NextResponse.json({ code, url, expiresAt });

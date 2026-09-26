@@ -34,12 +34,17 @@ const read = (): Pairing[] => {
 const write = (all: Pairing[]) => writeJsonAtomic(file(), all.filter((p) => p.expiresAt > Date.now()));
 const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
-export function startPairing(): { code: string; claim: string; expiresAt: number } {
+// However many are asked for, the file stays small.
+const MAX_OPEN = 500;
+
+export function startPairing(): { code: string; claim: string; expiresAt: number } | null {
+  const open = read().filter((p) => p.expiresAt > Date.now());
+  if (open.length >= MAX_OPEN) return null;
   // Short enough to read off a screen, long enough not to be guessed in five minutes.
   const code = crypto.randomBytes(5).toString("hex").toUpperCase();
   const claim = crypto.randomBytes(24).toString("base64url");
   const expiresAt = Date.now() + TTL_MS;
-  write([...read(), { code, claimHash: hash(claim), human: null, expiresAt, collected: false }]);
+  write([...open, { code, claimHash: hash(claim), human: null, expiresAt, collected: false }]);
   return { code, claim, expiresAt };
 }
 

@@ -32,6 +32,9 @@ export const Underwriting: React.FC<{
 }> = ({ humanOwner, rail = "arc", refreshTrigger, onTier }) => {
   const [data, setData] = useState<Summary | null>(null);
 
+  // A different rail is a different record: never show the last one's meanwhile.
+  useEffect(() => setData(null), [rail]);
+
   useEffect(() => {
     if (!humanOwner) return;
     let cancelled = false;

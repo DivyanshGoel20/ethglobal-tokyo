@@ -1,4 +1,9 @@
 process.env.LIFELINE_SESSION_SECRET = "test-secret-that-is-at-least-32-chars-long";
+process.env.LIFELINE_KEYSTORE_SECRET = "test-keystore-secret-long-enough";
+// The Sui rail counts as deployed (the repo's testnet deployment) with an
+// operator key set; nothing here touches the chain.
+process.env.SUI_NETWORK = "testnet";
+process.env.SUI_PRIVATE_KEY = process.env.SUI_PRIVATE_KEY || "suiprivkey-test-placeholder";
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -144,4 +149,17 @@ test("Lifeline fetches public URLs and its own sellers, not the private network"
   ]) {
     assert.ok(resourceUrlProblem(bad), bad);
   }
+});
+
+test("a mandate's cap is for its whole life, not each purchase", async () => {
+  const { recordMandateSpend } = await import("../src/lib/mandateSpend");
+  const { token, grant } = mintAgentToken(HUMAN, { capUsd: 1, days: 1, label: "x", agentAddress: A });
+  const first = resolveSpender(req("/", { bearer: token }), A, "arc");
+  assert.ok("spender" in first && first.spender.capUsd === 1);
+  recordMandateSpend(grant.id, 0.75);
+  const after = resolveSpender(req("/", { bearer: token }), A, "arc");
+  assert.ok("spender" in after && Math.abs(after.spender.capUsd! - 0.25) < 1e-9);
+  recordMandateSpend(grant.id, 0.5);
+  const spent = resolveSpender(req("/", { bearer: token }), A, "arc");
+  assert.ok("spender" in spent && spent.spender.capUsd === 0);
 });

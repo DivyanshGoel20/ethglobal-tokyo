@@ -32,12 +32,21 @@ export const AccountLinks: React.FC<{ onToast: (m: string) => void }> = ({ onToa
       .catch(() => {});
   }, []);
 
+  const [making, setMaking] = useState(false);
   const openInWorldApp = async () => {
     if (qr) return setQr(null);
-    const res = await fetch("/api/auth/link-token", { method: "POST" });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) return onToast(d.error || "Could not make a link.");
-    setQr({ url: d.url, img: await QRCode.toDataURL(d.url, { margin: 1, width: 360 }) });
+    if (making) return;
+    setMaking(true);
+    try {
+      const res = await fetch("/api/auth/link-token", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return onToast(d.error || "Could not make a link.");
+      setQr({ url: d.url, img: await QRCode.toDataURL(d.url, { margin: 1, width: 360 }) });
+    } catch {
+      onToast("Could not reach Lifeline to make a link.");
+    } finally {
+      setMaking(false);
+    }
   };
 
   const showAgents = agents?.configured;
@@ -57,7 +66,7 @@ export const AccountLinks: React.FC<{ onToast: (m: string) => void }> = ({ onToa
             </button>
           ))}
         {hasSession && (
-          <button onClick={openInWorldApp} className="mono text-[10.5px] ink-3 underline underline-offset-2">
+          <button onClick={openInWorldApp} disabled={making} className="mono text-[10.5px] ink-3 underline underline-offset-2">
             {qr ? "hide" : "Open in World App"}
           </button>
         )}

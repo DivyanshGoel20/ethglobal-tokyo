@@ -1,9 +1,11 @@
 import { Agent } from "@/types";
 import { getAgentsByOwner, getHumanFacilityStats, updateAgentInStore } from "./agentStore";
 import { flushAgent } from "./ledgerFlush";
-import { processRepayment, getLoansByAgent } from "./loanStore";
+import { processRepayment, getLoansByAgent, getActiveLoansByHuman } from "./loanStore";
+import { calculateLoanAccrual } from "./reputationEngine";
 import { executeOnChainRepayment } from "./facilityContract";
 import { invalidateTelemetryCache } from "./telemetryCache";
+import { claimReceipt } from "./receiptStore";
 
 /**
  * An Arc repayment, however it was funded.
@@ -31,8 +33,12 @@ export async function prepareArcRepayment(
     await flushAgent(humanOwner, sibling.address, { force: true });
   }
 
-  // Arc debt only: what is owed on Sui is repaid on Sui.
-  const owed = getHumanFacilityStats(humanOwner).arcOutstandingDebt;
+  // Arc debt only: what is owed on Sui is repaid on Sui. Counted with the
+  // interest accrued up to now, which the stored balances leave out until the
+  // next repayment - otherwise "repay all" always left a sliver behind.
+  const stored = getHumanFacilityStats(humanOwner).arcOutstandingDebt;
+  const accrued = getActiveLoansByHuman(humanOwner).reduce((n, l) => n + calculateLoanAccrual(l).totalDue, 0);
+  const owed = Math.max(stored, Math.round(accrued * 10000) / 10000);
   if (owed <= 0.0001) {
     return { ok: false, error: "No outstanding debt exists on this agent or human credit facility to repay." };
   }
@@ -56,6 +62,10 @@ export async function commitArcRepayment(p: {
     alreadyTransferred: p.funding.kind === "receipt" ? p.funding.txHash : undefined,
     fundedOffChain: p.funding.kind === "card" ? p.funding.reference : undefined,
   });
+
+  // The agent's own transfer is a receipt too: claimed here, so nobody can
+  // post its hash later as proof of a repayment of their own.
+  if (onChain.transferTxHash) claimReceipt(onChain.transferTxHash, p.humanOwner);
 
   // FIFO: oldest loan first, interest then principal.
   const result = processRepayment({

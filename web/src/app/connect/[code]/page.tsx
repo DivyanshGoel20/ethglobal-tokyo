@@ -15,6 +15,7 @@ type Request = {
   status: "pending" | "approving" | "approved" | "denied" | "collected";
   expiresAt: string;
   headroom: { arc: number; sui: number };
+  suiReady?: boolean;
   agent?: { address: string; name: string; rail: string };
 };
 
@@ -37,7 +38,7 @@ export default function ConnectPage({ params }: { params: { code: string } }) {
   const [days, setDays] = useState("7");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { status: "approved" | "denied"; address?: string; cap?: number; onChain?: boolean }>(null);
+  const [done, setDone] = useState<null | { status: "approved" | "denied"; address?: string; cap?: number; expiresAt?: string; onChain?: boolean }>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/agent/connect/${params.code}`, { cache: "no-store" });
@@ -46,8 +47,9 @@ export default function ConnectPage({ params }: { params: { code: string } }) {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) return setLoadError(d.error ?? "Could not load this request.");
     setReq(d);
-    setRail(d.rail);
-    const room = d.headroom[d.rail] ?? 0;
+    const startRail = d.rail === "sui" && d.suiReady === false ? "arc" : d.rail;
+    setRail(startRail);
+    const room = d.headroom[startRail] ?? 0;
     setCap(String(Math.min(d.capUsd ?? 5, room || 0) || ""));
   }, [params.code]);
 
@@ -69,7 +71,7 @@ export default function ConnectPage({ params }: { params: { code: string } }) {
       setDone(
         action === "deny"
           ? { status: "denied" }
-          : { status: "approved", address: d.agent.address, cap: d.grant.capUsd, onChain: d.authorizedOnChain }
+          : { status: "approved", address: d.agent.address, cap: d.grant.capUsd, expiresAt: d.grant.expiresAt, onChain: d.authorizedOnChain }
       );
     } catch (e: any) {
       setError(e.message);
@@ -107,7 +109,7 @@ export default function ConnectPage({ params }: { params: { code: string } }) {
               <h1 className="serif text-[32px] leading-tight">{req.name} is on your line.</h1>
               <p className="text-[14px] ink-2 leading-relaxed">
                 It has its own wallet, <span className="mono">{short(done.address!)}</span>, on {rail === "arc" ? "Arc" : "Sui"}, and can
-                borrow up to <b>${done.cap!.toFixed(2)}</b> for {days} days. Every payment is screened by Intercepta first; anything
+                borrow up to <b>${done.cap!.toFixed(2)}</b> until {new Date(done.expiresAt!).toLocaleDateString()}. Every payment is screened by Intercepta first; anything
                 risky waits for you.
               </p>
               {rail === "arc" && !done.onChain && (
@@ -158,8 +160,10 @@ export default function ConnectPage({ params }: { params: { code: string } }) {
                 <button
                   key={r}
                   type="button"
+                  disabled={r === "sui" && req.suiReady === false}
+                  title={r === "sui" && req.suiReady === false ? "Lifeline is not deployed on Sui here" : undefined}
                   onClick={() => setRail(r)}
-                  className="h-11 text-[13px]"
+                  className="h-11 text-[13px] disabled:opacity-35 disabled:cursor-not-allowed"
                   style={{ background: rail === r ? "var(--solid-bg)" : "transparent", color: rail === r ? "var(--solid-fg)" : "var(--ink-2)" }}
                 >
                   {r === "arc" ? "Arc" : "Sui"} <span className="mono text-[10.5px] opacity-70">· ${req.headroom[r].toFixed(2)} free</span>

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { recordMandateSpend } from "@/lib/mandateSpend";
 import { LifelineSigner } from "@/lib/lifelineSigner";
 import { getAgentPrivateKey } from "@/lib/agentKeys";
 import { invalidateTelemetryCache } from "@/lib/telemetryCache";
-import { resolveSpender } from "@/lib/agentToken";
+import { hasCredential, resolveSpender } from "@/lib/agentToken";
+import { unauthenticated } from "@/lib/session";
 import { getAgentWalletUsdc } from "@/lib/walletBalance";
-import { resourceUrlProblem } from "@/lib/resourceUrl";
+import { checkResourceUrl } from "@/lib/resourceUrl";
 
 export async function POST(req: NextRequest) {
   try {
+    // Turn an anonymous caller away before describing the request shape.
+    if (!hasCredential(req)) return unauthenticated();
     const body = await req.json();
     const { url, agentAddress, method, body: reqBody } = body;
 
@@ -34,7 +38,7 @@ export async function POST(req: NextRequest) {
     const auth = resolveSpender(req, agentAddress, "arc");
     if ("error" in auth) return auth.error;
 
-    const bad = resourceUrlProblem(url, new URL(req.url).origin);
+    const bad = await checkResourceUrl(url, new URL(req.url).origin);
     if (bad) return NextResponse.json({ success: false, error: bad, code: "bad_url" }, { status: 400 });
 
     // Server-custodied keys only. A key supplied in the request body was never
@@ -63,6 +67,7 @@ export async function POST(req: NextRequest) {
 
     // Intercepta stopped it before anything was signed: 403 refused, 202 held
     // for the human. The verdict and its reasons are in the body either way.
+    if (result.success) recordMandateSpend(auth.spender.mandateId, Number(result.borrowed));
     return NextResponse.json(result, { status: result.success ? 200 : result.status });
   } catch (error: any) {
     console.error("[POST /api/pay] Error:", error);

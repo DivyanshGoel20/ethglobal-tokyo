@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getHuman, signPayload, unauthenticated } from "./session";
 import { getAgentByAddress, agentRail } from "./agentStore";
+import { mandateSpent } from "./mandateSpend";
 
 /**
  * A credential a human issues to their own agent.
@@ -33,6 +34,8 @@ export type AgentGrant = {
    * agent. Unset for a general mandate, which may use any of the human's agents.
    */
   agentAddress?: string;
+  /** Stable id of this token, for counting what it has borrowed. */
+  id: string;
   /** Most this agent may borrow, in USDC, across the life of the token. */
   capUsd: number;
   label: string;
@@ -40,6 +43,8 @@ export type AgentGrant = {
 };
 
 type Claims = { typ: string; n: string; cap: number; lbl: string; exp: number; agt?: string };
+
+const mandateIdOf = (token: string) => crypto.createHash("sha256").update(token).digest("hex").slice(0, 32);
 
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o), "utf8").toString("base64url");
 
@@ -63,6 +68,7 @@ export function mintAgentToken(
       human,
       capUsd: opts.capUsd,
       label: claims.lbl,
+      id: mandateIdOf(`${payload}.${signPayload(payload)}`),
       ...(claims.agt ? { agentAddress: claims.agt } : {}),
       expiresAt: new Date(exp * 1000).toISOString(),
     },
@@ -94,6 +100,7 @@ export function verifyAgentToken(token: string | undefined | null): AgentGrant |
       human: c.n,
       capUsd: c.cap,
       label: typeof c.lbl === "string" ? c.lbl : "",
+      id: mandateIdOf(token),
       ...(typeof c.agt === "string" && c.agt ? { agentAddress: c.agt } : {}),
       expiresAt: new Date(c.exp * 1000).toISOString(),
     };
@@ -101,6 +108,9 @@ export function verifyAgentToken(token: string | undefined | null): AgentGrant |
     return null;
   }
 }
+
+/** What a mandate can still borrow: its cap, less what it has borrowed. */
+export const remainingCap = (grant: AgentGrant) => Math.max(0, Math.round((grant.capUsd - mandateSpent(grant.id)) * 1e6) / 1e6);
 
 /** Pulls a bearer token out of an Authorization header. */
 export const bearerFrom = (header: string | null): string | null =>
@@ -118,6 +128,8 @@ export type Spender = {
   capUsd?: number;
   /** Set when the mandate was issued to one agent: the only one it may use. */
   agentAddress?: string;
+  /** The mandate's id, to record what it borrows against its cap. */
+  mandateId?: string;
   via: "session" | "mandate";
 };
 
@@ -146,7 +158,7 @@ export function resolveSpender(
   const spender: Spender | null = sessionHuman
     ? { human: sessionHuman, via: "session" }
     : grant
-      ? { human: grant.human, capUsd: grant.capUsd, agentAddress: grant.agentAddress, via: "mandate" }
+      ? { human: grant.human, capUsd: remainingCap(grant), agentAddress: grant.agentAddress, mandateId: grant.id, via: "mandate" }
       : null;
 
   if (!spender) return { error: unauthenticated() };
@@ -215,7 +227,9 @@ export function resolveReader(req: NextRequest): Spender | null {
   if (sessionHuman) return { human: sessionHuman, via: "session" };
 
   const grant = verifyAgentToken(bearerFrom(req.headers.get("authorization")));
-  return grant ? { human: grant.human, capUsd: grant.capUsd, agentAddress: grant.agentAddress, via: "mandate" } : null;
+  return grant
+    ? { human: grant.human, capUsd: remainingCap(grant), agentAddress: grant.agentAddress, mandateId: grant.id, via: "mandate" }
+    : null;
 }
 
 /**

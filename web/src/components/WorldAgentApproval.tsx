@@ -36,6 +36,11 @@ export const WorldAgentApproval: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const done = useRef(false);
+  // The parent's onDone changes on every render; hold the latest one here so
+  // the request below is made once, not again on each re-render.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const started = useRef(false);
 
   const approvalUrl = `/api/pay/holds/${holdId}/approval`;
 
@@ -56,7 +61,7 @@ export const WorldAgentApproval: React.FC<{
       const l = await startLink();
       if (l.linked) {
         done.current = true;
-        return onDone({ approved: true, message: "World ID for Agents is linked" });
+        return onDoneRef.current({ approved: true, message: "World ID for Agents is linked" });
       }
       setStep("link");
       return show(l);
@@ -73,9 +78,12 @@ export const WorldAgentApproval: React.FC<{
     if (!d.success) throw new Error(d.error || "Could not ask World ID.");
     setStep("approve");
     return show(d);
-  }, [approvalUrl, holdId, onDone, show, startLink]);
+  }, [approvalUrl, holdId, show, startLink]);
 
   useEffect(() => {
+    // Once per mount (StrictMode runs effects twice in development).
+    if (started.current) return;
+    started.current = true;
     requestApproval().catch((e) => setError(e.message));
   }, [requestApproval]);
 
@@ -91,7 +99,7 @@ export const WorldAgentApproval: React.FC<{
             setView(null);
             if (!holdId) {
               done.current = true;
-              return onDone({ approved: true, message: "World ID for Agents is linked" });
+              return onDoneRef.current({ approved: true, message: "World ID for Agents is linked" });
             }
             return requestApproval();
           }
@@ -101,7 +109,7 @@ export const WorldAgentApproval: React.FC<{
         if (d.status === "approved" && d.payment) {
           done.current = true;
           const paid = d.payment.success;
-          return onDone({
+          return onDoneRef.current({
             approved: true,
             payment: d.payment,
             message: paid
@@ -115,7 +123,7 @@ export const WorldAgentApproval: React.FC<{
       }
     }, Math.max(2, view.interval ?? 5) * 1000);
     return () => clearTimeout(t);
-  }, [view, step, approvalUrl, holdId, requestApproval, show, onDone]);
+  }, [view, step, approvalUrl, holdId, requestApproval, show]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ verified: false, error: "Not a World ID session proof." }, { status: 400 });
   }
 
-  const verification = await verifyWorldSelfieProof(result);
+  const verification = await verifyWorldSelfieProof(result, undefined, { allowSession: true });
   if (!verification.success) {
     return NextResponse.json({ verified: false, error: verification.error, code: verification.code }, { status: 400 });
   }

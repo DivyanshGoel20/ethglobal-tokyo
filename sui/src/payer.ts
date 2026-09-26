@@ -176,7 +176,8 @@ export async function paySui(
   const method = init.method ?? "GET";
   const headers = { "Content-Type": "application/json", ...init.headers };
 
-  const first = await fetch(url, { method, headers, body: init.body });
+  // Never follow a redirect: a public URL could bounce the request into a private network.
+  const first = await fetch(url, { redirect: "manual", method, headers, body: init.body });
   const agent = agentKeypair(ctx.agentKey);
   const agentAddr = agent.toSuiAddress();
 
@@ -242,6 +243,7 @@ export async function paySui(
 
   const { bytes, signatures } = await signTransaction(tx, agent, operator);
   const paid = await fetch(url, {
+    redirect: "manual",
     method,
     headers: { ...headers, "PAYMENT-SIGNATURE": encodeHeader(paymentPayload(quote, bytes, signatures)) },
     body: init.body,

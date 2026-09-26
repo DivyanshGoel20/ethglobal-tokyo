@@ -11,6 +11,6 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     // Reachability is the answer, not an error: the UI offers the rail only
     // when it can actually be used.
-    return NextResponse.json({ rail: "sui", configured: false, sellerUp: false, resources: [], reason: err?.message });
+    return NextResponse.json({ rail: "sui", configured: false, unreachable: true, sellerUp: false, resources: [], reason: err?.message });
   }
 }

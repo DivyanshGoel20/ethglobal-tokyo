@@ -283,6 +283,8 @@ export function getArcTransport() {
  * found. Amount and recipient are checked too: a confirmed transaction is not
  * evidence of the right transaction.
  */
+const RECEIPT_MAX_AGE_SECONDS = 2 * 60 * 60;
+
 export async function verifyArcRepayment(params: {
   txHash: `0x${string}`;
   expectedTo: `0x${string}`;
@@ -306,6 +308,12 @@ export async function verifyArcRepayment(params: {
   try {
     const receipt = await client.waitForTransactionReceipt({ hash: params.txHash, timeout: 30_000 });
     if (receipt.status !== "success") return { ok: false, reason: "That transaction reverted." };
+    // A repayment is a transfer made to repay, now. An old transfer into the
+    // treasury - anyone's, for anything - is not one, however it is claimed.
+    const block = await client.getBlock({ blockNumber: receipt.blockNumber });
+    if (Date.now() / 1000 - Number(block.timestamp) > RECEIPT_MAX_AGE_SECONDS) {
+      return { ok: false, reason: "That transfer is too old to count as a repayment. Send a new one." };
+    }
   } catch {
     return { ok: false, reason: "That transaction has not confirmed on Arc yet." };
   }
@@ -498,6 +506,7 @@ export async function executeOnChainDrawdown(params: {
       const reason = err?.shortMessage || err?.message || String(err);
       console.error("[FacilityContract] Disbursement failed, unwinding drawdown:", reason);
 
+      let reversed = false;
       try {
         const unwind = await walletClient.writeContract({
           address: LIFELINE_CREDIT_FACILITY_ADDRESS,
@@ -511,7 +520,7 @@ export async function executeOnChainDrawdown(params: {
           ],
         });
         await publicClient.waitForTransactionReceipt({ hash: unwind });
-        throw new Error(`Could not fund the agent, so the draw was reversed. ${reason}`);
+        reversed = true;
       } catch (unwindErr: any) {
         // Both legs failed: say so loudly, with the tx to reconcile against.
         throw new Error(
@@ -519,6 +528,7 @@ export async function executeOnChainDrawdown(params: {
             `The profile owes ${params.amountUsdc} USDC it never received. ${reason}`
         );
       }
+      if (reversed) throw new Error(`Could not fund the agent, so the draw was reversed. ${reason}`);
     }
   }
 

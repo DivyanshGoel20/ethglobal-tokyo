@@ -1,4 +1,5 @@
 import { GatewayClient } from "@circle-fin/x402-batching/client";
+import { ORIGINATION_FEE_RATE } from "./reputationEngine";
 import { formatUnits, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import crypto from "crypto";
@@ -55,6 +56,8 @@ export interface AgentPaymentContext {
    * payment; a refusal stays a refusal.
    */
   humanApproved?: boolean;
+  /** What the human approved: the payment must still be to this payee, for no more. */
+  approvedFor?: { payTo: string; amountUsd: number };
 }
 
 export interface LifelinePayResult {
@@ -164,8 +167,10 @@ export class LifelineSigner {
       ? `${process.env.NEXT_PUBLIC_APP_URL || process.env.LIFELINE_APP_URL || "http://localhost:3000"}${rawUrl}`
       : rawUrl;
 
-    // Step 1: Initial request to resource
+    // Step 1: Initial request to resource. Redirects are never followed: a
+    // public URL could bounce the request into a private network.
     const initialResponse = await fetch(url, {
+      redirect: "manual",
       method,
       headers,
       body: serializedBody,
@@ -173,7 +178,7 @@ export class LifelineSigner {
 
     if (initialResponse.status !== 402) {
       if (initialResponse.ok) {
-        const data = await initialResponse.json();
+        const data = await readBody(initialResponse);
         return {
           success: true,
           fundingSource: "AGENT_GATEWAY",
@@ -284,6 +289,7 @@ export class LifelineSigner {
       ).toString("base64");
 
       const paidResponse = await fetch(url, {
+      redirect: "manual",
         method,
         headers: {
           ...headers,
@@ -307,7 +313,7 @@ export class LifelineSigner {
         );
       }
 
-      const data = await paidResponse.json();
+      const data = await readBody(paidResponse);
       const x402 = this.trace({
         method, url, paymentRequired, requirements: batchingOption, payload: paymentPayload,
         signerRole: "agent", borrowedUsd: 0, status: paidResponse.status, settleResponse,
@@ -371,13 +377,17 @@ export class LifelineSigner {
         const agentAvailableLimit = current
           ? Math.max(0, current.creditLimit - current.outstandingDebt)
           : facility.totalAvailableCredit;
+        // A suspended or delinquent agent borrows nothing, here as on /api/borrow.
+        const standing = current?.status === "Suspended" || current?.status === "Delinquent" ? 0 : Number.POSITIVE_INFINITY;
         const effectiveAvailable = Math.min(
           agentAvailableLimit,
           facility.totalAvailableCredit,
-          agentContext.maxCreditUsd ?? Number.POSITIVE_INFINITY
+          agentContext.maxCreditUsd ?? Number.POSITIVE_INFINITY,
+          standing
         );
 
-        if (shortfallAmount > effectiveAvailable) {
+        // The loan is booked with its origination fee, so that is what must fit.
+        if (shortfallAmount * (1 + ORIGINATION_FEE_RATE) > effectiveAvailable + 1e-9) {
           recordPayment({
             paymentId,
             agentAddress: agentContext.agentAddress,
@@ -426,6 +436,7 @@ export class LifelineSigner {
 
         // 4. Retry request with Lifeline's Payment-Signature
         const paidResponse = await fetch(url, {
+      redirect: "manual",
           method,
           headers: {
             ...headers,
@@ -517,7 +528,7 @@ export class LifelineSigner {
           );
         }
 
-        const data = await paidResponse.json();
+        const data = await readBody(paidResponse);
         const x402 = this.trace({
           method, url, paymentRequired, requirements: batchingOption, payload: fundingPaymentPayload,
           signerRole: "lifeline", borrowedUsd: shortfallAmount, status: paidResponse.status, settleResponse,
@@ -676,7 +687,12 @@ export class LifelineSigner {
       ? withFirstPayeeRule(screened, ctx.humanProfileId, requirements.payTo)
       : screened;
 
-    const approvedByHuman = verdict.decision === "hold" && ctx.humanApproved === true;
+    const quotedUsd = Number(formatUnits(BigInt(requirements.amount), 6));
+    const matchesApproval =
+      !ctx.approvedFor ||
+      (ctx.approvedFor.payTo.toLowerCase() === String(requirements.payTo).toLowerCase() &&
+        quotedUsd <= ctx.approvedFor.amountUsd + 1e-9);
+    const approvedByHuman = verdict.decision === "hold" && ctx.humanApproved === true && matchesApproval;
     if (verdict.decision === "refuse" || (verdict.decision === "hold" && !approvedByHuman)) {
       return { blocked: verdict };
     }
@@ -759,5 +775,18 @@ export class LifelineSigner {
       status: hold ? 202 : 403,
       payer: p.agentContext.agentAddress,
     };
+  }
+}
+
+/**
+ * What a seller sent back, whatever it is. Paid for and booked by the time it
+ * is read, so a body that is not JSON must not throw - the purchase happened.
+ */
+async function readBody(res: Response): Promise<any> {
+  const text = await res.text().catch(() => "");
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { contentType: res.headers.get("content-type") ?? "unknown", text: text.slice(0, 20_000) };
   }
 }

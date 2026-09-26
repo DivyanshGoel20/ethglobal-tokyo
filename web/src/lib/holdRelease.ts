@@ -33,16 +33,26 @@ export async function releaseHeldPayment(
 
   // Resolved before paying, so a double tap cannot pay twice.
   const hold = resolveHold(holdId, "approved")!;
-  const result = await new LifelineSigner().pay(
-    hold.url,
-    {
-      agentAddress: hold.agentAddress,
-      agentPrivateKey: getAgentPrivateKey(hold.agentAddress) || undefined,
-      humanProfileId: human,
-      humanApproved: true,
-    },
-    { method: hold.method, body: hold.body }
-  );
+  let result: LifelinePayResult;
+  try {
+    result = await new LifelineSigner().pay(
+      hold.url,
+      {
+        agentAddress: hold.agentAddress,
+        agentPrivateKey: getAgentPrivateKey(hold.agentAddress) || undefined,
+        humanProfileId: human,
+        humanApproved: true,
+        // The yes was for this payee and this price, not whatever the seller
+        // quotes on the way out.
+        approvedFor: { payTo: hold.payTo, amountUsd: hold.amountUsd },
+      },
+      { method: hold.method, body: hold.body }
+    );
+  } catch (err) {
+    // Nothing was paid: the hold stands, and can be answered again.
+    resolveHold(holdId, "held");
+    throw err;
+  }
   invalidateTelemetryCache(human);
   return { ok: true, result, hold };
 }

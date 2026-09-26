@@ -421,7 +421,7 @@ function OwedTab({ L, owedHere }: { L: ReturnType<typeof useLifeline>; owedHere:
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (L.rail !== "sui") return;
+    if (L.rail !== "sui") return setObligations(null);
     fetch("/api/sui/obligations")
       .then((r) => r.json())
       .then((d) => setObligations(d.obligations ?? []))

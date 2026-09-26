@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bearerFrom, verifyAgentToken } from "@/lib/agentToken";
+import { bearerFrom, remainingCap, verifyAgentToken } from "@/lib/agentToken";
 import { unauthenticated } from "@/lib/session";
 import { agentRail, getAgentByAddress, getHumanFacilityStats, getSuiFacilityStats } from "@/lib/agentStore";
 import { withSuiState } from "@/lib/suiRail";
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const [agent] = rail === "sui" ? await withSuiState([stored], grant.human) : [stored];
   const owes = rail === "arc" ? agent.outstandingDebt : agent.suiDebt ?? 0;
   const line = rail === "arc" ? getHumanFacilityStats(grant.human).totalAvailableCredit : getSuiFacilityStats(grant.human).availableCredit;
-  const capLeft = Math.max(0, grant.capUsd - owes);
+  const capLeft = remainingCap(grant);
 
   return NextResponse.json({
     agent: {
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       ...(rail === "sui" ? { suiAddress: agent.suiAddress } : {}),
       status: agent.status,
     },
-    mandate: { capUsd: grant.capUsd, expiresAt: grant.expiresAt, label: grant.label },
+    mandate: { capUsd: grant.capUsd, remainingUsd: capLeft, expiresAt: grant.expiresAt, label: grant.label },
     owesUsd: owes,
     walletUsd: rail === "arc" ? await getAgentWalletUsdc(agent.address).catch(() => null) : agent.suiWalletUsd ?? null,
     canBorrowUsd: Math.round(Math.min(capLeft, line) * 1e6) / 1e6,

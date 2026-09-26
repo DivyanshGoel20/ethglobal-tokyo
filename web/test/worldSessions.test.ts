@@ -118,8 +118,8 @@ test("the Open in World App link names the account, and only that", async () => 
 });
 
 test("two codes started in one browser each keep their own claim", async () => {
-  const a = await pairStart();
-  const b = await pairStart();
+  const a = await pairStart(post("/api/auth/pair", {}));
+  const b = await pairStart(post("/api/auth/pair", {}));
   const codeA = (await a.json()).code;
   const codeB = (await b.json()).code;
   // Both claims survive in the same browser: approving the one on screen works.
@@ -130,7 +130,7 @@ test("two codes started in one browser each keep their own claim", async () => {
 });
 
 test("a browser is paired from World App, once, and only by the browser that asked", async () => {
-  const started = await pairStart();
+  const started = await pairStart(post("/api/auth/pair", {}));
   const { code } = await started.json();
   const claim = `lifeline_pair_${code}=${cookieOf(started, `lifeline_pair_${code}`)}`;
   const poll = (c: string) => pairPoll(get(`/api/auth/pair?code=${code}`, c));

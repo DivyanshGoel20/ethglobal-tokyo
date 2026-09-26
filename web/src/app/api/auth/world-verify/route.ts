@@ -19,11 +19,7 @@ export async function POST(req: NextRequest) {
 
     // Fail closed. Without a nullifier there is no way to say which human this
     // is, and a guessed identity would void one-human-one-credit-line.
-    const nullifierHash: string | undefined =
-      verification.nullifier ||
-      proofPayload.responses?.[0]?.nullifier ||
-      proofPayload.nullifier ||
-      proofPayload.nullifier_hash;
+    const nullifierHash: string | undefined = verification.nullifier;
 
     if (!nullifierHash) {
       return NextResponse.json(

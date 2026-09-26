@@ -7,6 +7,7 @@ import { CardRepay } from "./CardRepay";
 import { useWallet } from "@/lib/useWallet";
 
 type Method = "agent" | "wallet" | "card";
+const UNBOOKED_KEY = "lifeline_unbooked_repayment";
 const METHOD_NAMES: Record<Method, string> = { agent: "Agent's wallet", wallet: "Your wallet", card: "Apple Pay · Google Pay" };
 
 interface RepayModalProps {
@@ -107,22 +108,62 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
     return data;
   };
 
+  // A wallet transfer that went out but is not booked yet. Kept (here and in
+  // the browser) so a failed booking is retried with the same transfer, never
+  // by sending the money a second time.
+  const [unbooked, setUnbooked] = useState<{ txHash: string; amount: number; agentAddress: string } | null>(null);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(UNBOOKED_KEY);
+      if (saved) setUnbooked(JSON.parse(saved));
+    } catch {
+      /* nothing saved */
+    }
+  }, [isOpen]);
+  const keepUnbooked = (u: typeof unbooked) => {
+    setUnbooked(u);
+    try {
+      if (u) localStorage.setItem(UNBOOKED_KEY, JSON.stringify(u));
+      else localStorage.removeItem(UNBOOKED_KEY);
+    } catch {
+      /* best effort */
+    }
+  };
+
+  const arcOwed = owing.reduce((n, a) => n + a.outstandingDebt, 0);
+
   const repayArc = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount) || 0;
     if (!agentAddress || value <= 0) return;
     if (method === "card") return setPaying(true);
-    if (method === "wallet" && !wallet.address) return wallet.connect();
+    if (method === "wallet" && !wallet.address && !unbooked) return wallet.connect();
+    if (method === "wallet" && !unbooked && value > arcOwed + 0.01) {
+      return setError(`That is more than is owed ($${arcOwed.toFixed(2)}). The excess would not come back.`);
+    }
     setBusy("arc");
     setError(null);
     try {
       // From a connected wallet: USDC to the treasury first, then the hash -
-      // which the server checks on Arc before it books anything.
-      const txHash = method === "wallet" ? await wallet.payTreasury(value) : undefined;
-      const data = await post("/api/repay", { agentAddress, amount: value, ...(txHash ? { txHash } : {}) });
+      // which the server checks on Arc before it books anything. A transfer
+      // already sent is booked as it is, not sent again.
+      let pending = method === "wallet" ? unbooked : null;
+      if (method === "wallet" && !pending) {
+        const txHash = await wallet.payTreasury(value);
+        pending = { txHash, amount: value, agentAddress };
+        keepUnbooked(pending);
+      }
+      const data = await post("/api/repay", {
+        agentAddress: pending?.agentAddress ?? agentAddress,
+        amount: pending?.amount ?? value,
+        ...(pending ? { txHash: pending.txHash } : {}),
+      });
+      keepUnbooked(null);
       onDone(`Repaid $${Number(data.amount).toFixed(2)} on Arc`);
       onClose();
     } catch (err: any) {
+      // A transfer that was refused for good is not retried forever.
+      if (/already been counted|too old|not Lifeline's treasury|reverted|less than/.test(err?.message ?? "")) keepUnbooked(null);
       setError(err?.code === 4001 ? "You declined in your wallet. Nothing was sent." : err.message);
     } finally {
       setBusy(null);
@@ -215,8 +256,22 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
               </select>
             </Field>
             <Field label="Amount" hint={method === "card" ? "USD" : "USDC"}>
-              <input type="number" step="0.01" min="0.01" className="field" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={method === "wallet" ? Math.ceil(arcOwed * 100) / 100 : undefined}
+                className="field"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
             </Field>
+            {method === "wallet" && unbooked && (
+              <p className="mono text-[10.5px] leading-relaxed" style={{ color: "var(--alarm)" }}>
+                ${unbooked.amount.toFixed(2)} was sent from your wallet ({unbooked.txHash.slice(0, 10)}…) but not booked yet. Repay
+                books that transfer; nothing is sent again.
+              </p>
+            )}
             {(error || wallet.error) && <ErrorNote>{error || wallet.error}</ErrorNote>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="btn btn-quiet">
@@ -227,6 +282,8 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
                   ? method === "wallet"
                     ? "Confirm in your wallet…"
                     : "Settling on Arc…"
+                  : method === "wallet" && unbooked
+                    ? "Book the transfer already sent"
                   : method === "card"
                     ? "Continue to pay"
                     : method === "wallet" && !wallet.address
@@ -246,8 +303,8 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
         cardFor && card?.publishableKey ? (
           <div className="space-y-3">
             <p className="text-[13px] ink-2 leading-relaxed">
-              {nameOf(cardFor.agentAddress)}&apos;s obligation, settled whole. Once the payment clears, Lifeline sends the agent
-              the USDC it is short and the agent settles on Sui.
+              {nameOf(cardFor.agentAddress)}&apos;s obligation, settled whole. You pay what its purse is short; once the payment
+              clears, Lifeline puts that in the purse and the agent settles on Sui.
             </p>
             <CardRepay
               publishableKey={card.publishableKey}

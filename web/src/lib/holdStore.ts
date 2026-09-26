@@ -69,7 +69,7 @@ export const openHolds = (human: string) =>
     (h) => h.status === "held" && h.expiresAt > Date.now() && h.human.toLowerCase() === human.toLowerCase()
   );
 
-export function resolveHold(holdId: string, status: "approved" | "declined"): HeldPayment | null {
+export function resolveHold(holdId: string, status: "approved" | "declined" | "held"): HeldPayment | null {
   const all = readAll();
   const hold = all.find((h) => h.holdId === holdId);
   if (!hold) return null;

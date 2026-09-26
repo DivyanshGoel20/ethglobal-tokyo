@@ -60,7 +60,7 @@ export const signPayload = sign;
 /** Marks the response as authenticating this World nullifier. */
 export function attachSession(res: NextResponse, nullifier: string): NextResponse {
   const exp = Math.floor(Date.now() / 1000) + TTL_SECONDS;
-  const payload = Buffer.from(JSON.stringify({ n: nullifier, exp }), "utf8").toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ typ: SESSION_TYP, n: nullifier, exp }), "utf8").toString("base64url");
 
   res.cookies.set(COOKIE, `${payload}.${sign(payload)}`, {
     httpOnly: true,
@@ -70,7 +70,7 @@ export function attachSession(res: NextResponse, nullifier: string): NextRespons
     maxAge: TTL_SECONDS,
   });
   const account = Buffer.from(
-    JSON.stringify({ n: nullifier, exp: Math.floor(Date.now() / 1000) + ACCOUNT_TTL_SECONDS }),
+    JSON.stringify({ typ: ACCOUNT_TYP, n: nullifier, exp: Math.floor(Date.now() / 1000) + ACCOUNT_TTL_SECONDS }),
     "utf8"
   ).toString("base64url");
   res.cookies.set(ACCOUNT_COOKIE, `${account}.${sign(account)}`, {
@@ -84,7 +84,8 @@ export function attachSession(res: NextResponse, nullifier: string): NextRespons
 }
 
 /** The account this browser last signed in as, if any. Not a session. */
-export const rememberedAccount = (req: NextRequest): string | null => readClaims(req.cookies.get(ACCOUNT_COOKIE)?.value);
+export const rememberedAccount = (req: NextRequest): string | null =>
+  readClaims(req.cookies.get(ACCOUNT_COOKIE)?.value, ACCOUNT_TYP);
 
 /** Forget the account too, for "not you?". */
 export function forgetAccount(res: NextResponse): NextResponse {
@@ -99,10 +100,18 @@ export function clearSession(res: NextResponse): NextResponse {
 
 /** The verified World nullifier behind this request, or null. */
 export function getHuman(req: NextRequest): string | null {
-  return readClaims(req.cookies.get(COOKIE)?.value);
+  return readClaims(req.cookies.get(COOKIE)?.value, SESSION_TYP);
 }
 
-function readClaims(token?: string): string | null {
+/*
+ * Every credential signed with this secret says what it is, and is only
+ * accepted as that. Without it, the year-long account cookie and an agent's
+ * mandate token - both {n, exp} under the same HMAC - also read as a session.
+ */
+const SESSION_TYP = "session";
+const ACCOUNT_TYP = "account";
+
+function readClaims(token: string | undefined, typ: string): string | null {
   if (!token) return null;
 
   const cut = token.lastIndexOf(".");
@@ -118,6 +127,7 @@ function readClaims(token?: string): string | null {
 
   try {
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (claims.typ !== typ) return null;
     if (typeof claims.n !== "string" || !claims.n) return null;
     if (typeof claims.exp !== "number" || claims.exp * 1000 <= Date.now()) return null;
     return claims.n;

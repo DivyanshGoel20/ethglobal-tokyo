@@ -1,5 +1,6 @@
 import { acquireLedgerLock, syncAgentDebts } from "@/lib/ledgerLock";
 import { NextRequest, NextResponse } from "next/server";
+import { recordMandateSpend } from "@/lib/mandateSpend";
 import { unauthenticated } from "@/lib/session";
 import { hasCredential, overMandate, resolveSpender } from "@/lib/agentToken";
 import { BorrowRequest, BorrowResponse } from "@/types";
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
       status: "Active",
     });
 
+    recordMandateSpend(auth.spender.mandateId, borrowAmount);
     const updatedFacility = getHumanFacilityStats(agent.humanOwner);
 
     const response: BorrowResponse = {

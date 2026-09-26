@@ -174,7 +174,10 @@ export function processRepayment(params: {
 
   // 1. If a specific loan ID was targeted
   if (params.targetLoanId) {
-    const loan = all.find((l) => l.loanId === params.targetLoanId);
+    // Only one of this human's own loans.
+    const loan = all.find(
+      (l) => l.loanId === params.targetLoanId && (l.humanOwner || "").toLowerCase() === params.humanOwner.toLowerCase()
+    );
     if (loan && loan.status === "ACTIVE" && (loan.outstandingAmount || 0) > 0.0001) {
       const accrual = calculateLoanAccrual(loan);
       const totalDue = accrual.totalDue;
@@ -200,22 +203,8 @@ export function processRepayment(params: {
         totalServicedDurationDays += accrual.daysOutstanding;
       }
 
-      saveAllLoans(all);
-
-      recordRepaymentInReputation({
-        humanOwner: params.humanOwner,
-        interestPaid: totalInterestPaid,
-        loanDurationDays: totalServicedDurationDays,
-      }).catch((err) => console.warn("[LoanStore] Reputation sync warning:", err));
-
-      return {
-        amountRepaid: Math.round((params.amount - remainingToApply) * 10000) / 10000,
-        beneficiaryAgentAddress: loan.agentAddress,
-        settledLoans,
-        remainingExcessAmount: remainingToApply,
-        interestPaid: totalInterestPaid,
-        principalPaid: totalPrincipalPaid,
-      };
+      // Anything left over goes on to the rest of what is owed, below: the
+      // whole amount was already paid on chain, so none of it can be dropped.
     }
   }
 

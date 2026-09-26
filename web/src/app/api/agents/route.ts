@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getHuman, unauthenticated } from "@/lib/session";
 import { getAgentWalletUsdc } from "@/lib/walletBalance";
 import { Agent } from "@/types";
-import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore, agentRail, getHumanFacilityStats } from "@/lib/agentStore";
+import { getAllAgents, addAgentToStore, getAgentByAddress, getAgentsByOwner, removeAgentFromStore, agentRail, getHumanFacilityStats } from "@/lib/agentStore";
 import { validateArcAgentWallet } from "@/lib/arc";
 import { LifelineSigner } from "@/lib/lifelineSigner";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
@@ -111,6 +111,16 @@ export async function POST(req: NextRequest) {
     }
 
     const formattedAddress = walletAddress.trim().toLowerCase() as `0x${string}`;
+
+    // An address is registered once. Re-registering it used to merge over the
+    // existing record - owner, debt and all - so anyone could claim another
+    // human's agent, and with it the key Lifeline holds for it.
+    if (getAgentByAddress(formattedAddress) || hasAgentPrivateKey(formattedAddress)) {
+      return NextResponse.json(
+        { error: "That address is already registered with Lifeline.", code: "already_registered" },
+        { status: 409 }
+      );
+    }
 
 
     const newAgent: Agent = {

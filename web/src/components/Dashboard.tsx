@@ -60,7 +60,7 @@ export function Dashboard({ rail }: { rail: Rail }) {
       />
 
       {L.toast && (
-        <div className="fixed bottom-6 right-6 z-50 sheet rise px-4 py-3 max-w-sm flex items-center gap-3">
+        <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 sheet rise px-4 py-3 sm:max-w-sm flex items-center gap-3">
           <span style={{ width: 6, height: 6, background: "var(--alarm)", display: "inline-block", flexShrink: 0 }} />
           <span className="text-[13px]">{L.toast}</span>
         </div>

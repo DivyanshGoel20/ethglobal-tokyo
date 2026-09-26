@@ -64,7 +64,12 @@ export function addAgentToStore(newAgent: Agent): Agent {
   );
 
   if (existingIndex >= 0) {
-    all[existingIndex] = { ...all[existingIndex], ...newAgent };
+    // Updating an agent never moves it to another human.
+    const current = all[existingIndex];
+    if ((current.humanOwner || "").toLowerCase() !== (newAgent.humanOwner || "").toLowerCase()) {
+      throw new Error("That agent belongs to a different human.");
+    }
+    all[existingIndex] = { ...current, ...newAgent };
     saveAllAgents(all);
     return all[existingIndex];
   }

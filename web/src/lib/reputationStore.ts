@@ -97,7 +97,22 @@ export function getHumanCreditTier(humanOwner: string, rail: RecordRail = "arc")
 /**
  * Record a settled repayment and check for automatic tier graduation.
  */
-export async function recordRepaymentInReputation(params: {
+// One update at a time per record: each reads the record, waits seconds on
+// Arc, then writes it back, and two at once kept only the later one.
+const g = globalThis as unknown as { __lifelineReputationQueue?: Map<string, Promise<unknown>> };
+const queue = (g.__lifelineReputationQueue ??= new Map());
+
+export function recordRepaymentInReputation(params: Parameters<typeof recordRepaymentNow>[0]): ReturnType<typeof recordRepaymentNow> {
+  const key = `${params.rail ?? "arc"}:${params.humanOwner.toLowerCase()}`;
+  const run = (queue.get(key) ?? Promise.resolve()).catch(() => {}).then(() => recordRepaymentNow(params));
+  queue.set(key, run);
+  void run.finally(() => {
+    if (queue.get(key) === run) queue.delete(key);
+  }).catch(() => {});
+  return run;
+}
+
+async function recordRepaymentNow(params: {
   humanOwner: string;
   interestPaid: number;
   loanDurationDays: number;

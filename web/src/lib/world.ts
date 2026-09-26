@@ -4,7 +4,9 @@
  */
 export async function verifyWorldSelfieProof(
   proof: any,
-  signal?: string
+  signal?: string,
+  /** Only /api/auth/world-session, which records every session proof it accepts. */
+  opts: { allowSession?: boolean } = {}
 ): Promise<{ success: boolean; error?: string; code?: string; nullifier?: string }> {
   const rpId = process.env.NEXT_PUBLIC_WORLD_RP_ID || "rp_62d19ed87590c550";
   const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "lifeline-human-verify";
@@ -21,20 +23,20 @@ export async function verifyWorldSelfieProof(
 
     let v4Payload: any;
     if (proof.session_id) {
-      // A session proof has no action, and must reach the portal as IDKit
-      // produced it.
+      // Session proofs are verified by /api/auth/world-session, which records
+      // each one; anywhere else they would name a nullifier World never checked.
+      if (!opts.allowSession) return { success: false, error: "Session proofs sign in through World ID sessions.", code: "session_proof" };
+      // A session proof has no action, and must reach the portal as IDKit produced it.
       v4Payload = proof;
     } else if (proof.protocol_version && Array.isArray(proof.responses)) {
-      v4Payload = {
-        ...proof,
-        action: proof.action || action,
-      };
+      // The action is Lifeline's, never the caller's.
+      v4Payload = { ...proof, action };
     } else if (proof.responses && Array.isArray(proof.responses)) {
       v4Payload = {
         protocol_version: "3.0",
-        action,
         nonce: proof.nonce || String(Date.now()),
         ...proof,
+        action,
       };
     } else {
       v4Payload = {
@@ -67,12 +69,9 @@ export async function verifyWorldSelfieProof(
     console.log("[World-Verify v4] API Response:", v4Response.status, JSON.stringify(v4Data));
 
     if (v4Response.ok && (v4Data.success === true || v4Data.results?.[0]?.success === true)) {
-      const nullifier =
-        v4Data.nullifier ||
-        v4Data.results?.[0]?.nullifier ||
-        proof.responses?.[0]?.nullifier ||
-        proof.nullifier ||
-        proof.nullifier_hash;
+      // Only a nullifier World checked: its answer, or the one inside the
+      // proof it just verified - never a field the caller added beside it.
+      const nullifier = v4Data.nullifier || v4Data.results?.[0]?.nullifier || v4Payload.responses?.[0]?.nullifier;
       return { success: true, nullifier };
     }
 
@@ -81,12 +80,7 @@ export async function verifyWorldSelfieProof(
       if (item.success === true) {
         return {
           success: true,
-          nullifier:
-            item.nullifier ||
-            v4Data.nullifier ||
-            proof.responses?.[0]?.nullifier ||
-            proof.nullifier ||
-            proof.nullifier_hash,
+          nullifier: item.nullifier || v4Data.nullifier || v4Payload.responses?.[0]?.nullifier,
         };
       }
       return {

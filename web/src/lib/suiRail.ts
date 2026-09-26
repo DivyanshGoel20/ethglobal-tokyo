@@ -1,6 +1,7 @@
 import {
   agentKeypair,
   deployment,
+  depositToPurse,
   facilityLiquidity,
   fromUnits,
   payOut,
@@ -28,8 +29,10 @@ import {
   settleObligation,
   unpaidObligations,
   unpaidRailDebts,
+  unpaidRowsOf,
 } from "./railDebt";
 import { invalidateTelemetryCache } from "./telemetryCache";
+import { withLedgerLock } from "./ledgerLock";
 import type { Agent } from "@/types";
 
 /**
@@ -118,6 +121,18 @@ export async function withSuiState(agents: Agent[], human: string): Promise<Agen
 
 /** Buy something on Sui for an agent, on its human's line. */
 export async function payOnSui(args: {
+  url: string;
+  agent: Agent;
+  human: string;
+  capUsd?: number;
+}): Promise<SuiPayResult & { explorer?: string | null }> {
+  // One Sui payment per human at a time: two first payments for one agent
+  // used to open two purses, and the agent book kept only one of them. Keyed
+  // apart from Arc's ledger lock - the rails are separate lines.
+  return withLedgerLock(`sui:${args.human}`, () => payOnSuiNow(args));
+}
+
+async function payOnSuiNow(args: {
   url: string;
   agent: Agent;
   human: string;
@@ -282,13 +297,21 @@ export async function reconcileSui(human?: string) {
   const out = { checked: ids.length, settled: [] as string[], defaulted: [] as string[], pending: 0, unresolved: [] as { obligationId: string; reason: string }[] };
 
   for (const id of ids) {
+    // Due, and the agent's earnings are in its wallet rather than its purse
+    // (that is where a customer pays it): settle from the wallet first, so an
+    // agent that can pay is not recorded as having defaulted.
+    const settledFromWallet = await settleDueFromWallet(id).catch(() => false);
+    if (settledFromWallet) {
+      out.settled.push(id);
+      continue;
+    }
     const o = await resolveObligation(id, { collectIfDue: true });
     if (o.state === "settled") {
       creditSuiRecord(settleObligation(id));
       out.settled.push(id);
     } else if (o.state === "defaulted") {
-      if (defaultObligation(id, o.reason).length) out.defaulted.push(id);
-      else out.defaulted.push(id);
+      defaultObligation(id, o.reason);
+      out.defaulted.push(id);
     } else if (o.state === "pending") {
       out.pending++;
     } else {
@@ -298,6 +321,22 @@ export async function reconcileSui(human?: string) {
   }
   if (human) invalidateTelemetryCache(human);
   return out;
+}
+
+/** Settle a due, open obligation from the agent's wallet, if it holds enough. */
+async function settleDueFromWallet(obligationId: string): Promise<boolean> {
+  const ob = await readObligation(obligationId);
+  if (ob.status !== "open" || ob.dueMs > Date.now()) return false;
+  const row = unpaidRowsOf(obligationId)[0];
+  const key = row ? getAgentPrivateKey(row.agentAddress) : null;
+  if (!row || !key) return false;
+  const [purse, profile] = await Promise.all([readPurse(ob.purseId), readProfile(ob.profileId)]);
+  const owed = profile && profile.outstandingDebt < ob.drawn ? profile.outstandingDebt : ob.drawn;
+  const short = owed > purse.balance ? owed - purse.balance : 0n;
+  const agent = agentKeypair(key);
+  if (short > 0n && (await walletUnits(agent.toSuiAddress())) < short) return false;
+  await settleEarlyFor(row.humanOwner, obligationId);
+  return true;
 }
 
 /**
@@ -317,41 +356,40 @@ export async function payAgentForWork(agentAddress: string, usd: number) {
 }
 
 /**
- * What settling one obligation needs from outside the agent, for a card
- * repayment: the whole amount owed (settling is all or nothing), and how much
- * of it the agent's purse and wallet do not already cover - which Lifeline's
- * operator sends it once the card payment clears.
+ * What a card repayment of one obligation pays for: what its purse is short
+ * of the amount owed. Settling is all or nothing, and the agent's own coins
+ * are left alone - the human is paying instead of the agent, not as well.
  */
 export async function suiShortfall(human: string, obligationId: string) {
   const row = railDebtsFor(human).find((r) => r.obligationId === obligationId);
   if (!row) throw new Error("No such obligation on your line");
-  const key = getAgentPrivateKey(row.agentAddress);
-  if (!key) throw new Error("Lifeline holds no key for the agent that owes this");
+  if (!getAgentPrivateKey(row.agentAddress)) throw new Error("Lifeline holds no key for the agent that owes this");
 
   const ob = await readObligation(obligationId);
   const open = ob.status !== "settled" && ob.status !== "closed";
   const [purse, profile] = await Promise.all([readPurse(ob.purseId), readProfile(ob.profileId)]);
   const owed = profile && profile.outstandingDebt < ob.drawn ? profile.outstandingDebt : ob.drawn;
-  const agentSui = agentKeypair(key).toSuiAddress();
-  const held = await walletUnits(agentSui);
-  const fromPurse = purse.balance < owed ? purse.balance : owed;
-  const needed = owed - fromPurse - held > 0n ? owed - fromPurse - held : 0n;
-  return { open, agentAddress: row.agentAddress, agentSui, owedUsd: fromUnits(owed), fundUsd: fromUnits(needed), fundUnits: needed };
+  const needed = owed > purse.balance ? owed - purse.balance : 0n;
+  return { open, agentAddress: row.agentAddress, purseId: ob.purseId, owedUsd: fromUnits(owed), fundUsd: fromUnits(needed), fundUnits: needed };
 }
 
 /** The operator's own USDC on Sui: what card repayments are funded from. */
 export const operatorReserveUsd = async () => fromUnits(await walletUnits(operatorKeypair().toSuiAddress()));
 
 /**
- * A card repayment has cleared: the operator sends the agent what it is short,
- * and the agent settles. Safe to retry - it only ever sends what is still
- * missing, so a failed settle does not send twice.
+ * A card repayment has cleared: the operator puts what the purse is short
+ * straight into the purse - where the agent cannot spend it on anything else -
+ * and the agent settles from it. Safe to retry: the shortfall is read again
+ * each time, so money already in the purse is never sent twice.
  */
-export async function fundAndSettleSui(human: string, obligationId: string) {
+export async function fundAndSettleSui(human: string, obligationId: string, maxFundUnits: bigint) {
   const s = await suiShortfall(human, obligationId);
   if (!s.open) return { ...(await settleEarlyFor(human, obligationId)), fundedUsd: 0 };
+  if (s.fundUnits > maxFundUnits) {
+    throw new Error("The obligation grew after the payment was started; it was not charged for the difference.");
+  }
   let fundedDigest: string | undefined;
-  if (s.fundUnits > 0n) fundedDigest = (await payOut(operatorKeypair(), s.agentSui, s.fundUnits)).digest;
+  if (s.fundUnits > 0n) fundedDigest = (await depositToPurse(operatorKeypair(), s.purseId, s.fundUnits)).digest;
   const settled = await settleEarlyFor(human, obligationId);
   return { ...settled, fundedUsd: s.fundUsd, fundedDigest };
 }

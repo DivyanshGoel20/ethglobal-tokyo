@@ -37,7 +37,7 @@ const sign = (payload: string) =>
 
 /** Mints a token directly, so expiry and tampering are reachable from a test. */
 function forge(claims: object, mac?: string) {
-  const payload = Buffer.from(JSON.stringify(claims), "utf8").toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ typ: "session", ...claims }), "utf8").toString("base64url");
   return `${payload}.${mac ?? sign(payload)}`;
 }
 
@@ -115,4 +115,11 @@ test("an unauthenticated caller cannot reach any agent", async () => {
   const denied = requireOwnedAgent(withCookie(), agents[0].address);
   assert.ok("error" in denied);
   assert.equal((denied as any).error.status, 401);
+});
+
+test("the remembered-account cookie and a mandate are never read as a session", () => {
+  // Both are signed with the same secret and carry {n, exp}.
+  assert.equal(getHuman(withCookie(forge({ typ: "account", n: HUMAN, exp: 2e9 }))), null);
+  assert.equal(getHuman(withCookie(forge({ typ: "agent", n: HUMAN, cap: 5, lbl: "x", exp: 2e9 }))), null);
+  assert.equal(getHuman(withCookie(forge({ typ: undefined, n: HUMAN, exp: 2e9 }))), null);
 });

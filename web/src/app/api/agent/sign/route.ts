@@ -8,6 +8,7 @@ import {
 import { getPublicClient, arcTestnetChain, LIFELINE_CREDIT_FACILITY_ABI } from "@/lib/facilityContract";
 import { LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
 import { resolveSpender } from "@/lib/agentToken";
+import { getHuman, unauthenticated } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
   try {
@@ -55,7 +56,10 @@ export async function POST(req: NextRequest) {
 
     // This endpoint signs arbitrary text with a custodied key. Unauthenticated,
     // an agent address - which the dashboard used to publish - was the only
-    // thing standing between an attacker and a signature from that key.
+    // thing standing between an attacker and a signature from that key. It is
+    // the human's, in person: a spending mandate is a card, and a card does not
+    // get to sign anything the agent's wallet could be held to.
+    if (!getHuman(req)) return unauthenticated();
     const auth = resolveSpender(req, agentAddress);
     if ("error" in auth) return auth.error;
 
