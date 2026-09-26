@@ -558,6 +558,16 @@ export async function executeOnChainRepayment(params: {
   const agentKey =
     params.alreadyTransferred || params.fundedOffChain ? null : getAgentPrivateKey(params.payerAddress);
 
+  // Money has to move before the debt does. Without a verified transfer, a
+  // card payment, or a key Lifeline holds to make the transfer, there is
+  // nothing to book - this used to record the repayment anyway, clearing
+  // debt for free for any agent registered by address alone.
+  if (!params.alreadyTransferred && !params.fundedOffChain && !agentKey) {
+    throw new Error(
+      "Lifeline does not hold this agent's key, so it cannot pay from the agent's wallet. Repay by card, or send USDC from the agent's wallet yourself and submit the transaction."
+    );
+  }
+
   if (agentKey) {
     const allowed = authorizeAgentSpend(params.payerAddress, params.amountUsdc);
     if (!allowed.ok) {
@@ -808,10 +818,13 @@ export async function ensureHumanProfileOnChain(
  * RPC call per record - which is what was rate-limiting the public Arc node.
  * Steady state is now one call for the head id plus one per genuinely new row.
  */
-const recordCache: Record<"drawdowns" | "repayments", Map<string, any>> = {
-  drawdowns: new Map(),
-  repayments: new Map(),
-};
+// On globalThis so every route shares one cache (Next bundles routes apart).
+const recordCache: Record<"drawdowns" | "repayments", Map<string, any>> = ((
+  globalThis as any
+).__lifelineRecordCache ??= { drawdowns: new Map(), repayments: new Map() });
+
+// Arc's public RPC answers 429 to bursts. Rows are fetched a few at a time.
+const RPC_BATCH = 6;
 
 /**
  * Rows are immutable per contract, not per id. Keying on the id alone meant a
@@ -833,19 +846,24 @@ async function warmRecordCache(
   }
   if (missing.length === 0) return cache;
 
-  const rows = await Promise.all(
-    missing.map((id) =>
-      publicClient
-        .readContract({
-          address: LIFELINE_CREDIT_FACILITY_ADDRESS,
-          abi: LIFELINE_CREDIT_FACILITY_ABI,
-          functionName: fn,
-          args: [id],
-        })
-        .then((row: any) => ({ id, row }))
-        .catch(() => null)
-    )
-  );
+  const rows: ({ id: bigint; row: any } | null)[] = [];
+  for (let i = 0; i < missing.length; i += RPC_BATCH) {
+    rows.push(
+      ...(await Promise.all(
+        missing.slice(i, i + RPC_BATCH).map((id) =>
+          publicClient
+            .readContract({
+              address: LIFELINE_CREDIT_FACILITY_ADDRESS,
+              abi: LIFELINE_CREDIT_FACILITY_ABI,
+              functionName: fn,
+              args: [id],
+            })
+            .then((row: any) => ({ id, row }))
+            .catch(() => null)
+        )
+      ))
+    );
+  }
 
   for (const entry of rows) {
     if (entry) cache.set(key(entry.id), entry.row);

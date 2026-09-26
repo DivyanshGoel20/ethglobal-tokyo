@@ -1,3 +1,4 @@
+import { acquireLedgerLock, syncAgentDebts } from "@/lib/ledgerLock";
 import { NextRequest, NextResponse } from "next/server";
 import { unauthenticated } from "@/lib/session";
 import { hasCredential, overMandate, resolveSpender } from "@/lib/agentToken";
@@ -14,6 +15,8 @@ import { executeOnChainDrawdown } from "@/lib/facilityContract";
 import { invalidateTelemetryCache } from "@/lib/telemetryCache";
 
 export async function POST(req: NextRequest) {
+  // One ledger change at a time for this human (see ledgerLock).
+  let release: (() => void) | undefined;
   try {
     // Turn an anonymous caller away before discussing the request shape.
     if (!hasCredential(req)) return unauthenticated();
@@ -48,6 +51,7 @@ export async function POST(req: NextRequest) {
     // different door.
     const auth = resolveSpender(req, agentAddress);
     if ("error" in auth) return auth.error;
+    release = await acquireLedgerLock(auth.spender.human);
 
     // A mandate caps what an agent may draw. A human here in person is bounded
     // only by their facility limit, which the contract enforces anyway.
@@ -132,16 +136,15 @@ export async function POST(req: NextRequest) {
     });
 
     // 6. Update Agent Financials (Principal + 1.0% Origination Fee)
+    // Debt comes from the loans themselves; the other figures are read again,
+    // not from before the seconds-long wait for Arc.
     const originationFee = loan.originationFee || Math.round(borrowAmount * 0.01 * 10000) / 10000;
-    const initialDebtAdded = Math.round((borrowAmount + originationFee) * 10000) / 10000;
-    const newDebt = Math.round((agent.outstandingDebt + initialDebtAdded) * 10000) / 10000;
-    const newTotalBorrowed = Math.round((agent.totalBorrowed + borrowAmount) * 10000) / 10000;
-    const newBalance = Math.round((agent.currentBalance + borrowAmount) * 10000) / 10000;
-
+    syncAgentDebts(agent.humanOwner);
+    const fresh = getAgentByAddress(agent.address) ?? agent;
+    const newDebt = fresh.outstandingDebt;
     updateAgentInStore(agent.address, {
-      outstandingDebt: newDebt,
-      totalBorrowed: newTotalBorrowed,
-      currentBalance: newBalance,
+      totalBorrowed: Math.round((fresh.totalBorrowed + borrowAmount) * 10000) / 10000,
+      currentBalance: Math.round((fresh.currentBalance + borrowAmount) * 10000) / 10000,
       status: "Active",
     });
 
@@ -164,7 +167,7 @@ export async function POST(req: NextRequest) {
       ...response,
       agentName: agent.name,
       originationFee,
-      initialTotalDue: initialDebtAdded,
+      initialTotalDue: Math.round((borrowAmount + originationFee) * 10000) / 10000,
       agentAvailableCredit: updatedFacility.totalAvailableCredit,
       facilityAvailableCredit: updatedFacility.totalAvailableCredit,
       network: `${ARC_TESTNET_NAME} (${ARC_TESTNET_CHAIN_ID})`,
@@ -179,5 +182,7 @@ export async function POST(req: NextRequest) {
       { success: false, error: error.message || "Failed to execute borrow draw" },
       { status: 500 }
     );
+  } finally {
+    release?.();
   }
 }

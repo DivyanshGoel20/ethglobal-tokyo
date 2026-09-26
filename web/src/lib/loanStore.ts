@@ -43,21 +43,9 @@ export function saveAllLoans(loans: Loan[]) {
   try {
     ensureDirectoryExists();
     const primary = getLoansFilePath();
+    // One file. A second copy, mirrored on every write, was never read and
+    // could only drift from the first.
     writeJsonAtomic(primary, loans);
-
-    // Also mirror to secondary path if in web workspace
-    const altPath = primary.includes("web/data")
-      ? primary.replace("web/data", "data")
-      : primary.replace("/data", "/web/data");
-    if (altPath !== primary) {
-      try {
-        const altDir = path.dirname(altPath);
-        if (!fs.existsSync(altDir)) fs.mkdirSync(altDir, { recursive: true });
-        writeJsonAtomic(altPath, loans);
-      } catch {
-        // ignore mirror error
-      }
-    }
   } catch (error) {
     console.error("[LoanStore] Error writing loans file:", error);
   }
@@ -201,6 +189,7 @@ export function processRepayment(params: {
       const remainingDebt = Math.max(0, Math.round((totalDue - payment) * 10000) / 10000);
       loan.outstandingAmount = remainingDebt <= 0.0001 ? 0 : remainingDebt;
       loan.totalRepaid = Math.round((loan.totalRepaid + payment) * 10000) / 10000;
+      loan.accruedThrough = Date.now();
       loan.repayTxHashes.push(params.txHash);
       remainingToApply = Math.max(0, Math.round((remainingToApply - payment) * 10000) / 10000);
 
@@ -255,6 +244,7 @@ export function processRepayment(params: {
     const remainingDebt = Math.max(0, Math.round((totalDue - payment) * 10000) / 10000);
     loan.outstandingAmount = remainingDebt <= 0.0001 ? 0 : remainingDebt;
     loan.totalRepaid = Math.round((loan.totalRepaid + payment) * 10000) / 10000;
+    loan.accruedThrough = Date.now();
     loan.repayTxHashes.push(params.txHash);
     remainingToApply = Math.max(0, Math.round((remainingToApply - payment) * 10000) / 10000);
 
@@ -294,6 +284,7 @@ export function processRepayment(params: {
       const remainingDebt = Math.max(0, Math.round((totalDue - payment) * 10000) / 10000);
       loan.outstandingAmount = remainingDebt <= 0.0001 ? 0 : remainingDebt;
       loan.totalRepaid = Math.round((loan.totalRepaid + payment) * 10000) / 10000;
+      loan.accruedThrough = Date.now();
       loan.repayTxHashes.push(params.txHash);
       remainingToApply = Math.max(0, Math.round((remainingToApply - payment) * 10000) / 10000);
 

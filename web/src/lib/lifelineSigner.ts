@@ -15,6 +15,7 @@ import { flushAgent } from "./ledgerFlush";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { screenOutgoing, verdictLine, Verdict } from "./intercepta";
 import { createHold } from "./holdStore";
+import { acquireLedgerLock, syncAgentDebts } from "./ledgerLock";
 
 // What Circle's BatchEvmScheme signs, reproduced so the authorisation
 // Intercepta screens is byte for byte the one that gets signed.
@@ -346,20 +347,169 @@ export class LifelineSigner {
       // Lifeline's Gateway pays the seller the whole price - so the whole
       // price is what is lent. Booking only the shortfall left Lifeline out
       // of pocket by whatever the agent happened to hold.
-      const shortfallAmount = parseFloat(requestedAmountFormatted);
+      // One ledger change at a time for this human: the limit check and the
+      // booking below must see, and leave, a ledger nobody else is changing.
+      const releaseLedger = await acquireLedgerLock(humanOwner);
+      try {
+        const shortfallAmount = parseFloat(requestedAmountFormatted);
 
-      // 1. Check Lifeline Credit Facility Limits
-      const facility = getHumanFacilityStats(humanOwner);
-      const agentAvailableLimit = agent
-        ? Math.max(0, agent.creditLimit - agent.outstandingDebt)
-        : facility.totalAvailableCredit;
-      const effectiveAvailable = Math.min(
-        agentAvailableLimit,
-        facility.totalAvailableCredit,
-        agentContext.maxCreditUsd ?? Number.POSITIVE_INFINITY
-      );
+        // 1. Check Lifeline Credit Facility Limits
+        const facility = getHumanFacilityStats(humanOwner);
+        // Read again inside the lock: the copy from before the balance check
+        // and screening can be seconds old.
+        const current = getAgentByAddress(agentContext.agentAddress);
+        const agentAvailableLimit = current
+          ? Math.max(0, current.creditLimit - current.outstandingDebt)
+          : facility.totalAvailableCredit;
+        const effectiveAvailable = Math.min(
+          agentAvailableLimit,
+          facility.totalAvailableCredit,
+          agentContext.maxCreditUsd ?? Number.POSITIVE_INFINITY
+        );
 
-      if (shortfallAmount > effectiveAvailable) {
+        if (shortfallAmount > effectiveAvailable) {
+          recordPayment({
+            paymentId,
+            agentAddress: agentContext.agentAddress,
+            humanProfileId: humanOwner,
+            sellerAddress,
+            resourceUrl: url,
+            requestedAmount: requestedAmountFormatted,
+            agentGatewayBalance: formattedAvailable,
+            shortfall: shortfallAmount.toFixed(2),
+            fundingSource: "LIFELINE_FACILITY",
+            drawdownId: null,
+            status: "REJECTED_CREDIT",
+            timestamp: Date.now(),
+            memo: `Credit rejected: Shortfall of $${shortfallAmount.toFixed(
+              2
+            )} exceeds headroom $${effectiveAvailable.toFixed(2)}`,
+          });
+
+          throw new Error(
+            `Lifeline: shortfall of $${shortfallAmount.toFixed(
+              2
+            )} USDC exceeds remaining credit limit ($${effectiveAvailable.toFixed(
+              2
+            )} USDC available).`
+          );
+        }
+
+        // 3. Sign x402 Payment Authorization using Lifeline's Gateway-Funded Facility
+        // Screened before Lifeline's own wallet signs anything for the agent.
+        const screened = await this.screenAndSign(this.fundingPrivateKey, x402Version, batchingOption, url, agentContext);
+        if ("blocked" in screened) {
+          return this.blocked(screened.blocked, {
+            paymentId, agentContext, humanOwner, url, method, body: options?.body, sellerAddress,
+            requestedAmountFormatted, formattedAvailable, fundingSource: "LIFELINE_FACILITY",
+          });
+        }
+        const { payload: fundingPaymentPayload, verdict } = screened;
+
+        const paymentHeader = Buffer.from(
+          JSON.stringify({
+            ...fundingPaymentPayload,
+            resource: paymentRequired.resource,
+            accepted: batchingOption,
+          })
+        ).toString("base64");
+
+        // 4. Retry request with Lifeline's Payment-Signature
+        const paidResponse = await fetch(url, {
+          method,
+          headers: {
+            ...headers,
+            "Payment-Signature": paymentHeader,
+          },
+          body: serializedBody,
+        });
+
+        if (!paidResponse.ok) {
+          const errJson = await paidResponse.json().catch(() => ({}));
+          recordPayment({
+            paymentId,
+            agentAddress: agentContext.agentAddress,
+            humanProfileId: humanOwner,
+            sellerAddress,
+            resourceUrl: url,
+            requestedAmount: requestedAmountFormatted,
+            agentGatewayBalance: formattedAvailable,
+            shortfall: shortfallAmount.toFixed(2),
+            fundingSource: "LIFELINE_FACILITY",
+            drawdownId: null,
+            status: "FAILED",
+            timestamp: Date.now(),
+            memo: `Seller verification failed: ${(errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")}`,
+          });
+
+          throw new Error(
+            `Lifeline-funded payment failed: ${
+              (errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")
+            }`
+          );
+        }
+
+        // 2. Book the debt - only now the seller has taken the payment. Booked
+        // before paying, a seller that refused left the human owing for
+        // something they never received. It reaches the chain with the next
+        // batch.
+        //
+        // Writing a drawdown per nanopayment cost more gas than the payment was
+        // worth. The debt is recorded here first and settled on chain as one row
+        // covering however many payments have accumulated.
+        //
+        // Admission control above reads the agent store, which is updated the
+        // moment a payment is booked - so it already accounts for debt that has
+        // not reached the chain yet. Adding the pending total on top would
+        // double-count it, and the contract's own limit check cannot fail at
+        // flush time for the same reason: chain debt plus the batch can never
+        // exceed what the store already admitted.
+        const loan = createLoan({
+          agentAddress: agentContext.agentAddress,
+          agentName: agent?.name || "Autonomous Agent",
+          humanOwner,
+          amount: shortfallAmount,
+          txHash: "",
+          memo: `Lifeline Overdraft x402 Drawdown for ${url}`,
+        });
+
+        addPending({
+          humanOwner,
+          agentAddress: agentContext.agentAddress,
+          amountUsdc: shortfallAmount,
+          reference: "x402",
+          loanId: loan.loanId,
+        });
+
+        // Settles only once the position is worth the gas, or has waited long
+        // enough. Most calls return here without touching the chain at all.
+        const flush = await flushAgent(humanOwner, agentContext.agentAddress);
+        const arcTxHash = flush.txHash ?? "";
+
+        // The agent owes what the loan says: principal and its 1% fee, the same
+        // as a direct draw. Adding the principal alone left the fee off the
+        // debt the dashboard showed, and the first repayment quietly paid it.
+        // Recomputed from the loans rather than added to a figure read earlier.
+        syncAgentDebts(humanOwner);
+        const booked = getAgentByAddress(agentContext.agentAddress);
+        if (booked) {
+          updateAgentInStore(booked.address, {
+            totalBorrowed: Math.round((booked.totalBorrowed + shortfallAmount) * 10000) / 10000,
+            status: "Active",
+          });
+        }
+
+        const settleHeader = paidResponse.headers.get("PAYMENT-RESPONSE");
+        let settleResponse: any;
+        if (settleHeader) {
+          settleResponse = JSON.parse(
+            Buffer.from(settleHeader, "base64").toString("utf-8")
+          );
+        }
+
+        const data = await paidResponse.json();
+
+        // 5. Record successful payment in audit trail
         recordPayment({
           paymentId,
           agentAddress: agentContext.agentAddress,
@@ -370,179 +520,42 @@ export class LifelineSigner {
           agentGatewayBalance: formattedAvailable,
           shortfall: shortfallAmount.toFixed(2),
           fundingSource: "LIFELINE_FACILITY",
-          drawdownId: null,
-          status: "REJECTED_CREDIT",
+          drawdownId: loan.loanId,
+          status: "SUCCESS",
           timestamp: Date.now(),
-          memo: `Credit rejected: Shortfall of $${shortfallAmount.toFixed(
+          transactionId: settleResponse?.transaction,
+          memo: `Overdraft funded via the Lifeline facility ($${shortfallAmount.toFixed(
             2
-          )} exceeds headroom $${effectiveAvailable.toFixed(2)}`,
+          )} shortfall)`,
+          screening: { decision: verdict.decision, reasons: verdict.reasons, capUsd: verdict.capUsd },
         });
 
-        throw new Error(
-          `Lifeline: shortfall of $${shortfallAmount.toFixed(
-            2
-          )} USDC exceeds remaining credit limit ($${effectiveAvailable.toFixed(
-            2
-          )} USDC available).`
-        );
-      }
+        const updatedFacility = getHumanFacilityStats(humanOwner);
+        const updatedAgent = getAgentByAddress(agentContext.agentAddress);
 
-      // 3. Sign x402 Payment Authorization using Lifeline's Gateway-Funded Facility
-      // Screened before Lifeline's own wallet signs anything for the agent.
-      const screened = await this.screenAndSign(this.fundingPrivateKey, x402Version, batchingOption, url, agentContext);
-      if ("blocked" in screened) {
-        return this.blocked(screened.blocked, {
-          paymentId, agentContext, humanOwner, url, method, body: options?.body, sellerAddress,
-          requestedAmountFormatted, formattedAvailable, fundingSource: "LIFELINE_FACILITY",
-        });
-      }
-      const { payload: fundingPaymentPayload, verdict } = screened;
-
-      const paymentHeader = Buffer.from(
-        JSON.stringify({
-          ...fundingPaymentPayload,
-          resource: paymentRequired.resource,
-          accepted: batchingOption,
-        })
-      ).toString("base64");
-
-      // 4. Retry request with Lifeline's Payment-Signature
-      const paidResponse = await fetch(url, {
-        method,
-        headers: {
-          ...headers,
-          "Payment-Signature": paymentHeader,
-        },
-        body: serializedBody,
-      });
-
-      if (!paidResponse.ok) {
-        const errJson = await paidResponse.json().catch(() => ({}));
-        recordPayment({
-          paymentId,
-          agentAddress: agentContext.agentAddress,
-          humanProfileId: humanOwner,
-          sellerAddress,
-          resourceUrl: url,
-          requestedAmount: requestedAmountFormatted,
+        return {
+          success: true,
+          screening: verdict,
+          fundingSource: "LIFELINE_FACILITY",
+          amount: requestedAmountFormatted,
+          borrowed: shortfallAmount.toFixed(2),
+          drawdownId: loan.loanId,
           agentGatewayBalance: formattedAvailable,
           shortfall: shortfallAmount.toFixed(2),
-          fundingSource: "LIFELINE_FACILITY",
-          drawdownId: null,
-          status: "FAILED",
-          timestamp: Date.now(),
-          memo: `Seller verification failed: ${(errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")}`,
-        });
-
-        throw new Error(
-          `Lifeline-funded payment failed: ${
-            (errJson.error || paidResponse.statusText) + (errJson.reason ? ` - ${errJson.reason}` : "")
-          }`
-        );
+          data,
+          status: paidResponse.status,
+          transactionId: arcTxHash || settleResponse?.transaction,
+          arcTxHash: arcTxHash || undefined,
+          arcTxLink: arcTxHash ? `https://testnet.arcscan.app/tx/${arcTxHash}` : undefined,
+          circleSettlementId: settleResponse?.transaction,
+          payer: this.fundingClient.address,
+          creditFacilityAddress: this.creditFacilityAddress,
+          agentDebt: updatedAgent?.outstandingDebt || shortfallAmount,
+          facilityDebt: updatedFacility.totalOutstandingDebt,
+        };
+      } finally {
+        releaseLedger();
       }
-
-      // 2. Book the debt - only now the seller has taken the payment. Booked
-      // before paying, a seller that refused left the human owing for
-      // something they never received. It reaches the chain with the next
-      // batch.
-      //
-      // Writing a drawdown per nanopayment cost more gas than the payment was
-      // worth. The debt is recorded here first and settled on chain as one row
-      // covering however many payments have accumulated.
-      //
-      // Admission control above reads the agent store, which is updated the
-      // moment a payment is booked - so it already accounts for debt that has
-      // not reached the chain yet. Adding the pending total on top would
-      // double-count it, and the contract's own limit check cannot fail at
-      // flush time for the same reason: chain debt plus the batch can never
-      // exceed what the store already admitted.
-      const loan = createLoan({
-        agentAddress: agentContext.agentAddress,
-        agentName: agent?.name || "Autonomous Agent",
-        humanOwner,
-        amount: shortfallAmount,
-        txHash: "",
-        memo: `Lifeline Overdraft x402 Drawdown for ${url}`,
-      });
-
-      addPending({
-        humanOwner,
-        agentAddress: agentContext.agentAddress,
-        amountUsdc: shortfallAmount,
-        reference: "x402",
-        loanId: loan.loanId,
-      });
-
-      // Settles only once the position is worth the gas, or has waited long
-      // enough. Most calls return here without touching the chain at all.
-      const flush = await flushAgent(humanOwner, agentContext.agentAddress);
-      const arcTxHash = flush.txHash ?? "";
-
-      // The agent owes what the loan says: principal and its 1% fee, the same
-      // as a direct draw. Adding the principal alone left the fee off the
-      // debt the dashboard showed, and the first repayment quietly paid it.
-      if (agent) {
-        updateAgentInStore(agent.address, {
-          outstandingDebt: Math.round((agent.outstandingDebt + loan.outstandingAmount) * 10000) / 10000,
-          totalBorrowed: Math.round((agent.totalBorrowed + shortfallAmount) * 10000) / 10000,
-          status: "Active",
-        });
-      }
-
-      const settleHeader = paidResponse.headers.get("PAYMENT-RESPONSE");
-      let settleResponse: any;
-      if (settleHeader) {
-        settleResponse = JSON.parse(
-          Buffer.from(settleHeader, "base64").toString("utf-8")
-        );
-      }
-
-      const data = await paidResponse.json();
-
-      // 5. Record successful payment in audit trail
-      recordPayment({
-        paymentId,
-        agentAddress: agentContext.agentAddress,
-        humanProfileId: humanOwner,
-        sellerAddress,
-        resourceUrl: url,
-        requestedAmount: requestedAmountFormatted,
-        agentGatewayBalance: formattedAvailable,
-        shortfall: shortfallAmount.toFixed(2),
-        fundingSource: "LIFELINE_FACILITY",
-        drawdownId: loan.loanId,
-        status: "SUCCESS",
-        timestamp: Date.now(),
-        transactionId: settleResponse?.transaction,
-        memo: `Overdraft funded via the Lifeline facility ($${shortfallAmount.toFixed(
-          2
-        )} shortfall)`,
-        screening: { decision: verdict.decision, reasons: verdict.reasons, capUsd: verdict.capUsd },
-      });
-
-      const updatedFacility = getHumanFacilityStats(humanOwner);
-      const updatedAgent = getAgentByAddress(agentContext.agentAddress);
-
-      return {
-        success: true,
-        screening: verdict,
-        fundingSource: "LIFELINE_FACILITY",
-        amount: requestedAmountFormatted,
-        borrowed: shortfallAmount.toFixed(2),
-        drawdownId: loan.loanId,
-        agentGatewayBalance: formattedAvailable,
-        shortfall: shortfallAmount.toFixed(2),
-        data,
-        status: paidResponse.status,
-        transactionId: arcTxHash || settleResponse?.transaction,
-        arcTxHash: arcTxHash || undefined,
-        arcTxLink: arcTxHash ? `https://testnet.arcscan.app/tx/${arcTxHash}` : undefined,
-        circleSettlementId: settleResponse?.transaction,
-        payer: this.fundingClient.address,
-        creditFacilityAddress: this.creditFacilityAddress,
-        agentDebt: updatedAgent?.outstandingDebt || shortfallAmount,
-        facilityDebt: updatedFacility.totalOutstandingDebt,
-      };
     }
   }
 

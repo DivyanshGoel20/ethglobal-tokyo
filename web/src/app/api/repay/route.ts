@@ -1,8 +1,10 @@
+import { acquireLedgerLock } from "@/lib/ledgerLock";
 import { NextRequest, NextResponse } from "next/server";
 import { unauthenticated } from "@/lib/session";
 import { ARC_TREASURY } from "@/lib/browserChain";
 import { hasCredential, resolveSpender } from "@/lib/agentToken";
 import { prepareArcRepayment, commitArcRepayment } from "@/lib/repayCore";
+import { getAgentPrivateKey } from "@/lib/agentKeys";
 import { RepayRequest, RepayResponse } from "@/types";
 import { getAgentByAddress, getHumanFacilityStats } from "@/lib/agentStore";
 import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
@@ -10,6 +12,8 @@ import { verifyArcRepayment } from "@/lib/facilityContract";
 import { claimReceipt, releaseReceipt } from "@/lib/receiptStore";
 
 export async function POST(req: NextRequest) {
+  // One ledger change at a time for this human (see ledgerLock).
+  let release: (() => void) | undefined;
   try {
     // Turn an anonymous caller away before discussing the request shape.
     if (!hasCredential(req)) return unauthenticated();
@@ -44,6 +48,7 @@ export async function POST(req: NextRequest) {
     // Gated so one human cannot write entries into another's ledger.
     const auth = resolveSpender(req, agentAddress);
     if ("error" in auth) return auth.error;
+    release = await acquireLedgerLock(auth.spender.human);
 
     const payingAgent = getAgentByAddress(agentAddress);
     if (!payingAgent) {
@@ -87,6 +92,20 @@ export async function POST(req: NextRequest) {
         );
       }
       beneficiaryAddress = targetAgent.address;
+    }
+
+    // Paying from the agent's wallet means Lifeline signs the transfer, so it
+    // needs the agent's key. Refused up front, before anything is flushed.
+    if (!txHash && !getAgentPrivateKey(payingAgent.address)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "no_agent_key",
+          error:
+            "Lifeline does not hold this agent's key, so it cannot pay from the agent's wallet. Repay by card, or send USDC from the agent's wallet yourself and submit the transaction.",
+        },
+        { status: 400 }
+      );
     }
 
     // 3. Settle pending debt, and how much of the request can be repaid.
@@ -206,5 +225,7 @@ export async function POST(req: NextRequest) {
       { success: false, error: error.message || "Failed to process repayment" },
       { status: 500 }
     );
+  } finally {
+    release?.();
   }
 }

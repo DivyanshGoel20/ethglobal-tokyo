@@ -52,21 +52,8 @@ export function saveAllReputationRecords(data: Record<string, HumanReputationDat
   try {
     ensureDirectoryExists();
     const primary = getReputationFilePath();
+    // One file; the mirrored second copy was never read.
     writeJsonAtomic(primary, data);
-
-    // Also mirror to secondary path if running in next.js web workspace
-    const altPath = primary.includes("web/data")
-      ? primary.replace("web/data", "data")
-      : primary.replace("/data", "/web/data");
-    if (altPath !== primary) {
-      try {
-        const altDir = path.dirname(altPath);
-        if (!fs.existsSync(altDir)) fs.mkdirSync(altDir, { recursive: true });
-        writeJsonAtomic(altPath, data);
-      } catch {
-        // ignore secondary mirror error
-      }
-    }
   } catch (error) {
     console.error("[ReputationStore] Error writing reputation file:", error);
   }

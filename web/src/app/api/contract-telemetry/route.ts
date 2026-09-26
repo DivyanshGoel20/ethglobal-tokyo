@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchCompleteContractTelemetry } from "@/lib/facilityContract";
-import { getAllAgents } from "@/lib/agentStore";
+import { getAgentsByOwner } from "@/lib/agentStore";
 import { getAllLoans } from "@/lib/loanStore";
 import { getCachedTelemetry, setCachedTelemetry } from "@/lib/telemetryCache";
 import { getPending } from "@/lib/pendingLedger";
@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Retrieve known agents and recorded loan hashes from store to enrich telemetry
-    const agents = getAllAgents();
+    // This human's agents only. Every agent in the system, checked on every
+    // refresh, was two RPC calls apiece - the burst that got Arc's RPC
+    // throttling the whole dashboard.
+    const agents = getAgentsByOwner(humanOwner);
     const knownAgentAddresses = agents.map((a) => a.address);
     const recordedLoans = getAllLoans();
 

@@ -73,6 +73,11 @@ export interface Loan {
   borrowedAt: number;
   dueAt?: number;
   settledAt?: number;
+  /**
+   * Interest has been folded into outstandingAmount up to this moment. Absent
+   * on a loan never repaid: interest then runs from borrowedAt.
+   */
+  accruedThrough?: number;
   borrowTxHash: string;
   repayTxHashes: string[];
   memo?: string;

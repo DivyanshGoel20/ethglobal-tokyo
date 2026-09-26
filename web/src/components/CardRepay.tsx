@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe, Stripe } from "@stripe/stripe-js";
 import { Elements, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { ErrorNote } from "./Sheet";
@@ -41,14 +41,24 @@ export const CardRepay: React.FC<{
   const [intent, setIntent] = useState<{ clientSecret: string; paymentIntentId: string; amountUsd: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // One payment per opening. React runs effects twice in development, and
+  // each run created its own Stripe payment; the request is shared instead.
+  const started = useRef<{ key: string; request: Promise<any> } | null>(null);
+
   useEffect(() => {
     let live = true;
-    fetch("/api/repay/card", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentAddress, amount: amountUsd }),
-    })
-      .then((r) => r.json())
+    const key = `${agentAddress}:${amountUsd}`;
+    if (started.current?.key !== key) {
+      started.current = {
+        key,
+        request: fetch("/api/repay/card", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentAddress, amount: amountUsd }),
+        }).then((r) => r.json()),
+      };
+    }
+    started.current.request
       .then((d) => {
         if (!live) return;
         if (!d.success) throw new Error(d.error);

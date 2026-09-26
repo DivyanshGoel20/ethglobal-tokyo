@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { writeJsonAtomic } from "./atomicWrite";
 import { getAgentByAddress, getHumanFacilityStats } from "./agentStore";
 import { prepareArcRepayment, commitArcRepayment } from "./repayCore";
+import { withLedgerLock } from "./ledgerLock";
 
 /**
  * Repaying Arc debt by card, Apple Pay or Google Pay, through Stripe.
@@ -104,6 +105,11 @@ export async function bookCardRepayment(paymentIntentId: string, asHuman?: strin
   if (intent.currency !== "usd") return { ok: false, status: 400, error: "Unexpected currency." };
   if (intent.status !== "succeeded") return { ok: false, status: 409, error: `The payment is ${intent.status.replace(/_/g, " ")}.` };
 
+  // Queued behind any other change to this human's ledger.
+  return withLedgerLock(human, () => book(intent, human));
+}
+
+async function book(intent: Stripe.PaymentIntent, human: string): Promise<CardBookingResult> {
   // Claimed before booking, so the webhook and the browser cannot both book it.
   const existing = bookingFor(intent.id);
   if (existing) {

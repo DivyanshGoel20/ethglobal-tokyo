@@ -83,15 +83,21 @@ export function calculateLoanAccrual(loan: Loan, asOfTimestamp = Date.now()): Lo
   const elapsedMs = Math.max(0, asOfTimestamp - borrowedAt);
   const daysOutstanding = elapsedMs / (24 * 60 * 60 * 1000);
 
-  // Daily interest = Principal * 0.0005 * Days
-  const accruedInterest =
-    Math.round(principal * DAILY_INTEREST_RATE * daysOutstanding * 10000) / 10000;
-
   // baseDebt is the unpaid balance (which already incorporates upfront origination fee)
   const baseDebt =
     loan.outstandingAmount !== undefined
       ? loan.outstandingAmount
       : Math.round((principal + originationFee) * 10000) / 10000;
+
+  // Daily interest, on what is still owed, since interest was last folded
+  // into the balance. Charging the full principal from the day it was
+  // borrowed, on every repayment, billed the same days twice and left a
+  // residue that reappeared after the loan was paid.
+  const accrualFrom = Math.max(borrowedAt, loan.accruedThrough ?? borrowedAt);
+  const accrualDays = Math.max(0, asOfTimestamp - accrualFrom) / (24 * 60 * 60 * 1000);
+  const interestBase = Math.min(principal, baseDebt);
+  const accruedInterest =
+    Math.round(interestBase * DAILY_INTEREST_RATE * accrualDays * 10000) / 10000;
   const totalDue = Math.round((baseDebt + accruedInterest) * 10000) / 10000;
 
   const dueTimestamp = loan.dueAt || (borrowedAt + MAX_LOAN_TERM_MS);
