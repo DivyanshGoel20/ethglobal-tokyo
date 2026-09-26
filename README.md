@@ -460,7 +460,8 @@ Open Claude Code in this repo and it has Lifeline as a set of tools
 by hand: no wallet to make, no key to paste, no token to copy.
 
 1. The agent's first Lifeline call finds it has no access, so it asks for some
-   and gets a link for you: `http://localhost:3000/connect/KGQ4P99C`.
+   and gets a link for you, with a QR code drawn right in the terminal - scan it
+   with your phone rather than typing the link.
 2. You open it signed in with World ID, and see who is asking, from where and
    why. You pick Arc or Sui, a cap and how many days, and approve
    ([`connect/[code]`](web/src/app/connect/[code]/page.tsx)). Lifeline makes
@@ -497,8 +498,11 @@ or paid. The agent is not trusted to behave. The limits are on the server:
   loopback, private and metadata addresses are refused unless they are
   Lifeline's own sellers ([`lib/resourceUrl.ts`](web/src/lib/resourceUrl.ts)).
 
-Settings are in `.mcp.json`: `LIFELINE_URL` (default `http://localhost:3000`),
-`LIFELINE_AGENT_NAME`, `LIFELINE_RAIL` (`arc` or `sui`). To use it outside this
+Settings are in `.mcp.json`: `LIFELINE_URL` (the deployed app; set
+`http://localhost:3000` to use a local one), `LIFELINE_AGENT_NAME`,
+`LIFELINE_RAIL` (`arc` or `sui`), and `LIFELINE_QR` - `dark` (default) or
+`light` for the terminal background the QR codes are drawn for, `off` to leave
+them out. A link to `localhost` gets no QR code, since a phone cannot open it. To use it outside this
 repo:
 
 ```bash

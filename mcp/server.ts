@@ -22,6 +22,8 @@
  *   LIFELINE_AGENT_NAME   how the agent introduces itself (default claude-code)
  *   LIFELINE_RAIL         arc or sui, the rail it asks for (default arc)
  *   LIFELINE_HOME         where credentials live (default ~/.lifeline)
+ *   LIFELINE_QR           dark (default) or light: the terminal background the
+ *                         QR codes are drawn for; off to leave them out
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -29,6 +31,7 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import QRCode from "qrcode";
 
 // stdout is the protocol. Anything a dependency logs goes to stderr instead.
 console.log = (...a: unknown[]) => console.error(...a);
@@ -102,12 +105,60 @@ async function api(
 
 type Gate = { ok: true; c: Connected } | { ok: false; text: string };
 
+/**
+ * A QR code as text, two rows of modules per line in half blocks, so a phone
+ * can scan it straight off the terminal. A block character is drawn in the
+ * terminal's text colour, so which modules are drawn depends on the
+ * background: on a dark terminal the light modules (and the quiet zone) are
+ * the ones drawn. A link a phone cannot reach gets no code.
+ */
+function qr(url: string): string | null {
+  const mode = (process.env.LIFELINE_QR || "dark").toLowerCase();
+  if (mode === "off") return null;
+  try {
+    const host = new URL(url).hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") return null;
+  } catch {
+    return null;
+  }
+  const { modules } = QRCode.create(url, { errorCorrectionLevel: "L" });
+  const size = modules.size;
+  const margin = 2;
+  const dark = (r: number, c: number) => r >= 0 && c >= 0 && r < size && c < size && !!modules.get(r, c);
+  const drawn = (r: number, c: number) => (mode === "light" ? dark(r, c) : !dark(r, c));
+  const lines: string[] = [];
+  for (let r = -margin; r < size + margin; r += 2) {
+    let line = "";
+    for (let c = -margin; c < size + margin; c++) {
+      const top = drawn(r, c);
+      const bottom = r + 1 < size + margin ? drawn(r + 1, c) : mode !== "light";
+      line += top && bottom ? "█" : top ? "▀" : bottom ? "▄" : " ";
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+/** A link for the human, with its QR code and the instruction to show both. */
+function linkForHuman(url: string): string[] {
+  const code = qr(url);
+  if (!code) return [`  ${url}`];
+  return [
+    `  ${url}`,
+    "",
+    "Show the human this QR code exactly as it is, inside a code block, with the link above - they can scan it with their phone instead of typing the link:",
+    "```",
+    code,
+    "```",
+  ];
+}
+
 function askHuman(p: Pending, lead: string): string {
   return [
     lead,
     "",
     `ACTION NEEDED - ask your human to open this link and approve it (signed in with World ID):`,
-    `  ${p.approveUrl}`,
+    ...linkForHuman(p.approveUrl),
     `  code ${p.code} · for "${p.name}" on ${p.rail === "arc" ? "Arc" : "Sui"} · expires ${new Date(p.expiresAt).toLocaleTimeString()}`,
     "",
     "Nothing can be bought until they do. Once they have approved it, call any Lifeline tool again (lifeline_status is simplest) and access is picked up automatically.",
@@ -498,7 +549,7 @@ server.registerTool(
     return text(
       [
         "ACTION NEEDED - your human approves this payment with World ID:",
-        `  ${r.data.verificationUriComplete ?? r.data.verificationUri}`,
+        ...linkForHuman(r.data.verificationUriComplete ?? r.data.verificationUri),
         r.data.userCode ? `  code ${r.data.userCode}` : "",
         "",
         `Then call lifeline_approval_status with holdId ${holdId} - the payment goes through once they approve. If they decline it stays unpaid.`,
