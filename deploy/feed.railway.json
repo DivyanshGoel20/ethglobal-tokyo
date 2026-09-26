@@ -1,6 +1,9 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "build": { "builder": "NIXPACKS", "buildCommand": "npm ci" },
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "node --version"
+  },
   "deploy": {
     "startCommand": "npx tsx sui/service/server.ts",
     "healthcheckPath": "/",

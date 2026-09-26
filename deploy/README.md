@@ -10,6 +10,21 @@ start commands come from there.
 | **premium** | the Arc x402 seller (`/premium-data`, `/risk-curve`, ...) | yes | none | `deploy/premium.railway.json` |
 | **feed** | the Sui x402 seller (`/risk?records=N`) | yes | `/app/sui/data` | `deploy/feed.railway.json` |
 
+## Live
+
+| service | URL |
+|---|---|
+| web | https://web-production-2ccec.up.railway.app |
+| premium | https://premium-production-6e83.up.railway.app |
+| feed | https://feed-production-bd25.up.railway.app |
+
+## Build commands
+
+Nixpacks installs dependencies itself (`npm ci`) before the build command
+runs, so the build commands never install again: a second `npm ci` fights the
+build cache over `node_modules/.cache` and fails with `EBUSY`. The web service
+builds; the two sellers run TypeScript through `tsx` and have nothing to build.
+
 ## Node 22
 
 `@mysten/sui` needs Node 22 or newer. The root `package.json` says so in
