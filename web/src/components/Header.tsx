@@ -9,6 +9,8 @@ interface HeaderProps {
   setRail: (rail: Rail) => void;
   nullifierHash: string;
   onSignOut: () => void;
+  /** Offer Sui only when it is deployed and configured here. */
+  suiReady?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   setRail,
   nullifierHash,
   onSignOut,
+  suiReady = true,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -59,7 +62,9 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
             <button
               onClick={() => setRail("sui")}
-              className={`px-3 py-1 rounded transition-colors cursor-pointer ${
+              disabled={!suiReady}
+              title={suiReady ? undefined : "Float is not deployed on Sui in this environment"}
+              className={`px-3 py-1 rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                 rail === "sui"
                   ? "bg-[#2a82e4] text-white font-medium"
                   : "text-[#94a3b8] hover:text-white"

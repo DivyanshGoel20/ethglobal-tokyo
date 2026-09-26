@@ -50,7 +50,11 @@ export interface ActivityItem {
   rail?: Rail;
   timestamp: number | string;
   txHash: string;
+  /** Explorer link for txHash, when the network has an explorer. */
+  txLink?: string | null;
   endpoint?: string;
+  /** What Float lent, when the agent could not cover it all. */
+  borrowed?: number;
 }
 
 export interface Loan {
