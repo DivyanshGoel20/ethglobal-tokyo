@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Agent, Instrument, Rail } from "@/types";
+import { Agent, Rail } from "@/types";
 import { Lead } from "./Pulse";
 import { Sheet, Field, ErrorNote } from "./Sheet";
 import { ago, type Beat } from "@/lib/ecg";
@@ -16,7 +16,6 @@ export type LeadData = {
 interface MonitorProps {
   leads: LeadData[];
   rail: Rail;
-  instrument: Instrument;
   suiNetwork?: string | null;
   onAddAgent: (input: { name: string; address: string; privateKey: string; capUsd: number }) => Promise<void>;
   onRemoveAgent: (address: string) => Promise<void>;
@@ -37,7 +36,6 @@ function condition(owed: number, lead: LeadData): { label: string; tone: "alarm"
 export const Monitor: React.FC<MonitorProps> = ({
   leads,
   rail,
-  instrument,
   suiNetwork,
   onAddAgent,
   onRemoveAgent,
@@ -85,7 +83,7 @@ export const Monitor: React.FC<MonitorProps> = ({
       {leads.length === 0 ? (
         <div className="py-16 grid place-items-center text-center">
           <div className="w-full max-w-[520px] mb-6">
-            <Lead beats={[]} instrument={instrument} height={56} />
+            <Lead beats={[]} height={56} />
           </div>
           <p className="serif text-[22px] leading-snug max-w-[30ch]">
             No agents on this line yet. <em className="ink-3">Authorize one and it can start spending.</em>
@@ -108,7 +106,7 @@ export const Monitor: React.FC<MonitorProps> = ({
               <div className="lead-who">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span
-                    className={c.tone === "alarm" && instrument === "monitor" ? "pulse-dot" : ""}
+                    className={c.tone === "alarm" ? "pulse-dot" : ""}
                     style={{
                       width: 6,
                       height: 6,
@@ -138,7 +136,7 @@ export const Monitor: React.FC<MonitorProps> = ({
                 <Lead
                   beats={lead.beats}
                   defaults={lead.defaults}
-                  instrument={instrument}
+                 
                   idle={lead.beats.length === 0}
                 />
               </div>

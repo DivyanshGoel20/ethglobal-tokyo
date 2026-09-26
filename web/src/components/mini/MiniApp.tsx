@@ -145,14 +145,6 @@ export default function MiniApp() {
             ]}
             grow
           />
-          <Segment
-            value={L.instrument}
-            onChange={(i) => L.chooseInstrument(i as "strip" | "monitor")}
-            options={[
-              { id: "strip", name: "Strip" },
-              { id: "monitor", name: "Monitor" },
-            ]}
-          />
         </div>
       </header>
 
@@ -332,7 +324,7 @@ function PulseTab({ L, onBuy, onAdd }: { L: ReturnType<typeof useLifeline>; onBu
 
       {L.leads.length === 0 ? (
         <div className="py-10 text-center">
-          <Lead beats={[]} instrument={L.instrument} height={52} />
+          <Lead beats={[]} height={52} />
           <p className="serif text-[19px] leading-snug mt-6">No agents on this line yet.</p>
           <button onClick={onAdd} className="btn btn-solid mt-5">
             Authorize your first agent
@@ -390,7 +382,7 @@ function MiniLead({ lead, L, onBuy }: { lead: LeadData; L: ReturnType<typeof use
       </div>
 
       <div className="mt-3">
-        <Lead beats={lead.beats} defaults={lead.defaults} instrument={L.instrument} height={60} />
+        <Lead beats={lead.beats} defaults={lead.defaults} height={60} />
       </div>
 
       <div className="flex gap-1 mt-2 -ml-1.5">

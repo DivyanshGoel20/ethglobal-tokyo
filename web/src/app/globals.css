@@ -11,18 +11,15 @@
    colour - the only colour on the page that means anything - and a repayment
    that fell due and collected nothing is an arrhythmia.
 
-   Two instruments. The printed strip: warm chart paper, a millimetre grid,
-   ink. The bedside monitor: the same strip after dark, the trace lit from
-   behind. Arc opens on the strip and Sui on the monitor - Sui's argument is a
-   repayment that waits on chain for its date with nobody watching - but
-   either rail can be read on either instrument.
+   One instrument: a bedside monitor drawn on chart paper. Warm paper, a
+   millimetre grid, ink - and a head that sweeps each lead, inking the beats
+   as it passes, the way a watch draws a heartbeat.
 
-   Both are held to the same rules: square corners, hairline rules, no
-   gradients, no soft shadows, three typefaces, numbers in the readout face.
+   Square corners, hairline rules, no gradients, no soft shadows, three
+   typefaces, numbers in the readout face.
    ────────────────────────────────────────────────────────────────────────── */
 
-:root,
-[data-instrument="strip"] {
+:root {
   color-scheme: light;
 
   /* Chart paper. The grid is the ruling of a real ECG strip: 1 mm minor,
@@ -41,7 +38,8 @@
 
   /* The trace, and the two things a beat can say besides "paid". */
   --trace: #1b1613;
-  --trace-glow: transparent;
+  /* The head's halo: a smudge of ink around the pen, not a glow. */
+  --trace-glow: rgba(27, 22, 19, 0.28);
   --alarm: #c3302a;
   --alarm-soft: rgba(195, 48, 42, 0.09);
   --steady: #2f6a4c;
@@ -54,36 +52,6 @@
 
   }
 
-[data-instrument="monitor"] {
-  color-scheme: dark;
-
-  /* The bedside monitor. Not black - a deep blue-green glass - and the grid
-     is barely there, as on a screen rather than paper. */
-  --ground: #080c0e;
-  --ground-2: #0d1316;
-  --panel: #0b1114;
-  --grid-minor: rgba(120, 190, 220, 0.035);
-  --grid-major: rgba(120, 190, 220, 0.075);
-
-  --ink: #e4ecef;
-  --ink-2: #9aabb2;
-  --ink-3: #66777e;
-  --rule: #1d292e;
-  --hair: #152024;
-
-  --trace: #7fd1ff;
-  --trace-glow: rgba(127, 209, 255, 0.55);
-  --alarm: #ff5b4d;
-  --alarm-soft: rgba(255, 91, 77, 0.1);
-  --steady: #5fd6a0;
-  --steady-soft: rgba(95, 214, 160, 0.1);
-
-  --solid-bg: #e4ecef;
-  --solid-fg: #080c0e;
-  --scrim: rgba(2, 5, 6, 0.7);
-  --shadow: 0 0 0 1px #1d292e;
-
-  }
 
 :root {
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
@@ -186,9 +154,6 @@ body {
   box-shadow: var(--shadow);
 }
 
-[data-instrument="monitor"] .sheet {
-  border-color: var(--rule);
-}
 
 /* ── Controls ─────────────────────────────────────────────────────────── */
 
@@ -286,27 +251,18 @@ select.field {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-[data-instrument="monitor"] .trace {
-  filter: drop-shadow(0 0 2px var(--trace-glow));
-}
 .trace-alarm {
   stroke: var(--alarm);
-}
-[data-instrument="monitor"] .trace-alarm {
-  filter: drop-shadow(0 0 3px rgba(255, 91, 77, 0.6));
 }
 
 /* The monitor's head: the lit point drawing the trace, as on a watch. */
 .head {
   fill: var(--trace);
-  filter: drop-shadow(0 0 4px var(--trace)) drop-shadow(0 0 10px var(--trace-glow));
+  filter: drop-shadow(0 0 3px var(--trace-glow));
 }
-[data-instrument="monitor"] .lit .trace {
+/* Where the head has just been, the ink is fresh and a touch heavier. */
+.lit .trace {
   stroke-width: 1.9;
-  filter: drop-shadow(0 0 4px var(--trace-glow));
-}
-[data-instrument="monitor"] .lit .trace-alarm {
-  filter: drop-shadow(0 0 4px rgba(255, 91, 77, 0.75));
 }
 
 /* A new payment feeds the trace one slot to the left. */

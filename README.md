@@ -87,11 +87,10 @@ red Lifeline lent for. Between payments the line is flat, and an agent that has
 never bought anything flatlines. A Sui repayment that fell due and collected
 nothing is drawn as **fibrillation** at its due date.
 
-The two rails are two instruments. **Arc** is the printed strip: warm chart
-paper with a millimetre grid, ink, the pen resting at "now". **Sui** is the
-bedside monitor: the same strip after dark, the trace lit, an erase bar
-sweeping it - because Sui's argument is a repayment that waits on chain for its
-date with nobody watching.
+It is a bedside monitor drawn on chart paper: warm paper with a millimetre
+grid, ink, and on every lead a head that sweeps the trace the way a watch draws
+a heartbeat, inking each beat - red where Lifeline lent - as it passes. Both
+rails read the same way.
 
 Type is Newsreader for words, Martian Mono for every figure, Hanken Grotesk for
 the rest. Red is reserved for money that was lent; nothing else on the page is

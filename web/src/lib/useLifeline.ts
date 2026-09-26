@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Rail, Agent, ActivityItem, Instrument } from "@/types";
+import type { Rail, Agent, ActivityItem } from "@/types";
 import type { LeadData } from "@/components/Monitor";
 
 /**
@@ -9,7 +9,7 @@ import type { LeadData } from "@/components/Monitor";
  *
  * The browser dashboard and the World App mini app are two layouts over the
  * same state: the signed-in human, their agents, payments and parked
- * repayments, which rail and instrument they are looking at, and the actions
+ * repayments, which rail they are looking at, and the actions
  * that move money. Keeping it here means a fix to how Lifeline behaves is a
  * fix on the phone and on the desktop at once.
  */
@@ -43,8 +43,6 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
   const [rail, setRail] = useState<Rail>("arc");
   // Arc opens on the strip and Sui on the monitor; either can be read on
   // either, and the choice is remembered per rail.
-  const [instruments, setInstruments] = useState<Record<Rail, Instrument>>({ arc: "strip", sui: "monitor" });
-  const instrument = instruments[rail];
   const [sui, setSui] = useState<{ ready: boolean; network: string | null }>({ ready: false, network: null });
 
   const [creditLimit, setCreditLimit] = useState(10.0);
@@ -95,36 +93,6 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
   const refresh = () => {
     setRefreshTrigger((t) => t + 1);
     void load();
-  };
-
-  // The instrument is stamped on the document: every colour is a token, so
-  // the strip and the monitor are the same components under different ink.
-  useEffect(() => {
-    document.documentElement.setAttribute("data-instrument", instrument);
-  }, [instrument]);
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("lifeline_instruments") || "{}");
-      setInstruments((cur) => ({
-        arc: saved.arc === "monitor" || saved.arc === "strip" ? saved.arc : cur.arc,
-        sui: saved.sui === "monitor" || saved.sui === "strip" ? saved.sui : cur.sui,
-      }));
-    } catch {
-      /* a display preference */
-    }
-  }, []);
-
-  const chooseInstrument = (next: Instrument) => {
-    setInstruments((cur) => {
-      const updated = { ...cur, [rail]: next };
-      try {
-        localStorage.setItem("lifeline_instruments", JSON.stringify(updated));
-      } catch {
-        /* a display preference */
-      }
-      return updated;
-    });
   };
 
   // The session cookie is httpOnly, so who we are is a question for the server.
@@ -302,8 +270,6 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
     // what is on screen
     rail,
     chooseRail,
-    instrument,
-    chooseInstrument,
     sui,
     // the line
     creditLimit,

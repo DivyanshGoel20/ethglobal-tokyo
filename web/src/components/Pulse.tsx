@@ -2,7 +2,6 @@
 
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { buildTrace, TRACE_H, type Beat } from "@/lib/ecg";
-import type { Instrument } from "@/types";
 
 /** The mark: one complex, drawn once. */
 export const LifelineMark: React.FC<{ size?: number; className?: string }> = ({ size = 22, className }) => (
@@ -21,7 +20,6 @@ export const LifelineMark: React.FC<{ size?: number; className?: string }> = ({ 
 interface LeadProps {
   beats: Beat[];
   defaults?: number[];
-  instrument: Instrument;
   /** Flatline, rendered with a note, when the agent has never paid for anything. */
   idle?: boolean;
   height?: number;
@@ -51,13 +49,12 @@ const TAIL = [
 /**
  * One agent's lead.
  *
- * On the strip the paper has stopped and the pen rests at the right, where
- * the next beat will be drawn. On the monitor a lit head sweeps the trace the
- * way a watch or a bedside screen draws it: the whole line stays faintly
- * visible, and a bright tail lights each beat - red where Lifeline lent - as
- * the head passes. Either way a new payment feeds the trace one slot left.
+ * A head sweeps the trace the way a watch or a bedside monitor draws it, on
+ * chart paper: the whole line stays faintly visible, and a dark tail inks each
+ * beat - red where Lifeline lent - as the head passes. A new payment feeds the
+ * trace one slot left.
  */
-export const Lead: React.FC<LeadProps> = ({ beats, defaults, instrument, idle, height = TRACE_H }) => {
+export const Lead: React.FC<LeadProps> = ({ beats, defaults, idle, height = TRACE_H }) => {
   const [ref, width] = useWidth<HTMLDivElement>();
   const trace = useMemo(
     () => (width > 0 ? buildTrace(beats, width, { defaults, height }) : null),
@@ -77,7 +74,6 @@ export const Lead: React.FC<LeadProps> = ({ beats, defaults, instrument, idle, h
     }
   }, [newest]);
 
-  const monitor = instrument === "monitor";
   const dur = `${Math.max(3.2, width / 230).toFixed(2)}s`;
 
   const drawing = trace && (
@@ -97,8 +93,7 @@ export const Lead: React.FC<LeadProps> = ({ beats, defaults, instrument, idle, h
       {trace && (
         <svg width={width} height={height} className="absolute inset-0 overflow-visible" aria-label={`${beats.length} payments`}>
           <g key={feedKey} className={feedKey ? "feed" : undefined}>
-            {monitor ? (
-              <>
+            <>
                 <defs>
                   {/* The comet: the trace's own path, dashed so only a short
                       run near the head shows, moving the length of the line. */}
@@ -121,7 +116,7 @@ export const Lead: React.FC<LeadProps> = ({ beats, defaults, instrument, idle, h
                 </defs>
 
                 {/* Always visible, faintly: nothing is lost between sweeps. */}
-                <g style={{ opacity: 0.36 }}>{drawing}</g>
+                <g style={{ opacity: 0.5 }}>{drawing}</g>
 
                 {/* Lit where the head has just been. */}
                 <g mask={`url(#m${uid})`} className="lit">
@@ -132,24 +127,13 @@ export const Lead: React.FC<LeadProps> = ({ beats, defaults, instrument, idle, h
                 <circle r={2.6} className="head">
                   <animateMotion dur={dur} repeatCount="indefinite" path={trace.line} />
                 </circle>
-              </>
-            ) : (
-              drawing
-            )}
+            </>
           </g>
 
           {trace.marks.map((m, i) => (
             <rect key={`h${i}`} x={m.x - 12} y={0} width={24} height={height} fill="transparent" onMouseEnter={() => setHover(i)} />
           ))}
         </svg>
-      )}
-
-      {/* The pen, on paper: where the next beat will be drawn. */}
-      {!monitor && trace && (
-        <span
-          className="absolute"
-          style={{ left: width - 18, top: trace.baseline - 2.5, width: 5, height: 5, background: "var(--ink)" }}
-        />
       )}
 
       {idle && (

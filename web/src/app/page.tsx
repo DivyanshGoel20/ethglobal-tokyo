@@ -59,8 +59,6 @@ function Dashboard() {
         nullifierHash={L.nullifierHash}
         onSignOut={L.handleSignOut}
         suiReady={L.sui.ready}
-        instrument={L.instrument}
-        setInstrument={L.chooseInstrument}
       />
 
       {L.toast && (
@@ -86,7 +84,6 @@ function Dashboard() {
         <Monitor
           leads={L.leads}
           rail={L.rail}
-          instrument={L.instrument}
           suiNetwork={L.sui.network}
           onAddAgent={L.handleAddAgent}
           onRemoveAgent={L.handleRemoveAgent}

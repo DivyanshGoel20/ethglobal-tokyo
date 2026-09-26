@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Instrument, Rail } from "@/types";
+import { Rail } from "@/types";
 import { LifelineMark } from "./Pulse";
 
 interface HeaderProps {
@@ -11,8 +11,6 @@ interface HeaderProps {
   onSignOut: () => void;
   /** Offer Sui only when it is deployed and configured here. */
   suiReady?: boolean;
-  instrument: Instrument;
-  setInstrument: (i: Instrument) => void;
 }
 
 const RAILS: { id: Rail; name: string }[] = [
@@ -20,12 +18,7 @@ const RAILS: { id: Rail; name: string }[] = [
   { id: "sui", name: "Sui" },
 ];
 
-const INSTRUMENTS: { id: Instrument; name: string }[] = [
-  { id: "strip", name: "Strip" },
-  { id: "monitor", name: "Monitor" },
-];
-
-/** A square two-way switch, as used for the rail and the instrument. */
+/** A square two-way switch, as used for the rail. */
 function Switch<T extends string>({
   label,
   value,
@@ -71,8 +64,6 @@ export const Header: React.FC<HeaderProps> = ({
   nullifierHash,
   onSignOut,
   suiReady = true,
-  instrument,
-  setInstrument,
 }) => {
   const [copied, setCopied] = useState(false);
   const short = nullifierHash ? `${nullifierHash.slice(0, 6)}…${nullifierHash.slice(-4)}` : "verified";
@@ -94,7 +85,6 @@ export const Header: React.FC<HeaderProps> = ({
               onChange={setRail}
               disabled={(r) => (r === "sui" && !suiReady ? "Lifeline is not deployed on Sui here" : undefined)}
             />
-            <Switch label="Instrument" value={instrument} options={INSTRUMENTS} onChange={setInstrument} />
           </div>
         </div>
 

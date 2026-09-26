@@ -1,7 +1,6 @@
 export type Rail = "arc" | "sui";
 
 /** How the dashboard is drawn: printed ECG paper, or a lit bedside screen. */
-export type Instrument = "strip" | "monitor";
 
 export interface Agent {
   agentId?: string;

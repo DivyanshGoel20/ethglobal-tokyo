@@ -45,19 +45,18 @@ export const CardRepay: React.FC<{
     };
   }, [agentAddress, amountUsd]);
 
-  const dark = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   const options = useMemo(
     () =>
       intent
         ? {
             clientSecret: intent.clientSecret,
             appearance: {
-              theme: (dark ? "night" : "stripe") as "night" | "stripe",
+              theme: "stripe" as const,
               variables: { borderRadius: "0px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
             },
           }
         : null,
-    [intent, dark]
+    [intent]
   );
 
   if (error) {
