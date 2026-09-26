@@ -33,6 +33,15 @@ export const AccountLinks: React.FC<{ onToast: (m: string) => void }> = ({ onToa
   }, []);
 
   const [making, setMaking] = useState(false);
+  const [showLookups, setShowLookups] = useState(false);
+  const [registry, setRegistry] = useState<{ listed: boolean; lookups: { partner: string; answered: string; at: string }[] } | null>(null);
+  useEffect(() => {
+    if (!agents?.linked) return;
+    fetch("/api/registry/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setRegistry(d))
+      .catch(() => {});
+  }, [agents?.linked, showLookups]);
   const openInWorldApp = async () => {
     if (qr) return setQr(null);
     if (making) return;
@@ -55,22 +64,48 @@ export const AccountLinks: React.FC<{ onToast: (m: string) => void }> = ({ onToa
   return (
     <div className="pt-6 space-y-3">
       <div className="flex flex-wrap justify-end gap-x-5 gap-y-1">
-        {showAgents &&
-          (agents!.linked ? (
-            <span className="mono text-[10.5px] ink-3">
-              agent approvals · <span style={{ color: "var(--steady)" }}>World ID linked</span>
-            </span>
-          ) : (
-            <button onClick={() => setLinking((l) => !l)} className="mono text-[10.5px] ink-3 underline underline-offset-2">
-              {linking ? "hide" : "Link World ID for agent approvals"}
-            </button>
-          ))}
+        {showAgents && agents!.linked && (
+          <button onClick={() => setShowLookups((v) => !v)} className="mono text-[10.5px] ink-3 underline underline-offset-2">
+            in the registry · <span style={{ color: "var(--steady)" }}>World ID linked</span>
+            {registry ? ` · ${registry.lookups.length} lookup${registry.lookups.length === 1 ? "" : "s"}` : ""}
+          </button>
+        )}
         {hasSession && (
           <button onClick={openInWorldApp} disabled={making} className="mono text-[10.5px] ink-3 underline underline-offset-2">
             {qr ? "hide" : "Open in World App"}
           </button>
         )}
       </div>
+      {showAgents && !agents!.linked && !linking && (
+        <div className="p-4 flex flex-wrap items-center justify-between gap-3 max-w-[640px] ml-auto" style={{ border: "1px solid var(--rule)" }}>
+          <p className="text-[12.5px] ink-2 leading-snug max-w-[46ch]">
+            <b>Finish setting up: link World ID.</b> It lets you approve held payments, and lists you in the Lifeline registry:
+            partner World apps you sign in to can see whether you repay - good, late or in default, never amounts.
+          </p>
+          <button className="btn btn-solid shrink-0" onClick={() => setLinking(true)}>
+            Link World ID
+          </button>
+        </div>
+      )}
+      {showLookups && registry && (
+        <div className="sheet p-4 max-w-[520px] ml-auto space-y-2">
+          <div className="lab">Who has looked you up</div>
+          {registry.lookups.length === 0 ? (
+            <p className="text-[12.5px] ink-3">No partner app has asked about you yet.</p>
+          ) : (
+            <ul className="space-y-1">
+              {registry.lookups.map((l, i) => (
+                <li key={i} className="mono text-[10.5px] flex justify-between gap-3">
+                  <span>{l.partner}</span>
+                  <span className="ink-3">
+                    told {l.answered} · {new Date(l.at).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {linking && (
         <div className="sheet p-4 sm:p-5 max-w-[520px] ml-auto">
           <WorldAgentApproval

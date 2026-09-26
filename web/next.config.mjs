@@ -38,6 +38,11 @@ const nextConfig = {
 
   // World appends a mini app path to the App URL, so an App URL that already
   // ends in /mini turns /mini into /mini/mini. Either way lands on the app.
+  // The registry's authorization document, where partners' World clients point.
+  async rewrites() {
+    return [{ source: "/.well-known/lifeline-sector.json", destination: "/api/registry/sector" }];
+  },
+
   async redirects() {
     return [{ source: "/mini/mini", destination: "/mini", permanent: false }];
   },

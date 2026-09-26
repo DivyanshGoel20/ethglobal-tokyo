@@ -363,6 +363,47 @@ cannot start over with a clean line.
 (with `LIFELINE_CRON_SECRET`) checks everyone. The grace period and loan term
 are `LIFELINE_DEFAULT_GRACE_DAYS` and `LIFELINE_LOAN_TERM_DAYS`.
 
+## A registry other World apps can ask
+
+World gives each app its own private identifier for a person, so apps cannot
+link people behind their backs. The owner of a relationship can name other
+apps to share its identifier by publishing an authorization document listing
+their exact callback URLs. Lifeline owns the relationship its humans link with
+World ID for Agents, so a partner app it lists gets Lifeline's identifier - the
+`sub` - when that human signs in to it with World, and can ask how they stand
+([`lib/registry.ts`](web/src/lib/registry.ts)).
+
+For a partner app:
+
+1. Lifeline adds you: `npm run registry:add -- --id acme --name "Acme" --callback https://acme.example/auth/world/callback`.
+   You get a key, shown once. Your callback now appears in
+   `https://<lifeline>/.well-known/lifeline-sector.json`.
+2. Your World client names that document as its sector (the sector identifier URI),
+   so World gives you the same `sub` Lifeline has for each human.
+3. A human signs in to you with World. Ask:
+   ```
+   GET https://<lifeline>/api/registry/standing?sub=<sub>
+   Authorization: Bearer <your key>
+   ```
+   ```json
+   { "found": true, "overall": "good", "standing": { "arc": "good", "sui": "good" }, "tier": { "arc": 1, "sui": 1 }, "memberSince": "…" }
+   ```
+   `overall` is `good`, `delinquent` or `defaulted` ([above](#when-a-human-does-not-repay)).
+   Someone who never linked is `{ "found": false }`.
+
+What it does not say: amounts, loans, history, or anything about the other
+apps that asked. It says how the human stands *now* - paying off a default
+clears it. Every lookup is shown to the human on their dashboard ("Who has
+looked you up"), and the join screen says the registry exists. Humans are
+listed once they link World ID, which the dashboard asks every new account to
+do. Partners are managed with `npm run registry:add` locally, or the
+`LIFELINE_REGISTRY_PARTNERS` JSON array on a deployment. `npm run
+registry:lookup -- --key … --sub …` asks as a partner would.
+
+World's documentation of the authorization document is brief; the format here
+- a JSON array of callback URLs served over HTTPS - is OpenID Connect's sector
+identifier document, which is what it describes.
+
 ## Repaying by Apple Pay, Google Pay or card
 
 Arc debt can be repaid three ways, and the repay sheet offers whichever apply:

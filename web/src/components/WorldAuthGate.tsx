@@ -203,6 +203,10 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
                 ? "Welcome back. World ID confirms it is you - no new verification."
                 : "Scan with World App. The same World ID is the same account here and in Lifeline's World App version."}
             </div>
+            <div className="mt-2 mono text-[10.5px] ink-3 leading-relaxed max-w-[48ch]">
+              Lifeline is also a repayment registry: World apps that partner with it can see whether you repay - good, late or in
+              default. Never amounts, never history, and you can see who asked.
+            </div>
             {!pairing && (
               <button onClick={() => setPairing(true)} className="mt-2 mono text-[10.5px] ink-3 underline underline-offset-2">
                 {returning ? "Someone else? Sign in from World App" : "Already joined? Sign in from World App"}

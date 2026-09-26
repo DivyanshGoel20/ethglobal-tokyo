@@ -144,6 +144,12 @@ const key = (h: string) => h.toLowerCase();
 
 export const boundIdentity = (human: string) => read().bindings[key(human)] ?? null;
 
+/** The Lifeline human a World ID for Agents subject is linked to, if any. */
+export function humanForSubject(sub: string): { human: string; iss: string; linkedAt: number } | null {
+  const hit = Object.entries(read().bindings).find(([, b]) => b.sub === sub);
+  return hit ? { human: hit[0], iss: hit[1].iss, linkedAt: hit[1].linkedAt } : null;
+}
+
 /**
  * Bind a World ID for Agents subject to the signed-in Lifeline human, once.
  * Never silently moved: not to a second human, not replaced by another subject.
