@@ -52,12 +52,7 @@ export function Dashboard({ rail }: { rail: Rail }) {
 
   return (
     <div className="min-h-screen">
-      <Header
-        rail={L.rail}
-        nullifierHash={L.nullifierHash}
-        onSignOut={L.handleSignOut}
-        suiReady={L.sui.ready}
-      />
+      <Header onSignOut={L.handleSignOut} />
 
       {L.toast && (
         <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 sheet rise px-4 py-3 sm:max-w-sm flex items-center gap-3">

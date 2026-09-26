@@ -141,12 +141,11 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="max-w-[1180px] w-full mx-auto px-6 sm:px-10 h-16 flex items-center justify-between">
+      <header className="max-w-[1180px] w-full mx-auto px-6 sm:px-10 h-16 flex items-center">
         <div className="flex items-center gap-2.5">
           <LifelineMark size={18} />
           <span className="serif text-[25px] leading-none tracking-tight">Lifeline</span>
         </div>
-        <span className="lab">Arc · Sui · World ID</span>
       </header>
 
       <main className="flex-1 flex flex-col justify-center">
