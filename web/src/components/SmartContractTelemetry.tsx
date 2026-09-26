@@ -88,7 +88,7 @@ export const SmartContractTelemetry: React.FC<SmartContractTelemetryProps> = ({
     return () => clearInterval(interval);
   }, [isOpen, humanOwner]);
 
-  const contractAddress = data?.contract?.address || "0x43bC32b6D54be323b9072494Efb8E8e073E642C4";
+  const contractAddress = data?.contract?.address || "0xe382723bE95cB5c8801270a03Da17Bf4c27F320f";
   const latestBlock = data?.network?.latestBlock || 0;
 
   return (

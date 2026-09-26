@@ -16,7 +16,7 @@ export const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.n
 export const ARC_TESTNET_NAME = "Arc Testnet";
 export const FLOAT_CREDIT_FACILITY_ADDRESS = (process.env.FLOAT_CREDIT_FACILITY_ADDRESS ||
   process.env.NEXT_PUBLIC_FLOAT_CREDIT_FACILITY_ADDRESS ||
-  "0x43bC32b6D54be323b9072494Efb8E8e073E642C4") as `0x${string}`;
+  "0xe382723bE95cB5c8801270a03Da17Bf4c27F320f") as `0x${string}`;
 export const ARC_USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ||
   "0x3600000000000000000000000000000000000000") as `0x${string}`;
 

@@ -1,64 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requirePayment } from "@/lib/x402Gateway";
 
-
-const SELLER_WALLET = process.env.SELLER_WALLET_ADDRESS || "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf";
-const PRICE_MICRO = "10000";
-const PRICE_FORMATTED = "0.01 USDC";
+const PRICE_USD = 0.01;
 const TITLE = "Alpha Signal Intelligence";
 
 export async function GET(req: NextRequest) {
-  // Check for Payment-Signature header sent by FloatSigner / x402 client
-  const paymentSig = req.headers.get("payment-signature");
+  const gate = await requirePayment(req, PRICE_USD, TITLE);
+  if ("response" in gate) return gate.response;
+  const { settled } = gate;
 
-  if (!paymentSig) {
-    // Return HTTP 402 Payment Required with x402 specification
-    const paymentRequired = {
-      x402Version: 2,
-      resource: "/api/paid/signal",
-      accepts: [
-        {
-          scheme: "circleGateway",
-          network: "arcTestnet",
-          chainId: 5042002,
-          payTo: SELLER_WALLET,
-          amount: PRICE_MICRO,
-          currency: "USDC",
-          description: TITLE,
-        },
-      ],
-    };
-
-    const base64Header = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
-
-    return new NextResponse(JSON.stringify(paymentRequired), {
-      status: 402,
-      headers: {
-        "Content-Type": "application/json",
-        "PAYMENT-REQUIRED": base64Header,
-        "WWW-Authenticate": "x402 version=2, scheme=circleGateway",
-      },
-    });
-  }
-
-  // Parse payment signature
-  let payer = "0xAgent";
-  let transactionId = "tx_" + Date.now();
-  try {
-    const parsed = JSON.parse(Buffer.from(paymentSig, "base64").toString("utf-8"));
-    if (parsed.signer || parsed.payer || parsed.from) {
-      payer = parsed.signer || parsed.payer || parsed.from;
-    }
-  } catch {}
-
-  const settleResponse = Buffer.from(
-    JSON.stringify({
-      transaction: transactionId,
-      status: "SETTLED",
-      network: "arcTestnet",
-    })
-  ).toString("base64");
-
-  
   return NextResponse.json(
     {
       success: true,
@@ -73,17 +23,12 @@ export async function GET(req: NextRequest) {
         timestamp: Date.now(),
       },
       payment: {
-        payer,
-        amount: PRICE_FORMATTED,
-        network: "Arc Testnet (5042002)",
-        verified: true,
+        payer: settled.payer,
+        amount: `${PRICE_USD.toFixed(2)} USDC`,
+        network: settled.network,
+        transaction: settled.transaction,
       },
     },
-    {
-      headers: {
-        "PAYMENT-RESPONSE": settleResponse,
-      },
-    }
+    { headers: { "PAYMENT-RESPONSE": settled.header } }
   );
-  
 }

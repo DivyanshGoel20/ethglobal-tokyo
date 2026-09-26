@@ -29,6 +29,15 @@ const gateway = createGatewayMiddleware({
   facilitatorUrl: FACILITATOR_URL,
 });
 
+app.get("/", (_req, res) => {
+  res.json({
+    service: "Float Premium API",
+    rail: "arc",
+    settlement: "x402 via Circle Gateway",
+    paid: ["/premium-data", "/risk-curve", "/dossier"],
+  });
+});
+
 app.get(
   "/premium-data",
   gateway.require("$0.01"),

@@ -13,6 +13,7 @@ import { FLOAT_CREDIT_FACILITY_ADDRESS, ARC_TESTNET_CHAIN_ID, ARC_RPC_URL } from
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { depositToAgentGateway } from "./disburse";
 import { refHash } from "./paymentRef";
+import { ARC_TREASURY } from "./browserChain";
 
 export const arcTestnetChain = defineChain({
   id: ARC_TESTNET_CHAIN_ID,
@@ -539,10 +540,17 @@ export async function executeOnChainRepayment(params: {
   payerAddress: string;
   agentAddress: string;
   amountUsdc: number;
+  /**
+   * The funds already moved - a browser wallet paid the treasury and the route
+   * verified the receipt. Only the ledger entry is left to write. Skipping the
+   * whole call in that case, as the route used to, cleared the debt off-chain
+   * while the facility went on reporting it.
+   */
+  alreadyTransferred?: `0x${string}`;
 }): Promise<{ txHash: `0x${string}`; transferTxHash?: string; blockNumber: number }> {
   // 1. If payer is an autonomous agent with a stored private key, transfer real USDC on Arc Testnet
-  let transferTxHash: string | undefined = undefined;
-  const agentKey = getAgentPrivateKey(params.payerAddress);
+  let transferTxHash: string | undefined = params.alreadyTransferred;
+  const agentKey = params.alreadyTransferred ? null : getAgentPrivateKey(params.payerAddress);
 
   if (agentKey) {
     const allowed = authorizeAgentSpend(params.payerAddress, params.amountUsdc);
@@ -559,9 +567,9 @@ export async function executeOnChainRepayment(params: {
         transport: getArcTransport(),
       });
 
-      // Facility recipient (funding operator wallet)
-      const facilityRecipient = (process.env.HUMAN_OWNER ||
-        "0x5233E4253bC38e8CF517c0768dbC8aCC886F32B3") as `0x${string}`;
+      // The same treasury a browser repayment is checked against, so both
+      // ways of repaying land in one place.
+      const facilityRecipient = ARC_TREASURY;
 
       console.log(`[Repayment] Executing real on-chain transfer of ${params.amountUsdc} USDC from agent ${agentAccount.address} to facility ${facilityRecipient} on Arc Testnet...`);
 
@@ -774,8 +782,11 @@ export async function ensureHumanProfileOnChain(
 
     return { profileId };
   } catch (err: any) {
-    console.warn("[OnChainProfile] Provision notice:", err.message);
-    return { profileId };
+    // Rethrown, not swallowed: the verify route reports profileProvisioned to
+    // the dashboard, and a failure logged here and returned as success made
+    // that flag true no matter what the chain said.
+    console.warn("[OnChainProfile] Provisioning failed:", err.message);
+    throw err;
   }
 }
 

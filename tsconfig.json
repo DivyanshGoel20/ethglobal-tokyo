@@ -10,5 +10,8 @@
     "noEmit": true,
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", "**/node_modules", "**/dist", "float"]
+  // web/ owns its own config; this covers what runs through tsx, which
+  // transpiles without checking.
+  "include": ["premium-api/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "**/node_modules", "**/dist"]
 }

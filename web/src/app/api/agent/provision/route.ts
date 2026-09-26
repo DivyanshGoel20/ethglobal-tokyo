@@ -53,10 +53,19 @@ export async function POST(req: NextRequest) {
     registeredAt: Date.now(),
   });
 
-  // Sync to on-chain Arc FloatCreditFacility contract
-  syncAgentToContractOnChain(wallet.address, human).catch((err) => {
-    console.warn("[Provision] On-chain sync notice:", err.message);
-  });
+  // Awaited: the agent is handed back ready to spend, and a drawdown the
+  // moment provisioning returns used to race an authorisation still in flight
+  // and be refused by the facility.
+  let authorizedOnChain = true;
+  let authorizationError: string | undefined;
+  try {
+    authorizedOnChain = !!(await syncAgentToContractOnChain(wallet.address, human));
+    if (!authorizedOnChain) authorizationError = "Arc Testnet authorization did not complete.";
+  } catch (err: any) {
+    authorizedOnChain = false;
+    authorizationError = err?.message || String(err);
+    console.warn("[Provision] On-chain authorization failed:", authorizationError);
+  }
 
   const { token, grant } = mintAgentToken(human, {
     capUsd,
@@ -72,6 +81,8 @@ export async function POST(req: NextRequest) {
       label,
       network: "Arc Testnet (5042002)",
     },
+    authorizedOnChain,
+    ...(authorizationError ? { authorizationError } : {}),
     grant,
     token,
     notice:

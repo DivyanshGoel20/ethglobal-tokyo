@@ -14,6 +14,7 @@ import {
 import { processRepayment, getLoansByAgent } from "@/lib/loanStore";
 import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, FLOAT_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
 import { executeOnChainRepayment, verifyArcRepayment } from "@/lib/facilityContract";
+import { claimReceipt, releaseReceipt } from "@/lib/receiptStore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -140,17 +141,32 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      if (!claimReceipt(arcTxHash, payingAgent.humanOwner)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "That transfer has already been counted as a repayment.",
+            code: "receipt_reused",
+          },
+          { status: 409 }
+        );
+      }
     }
 
-    if (!arcTxHash) {
+    try {
       const onChainRepay = await executeOnChainRepayment({
         humanOwner: payingAgent.humanOwner,
         payerAddress: payingAgent.address,
         agentAddress: beneficiaryAddress,
         amountUsdc: effectiveRepayAmount,
+        alreadyTransferred: arcTxHash as `0x${string}` | undefined,
       });
-      arcTxHash = onChainRepay.txHash;
       transferTxHash = onChainRepay.transferTxHash;
+      arcTxHash = onChainRepay.txHash;
+    } catch (err) {
+      // The receipt was not spent after all; let it be presented again.
+      if (txHash) releaseReceipt(txHash);
+      throw err;
     }
 
     // 5. Process Repayment against Loan Ledger (FIFO: oldest loan first, interest then principal)

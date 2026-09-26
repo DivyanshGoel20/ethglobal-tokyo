@@ -3,14 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "web"
+    "web",
+    "premium-api"
   ],
   "scripts": {
     "dev": "npm --workspace=web run dev",
     "build": "npm --workspace=web run build",
     "start": "npm --workspace=web run start",
     "lint": "npm --workspace=web run lint",
-    "premium": "tsx premium-api/server.ts"
+    "test": "npm run test:contracts && npm --workspace=web run test",
+    "test:contracts": "cd contracts && forge test",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json",
+    "premium": "tsx --env-file-if-exists=.env premium-api/server.ts",
+    "deposit": "tsx --env-file-if-exists=.env scripts/deposit-gateway.ts",
+    "balances": "tsx --env-file-if-exists=.env scripts/check-all-balances.ts",
+    "deploy:arc": "cd contracts && forge script script/DeployArc.s.sol --rpc-url arc_testnet --broadcast",
+    "e2e:arc": "npm --workspace=web run e2e:arc"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
