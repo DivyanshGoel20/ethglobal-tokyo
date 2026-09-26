@@ -163,7 +163,7 @@ export const Monitor: React.FC<MonitorProps> = ({
                     <button
                       onClick={() => act(`pay-${a.address}`, () => onPayAgent(a.address))}
                       disabled={!!busy}
-                      title="Test networks: a customer pays this agent $0.10 in demo dollars"
+                      title="Test networks: a customer pays this agent $0.10 in testnet USDC"
                       className="btn btn-quiet h-7"
                     >
                       {busy === `pay-${a.address}` ? "paying…" : "+$0.10"}

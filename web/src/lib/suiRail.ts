@@ -3,7 +3,7 @@ import {
   deployment,
   facilityLiquidity,
   fromUnits,
-  mintDemoDollars,
+  payOut,
   network,
   operatorKeypair,
   paySui,
@@ -301,16 +301,17 @@ export async function reconcileSui(human?: string) {
 }
 
 /**
- * Test networks only: pay an agent in demo dollars, standing in for a customer
+ * Test networks only: pay an agent in testnet USDC, standing in for a customer
  * paying it for its work. The only way an agent here earns what it repays.
  */
 export async function payAgentForWork(agentAddress: string, usd: number) {
   const d = deployment();
-  if (!d?.faucetId || network() === "mainnet") {
-    throw new Error("Demo dollars exist only on a test network with the demo coin");
+  if (!d || network() === "mainnet") {
+    throw new Error("Paying an agent for its work is a test-network stand-in for a real customer");
   }
   const to = suiAddressFor(agentAddress);
   if (!to) throw new Error("Lifeline holds no key for this agent, so it has no Sui address");
-  const r = await mintDemoDollars(operatorKeypair(), to, toUnits(usd));
+  // Testnet USDC from the operator (or demo dollars, on a demo-coin facility).
+  const r = await payOut(operatorKeypair(), to, toUnits(usd));
   return { to, digest: r.digest, link: suiExplorer("tx", r.digest) };
 }

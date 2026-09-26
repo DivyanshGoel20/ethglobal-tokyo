@@ -218,6 +218,20 @@ export async function mintDemoDollars(sender: Keypair, to: string, units: bigint
   return execute(tx, sender);
 }
 
+/**
+ * Send `units` of the facility's coin to `to`. Where the facility lends the
+ * demo coin it is minted; where it lends a real coin (Circle's USDC on
+ * testnet) it comes out of the sender's own balance.
+ */
+export async function payOut(sender: Keypair, to: string, units: bigint) {
+  const d = requireDeployment();
+  if (d.faucetId) return mintDemoDollars(sender, to, units);
+  const tx = new Transaction();
+  tx.setSender(sender.toSuiAddress());
+  tx.transferObjects([coinWithBalance({ type: d.coinType, balance: units })], tx.pure.address(to));
+  return execute(tx, sender);
+}
+
 // === Agent (signs, Lifeline sponsors gas) ===
 
 export async function openPurse(agent: Keypair, sponsor: Keypair, profileId: string): Promise<string> {

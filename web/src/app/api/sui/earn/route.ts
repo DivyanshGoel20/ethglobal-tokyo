@@ -4,7 +4,7 @@ import { requireOwnedAgent } from "@/lib/session";
 import { payAgentForWork } from "@/lib/suiRail";
 
 /**
- * Test networks only: pay an agent in demo dollars.
+ * Test networks only: pay an agent in testnet USDC.
  *
  * A closed demo has no customers, so this stands in for one paying the agent
  * for its work - which is the only way an agent here ends up holding what it

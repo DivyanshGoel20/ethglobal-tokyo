@@ -24,7 +24,7 @@ import {
   depositToPurse,
   encodeHeader,
   fromUnits,
-  mintDemoDollars,
+  payOut,
   operatorKeypair,
   paySui,
   paymentPayload,
@@ -71,7 +71,7 @@ async function main() {
 
   // --- An agent that can afford it pays for itself and owes nothing.
   const rich = newAgentKey();
-  await mintDemoDollars(operator, agentKeypair(rich).toSuiAddress(), toUnits(1));
+  await payOut(operator, agentKeypair(rich).toSuiAddress(), toUnits(1));
   const own = await paySui(`${FEED}/risk?records=2`, ctx(rich));
   check("an agent with coins pays for itself", own.fundingSource === "AGENT_WALLET" && own.borrowed === "0.000000", `paid ${own.amount} tx ${own.digest}`);
 
@@ -128,7 +128,7 @@ async function main() {
   }
 
   // --- The earner is paid for its work; the idler is not.
-  await mintDemoDollars(operator, operator.toSuiAddress(), toUnits(0.05));
+  await payOut(operator, operator.toSuiAddress(), toUnits(0.05));
   await depositToPurse(operator, earner.purseId!, toUnits(0.05));
   const purse = await readPurse(earner.purseId!);
   check("earnings land in the earner's purse, pledged to its debt", purse.balance === toUnits(0.05) && purse.pledged === toUnits(0.02), `balance ${fromUnits(purse.balance)} pledged ${fromUnits(purse.pledged)}`);
@@ -164,7 +164,7 @@ async function main() {
   check("only the defaulted debt still counts against the line", after?.outstandingDebt === toUnits(0.01), `owes ${fromUnits(after?.outstandingDebt ?? 0n)}`);
 
   // --- The idler earns later and cures its default.
-  await mintDemoDollars(operator, agentKeypair(idlerKey).toSuiAddress(), toUnits(0.01));
+  await payOut(operator, agentKeypair(idlerKey).toSuiAddress(), toUnits(0.01));
   check("the idler now holds enough to cure", (await walletUnits(agentKeypair(idlerKey).toSuiAddress())) === toUnits(0.01));
   const { settleEarly } = await import("../src");
   await settleEarly(agentKeypair(idlerKey), operator, {

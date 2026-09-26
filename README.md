@@ -55,6 +55,44 @@ on the other rail is refused (`wrong_rail`). The dashboard shows the selected
 rail's agents, and authorising an agent creates it on that rail. The agent
 that borrows is the agent that signs its own repayment.
 
+## Why Sui
+
+Credit for agents fails at one moment: getting paid back. An agent borrows,
+spends, and moves on; the promise to repay "on the 30th" usually needs a keeper
+bot holding a hot key, or a token allowance the agent can revoke the moment the
+goods arrive. On Sui that promise is made of objects instead, and several
+properties of the chain do work that elsewhere needs trusted off-chain parts:
+
+- **Collection without a keeper or an allowance.** The repayment is an
+  `Obligation` - a shared object with its own due date, read against Sui's
+  on-chain `Clock` - holding a claim on the agent's `Purse`. Once it is due,
+  *anyone* can call `obligation::collect`; no capability, no bot, no approval
+  that can be withdrawn. If Lifeline disappeared, a stranger could still
+  collect, and would get the same outcome.
+- **The promise comes before the spending, in the same transaction.** One
+  programmable transaction parks the obligation, draws the credit out of the
+  facility, tops it up from the agent's own coins and pays the x402 seller.
+  It all happens or none of it does: there is no borrowed coin that exists
+  without a dated promise attached.
+- **Money moves where the debt is booked.** `obligation::draw` takes coins out
+  of the `Facility` in the call that records the debt; the ledger and the money
+  cannot disagree.
+- **Earnings are held for the debt.** While a pledge is outstanding, the purse
+  will not release the coins covering it - an object-level rule, not a policy.
+- **Defaults are public facts.** A purse short at the due date writes
+  `RepaymentDefaulted` on chain; the debt keeps consuming the line until it is
+  cured. Nobody has to take the lender's word for it.
+- **Agents need no gas.** Lifeline sponsors every agent transaction natively,
+  so an agent holds only what it earns - on testnet, Circle's USDC for Sui.
+- **Tranches, not rows.** One obligation covers many small payments up to a
+  ceiling and collects only what was drawn, which suits agents that pay a cent
+  at a time.
+
+The Sui line is independent of Arc: its own facility, limit, debt, repayment
+record and agents. It lends Circle's USDC on Sui testnet
+(`0xa1ec…7e29::usdc::USDC`); `npm run sui:open-usdc` opens a USDC facility on
+the published package and funds it from the operator's USDC.
+
 ## On Sui
 
 `sui/lifeline` is `contracts/src/LifelineCreditFacility.sol` in Move, plus the
@@ -322,10 +360,10 @@ host).
 
 ```text
 contracts/      Foundry: LifelineCreditFacility for Arc, tests, deploy scripts
-sui/lifeline/      Move package: facility, obligation, fusd (demo coin), tests
+sui/lifeline/   Move package: facility, obligation, fusd (demo coin for localnet), tests
 sui/src/        @lifeline/sui: Move client, x402 on Sui, the payer, reconcile
 sui/service/    the Sui x402 feed, metered per record
-sui/scripts/    deploy, lifecycle (both endings on chain), reconcile
+sui/scripts/    deploy, open-facility (USDC), lifecycle (both endings on chain), reconcile
 web/            Next.js: dashboard, World ID, agent APIs, both rails
 premium-api/    Arc x402 resources, priced $0.01 / $1 / $5
 scripts/        operator tools: fund Gateway, read balances on both rails
@@ -362,9 +400,20 @@ prints it; on testnet the operator needs about 1 SUI for gas (from
 [faucet.sui.io](https://faucet.sui.io)). For local work, `sui start
 --with-faucet --force-regenesis` and `SUI_NETWORK=localnet`.
 
-The facility is generic over its coin: set `SUI_COIN_TYPE` to Circle's testnet
-USDC to lend the real thing. The demo dollar exists because testnet USDC comes
-from a faucet with a captcha, which no script can pass.
+The facility is generic over its coin, and on testnet Lifeline lends Circle's
+USDC. Get testnet USDC for the operator address at
+[faucet.circle.com](https://faucet.circle.com) ("Sui Testnet" - it has a
+captcha, so a person does this step), then open a USDC facility on the
+published package and fund it:
+
+```bash
+SUI_NETWORK=testnet npm run sui:open-usdc
+```
+
+It keeps $2 of the operator's USDC back to stand in for customers paying agents
+for their work, and writes the new facility to `sui/deployments/testnet.json`
+(the previous one is kept beside it). The demo coin (`fusd`) remains for
+localnet, where there is no USDC.
 
 Then run the pieces you need:
 
