@@ -34,6 +34,40 @@ export interface SuiPaymentPayload {
   payload: { transaction: string; signatures: string[] };
 }
 
+/**
+ * How one x402 purchase happened, step by step, for showing to a person:
+ * the request, the 402 that came back, the quote it carried, what was signed
+ * and by whom, and the seller's settlement receipt. Both rails fill it in.
+ */
+export interface X402Trace {
+  rail: "arc" | "sui";
+  request: { method: string; url: string };
+  challenge: { status: number; x402Version: number; description?: string };
+  quote: {
+    scheme: string;
+    network: string;
+    /** "GatewayWalletBatched (Circle Gateway)" on Arc, "Sui transaction" on Sui. */
+    mechanism: string;
+    asset: string;
+    assetLabel: string;
+    amount: string;
+    amountUsd: number;
+    payTo: string;
+    maxTimeoutSeconds?: number;
+  };
+  payment: {
+    signer: string;
+    signerRole: "agent" | "lifeline";
+    /** One line on what was signed. */
+    summary: string;
+    /** The signed fields, where they are an authorisation rather than a transaction. */
+    authorization?: Record<string, string>;
+    borrowedUsd?: number;
+  };
+  settlement: { status: number; receipt: Record<string, unknown> | null };
+  response: { contentType: string | null };
+}
+
 export const encodeHeader = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64");
 export const decodeHeader = <T>(value: string): T => JSON.parse(Buffer.from(value, "base64").toString("utf8"));
 

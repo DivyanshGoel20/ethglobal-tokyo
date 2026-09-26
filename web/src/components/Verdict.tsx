@@ -34,6 +34,15 @@ const TONE: Record<string, string> = {
   unknown: "var(--ink-3)",
 };
 
+// What each check looked at, in words.
+const SUBJECT: Record<string, string> = {
+  payTo: "payee",
+  payer: "payer",
+  token: "token",
+  authorization: "authorisation",
+  history: "history",
+};
+
 const LABEL: Record<string, string> = {
   pay: "Cleared",
   cap: "Cleared, capped",
@@ -59,10 +68,10 @@ export const Verdict: React.FC<{ verdict: ScreeningVerdict }> = ({ verdict }) =>
         <li key={i}>{r}</li>
       ))}
     </ul>
-    <dl className="grid grid-cols-[96px_1fr] gap-y-1.5 mono text-[10.5px]">
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 mono text-[10.5px]">
       {verdict.checks.map((c, i) => (
         <React.Fragment key={i}>
-          <dt className="ink-3">{c.subject}</dt>
+          <dt className="ink-3 whitespace-nowrap">{SUBJECT[c.subject] ?? c.subject}</dt>
           <dd className="truncate" title={c.summary}>
             <span style={{ color: TONE[c.level] }}>{c.level}</span>
             <span className="ink-3">

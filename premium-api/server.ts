@@ -73,12 +73,23 @@ app.get(
   (req: PaidRequest, res) => {
     const { payer, amount, network } = req.payment!;
 
+    // A small, self-describing result: what was bought is as plain as how.
+    const now = new Date();
     res.json({
       success: true,
+      title: "Alpha signal",
+      artifact: "json",
       message: "Premium data unlocked.",
       data: {
         signal: "DEMO-ALPHA-001",
-        value: 8472,
+        market: "ETH / USDC",
+        direction: "long",
+        confidence: "0.74",
+        horizon: "4h",
+        entry: 3284.5,
+        stop: 3221.0,
+        generatedAt: now.toISOString(),
+        note: "Demo data - not financial advice.",
       },
       payment: {
         payer,

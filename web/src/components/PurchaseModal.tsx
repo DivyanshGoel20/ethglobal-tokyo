@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Agent, Rail } from "@/types";
 import { Sheet, Field, ErrorNote } from "./Sheet";
 import { Verdict } from "./Verdict";
+import { X402Receipt } from "./X402Receipt";
 import { WorldAgentApproval } from "./WorldAgentApproval";
 
 type Resource = { path: string; price: number; title: string; artifact?: string };
@@ -164,7 +165,13 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
   const onCredit = result && (result.fundingSource === "LIFELINE_CREDIT" || result.fundingSource === "LIFELINE_FACILITY" || choice === "direct");
 
   return (
-    <Sheet open={isOpen} onClose={onClose} kicker={rail === "arc" ? "Arc · Circle Gateway" : "Sui · parked repayment"} title="x402 purchase">
+    <Sheet
+      open={isOpen}
+      onClose={onClose}
+      kicker={rail === "arc" ? "Arc · Circle Gateway" : "Sui · parked repayment"}
+      title="x402 purchase"
+      width={result?.x402 ? 580 : 460}
+    >
       {agents.length === 0 ? (
         <p className="serif text-[18px]">Authorize an agent first.</p>
       ) : result && !result.success && result.screening ? (
@@ -257,6 +264,11 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
             )}
           </dl>
           {result.screening && <Verdict verdict={result.screening} />}
+          {result.x402 && (
+            <div className="rule-t pt-4">
+              <X402Receipt trace={result.x402} data={result.data} settlementLink={result.explorer ?? null} />
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <button onClick={() => setResult(null)} className="btn btn-quiet">
               Buy another

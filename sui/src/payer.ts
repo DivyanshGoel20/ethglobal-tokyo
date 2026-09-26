@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import type { X402Trace } from "./x402";
 import { agentKeypair, operatorKeypair, suiClient } from "./client";
 import { fromUnits, requireDeployment, termMs, toUnits, trancheCeilingUsd } from "./config";
 import {
@@ -61,6 +62,8 @@ export interface SuiPayResult {
   dueMs?: number;
   parkedDigest?: string;
   data: unknown;
+  /** How it happened, step by step. */
+  x402?: X402Trace;
 }
 
 /** Which purse and obligations belong to which agent, so tranches are reused. */
@@ -250,6 +253,9 @@ export async function paySui(
 
   const receipt = paid.headers.get("payment-response");
   const settled = receipt ? decodeHeader<{ transaction?: string }>(receipt) : {};
+  const firstQuote = decodeHeader<{ x402Version?: number; resource?: { description?: string } }>(
+    first.headers.get("payment-required")!
+  );
 
   // The seller executed it, in another process. Until this node has indexed
   // that, the sponsor's gas coin still reads at its old version, and the next
@@ -272,5 +278,31 @@ export async function paySui(
     dueMs: credit?.dueMs,
     parkedDigest: credit?.parkedDigest,
     data: await paid.json().catch(() => null),
+    x402: {
+      rail: "sui",
+      request: { method, url },
+      challenge: { status: 402, x402Version: firstQuote.x402Version ?? 2, description: firstQuote.resource?.description },
+      quote: {
+        scheme: quote.scheme,
+        network: quote.network,
+        mechanism: "Sui transaction, submitted by the seller",
+        asset: quote.asset,
+        assetLabel: quote.asset.split("::").pop() ?? quote.asset,
+        amount: quote.amount,
+        amountUsd: fromUnits(price),
+        payTo: quote.payTo,
+        maxTimeoutSeconds: quote.maxTimeoutSeconds,
+      },
+      payment: {
+        signer: agentAddr,
+        signerRole: "agent",
+        summary: credit
+          ? `The agent signed one transaction that draws ${fromUnits(drawUnits).toFixed(6)} from Lifeline's facility against its parked repayment, adds ${fromUnits(ownUnits).toFixed(6)} of its own, and pays the seller; Lifeline sponsored the gas.`
+          : "The agent signed a transaction paying the seller from its own coins; Lifeline sponsored the gas.",
+        borrowedUsd: fromUnits(drawUnits),
+      },
+      settlement: { status: paid.status, receipt: settled as Record<string, unknown> },
+      response: { contentType: paid.headers.get("content-type") },
+    },
   };
 }

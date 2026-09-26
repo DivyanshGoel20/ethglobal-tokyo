@@ -16,6 +16,7 @@ import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { screenOutgoing, verdictLine, Verdict } from "./intercepta";
 import { createHold } from "./holdStore";
 import { withFirstPayeeRule } from "./payeePolicy";
+import type { X402Trace } from "@lifeline/sui";
 import { acquireLedgerLock, syncAgentDebts } from "./ledgerLock";
 
 // What Circle's BatchEvmScheme signs, reproduced so the authorisation
@@ -58,6 +59,8 @@ export interface AgentPaymentContext {
 
 export interface LifelinePayResult {
   success: boolean;
+  /** How the x402 payment happened, step by step. */
+  x402?: X402Trace;
   /** Intercepta's verdict, taken before anything was signed. */
   screening?: Verdict & { approvedByHuman?: boolean };
   /** Set when the verdict sent the payment to the human. */
@@ -305,6 +308,11 @@ export class LifelineSigner {
       }
 
       const data = await paidResponse.json();
+      const x402 = this.trace({
+        method, url, paymentRequired, requirements: batchingOption, payload: paymentPayload,
+        signerRole: "agent", borrowedUsd: 0, status: paidResponse.status, settleResponse,
+        contentType: paidResponse.headers.get("content-type"),
+      });
 
       // Record normal payment record in Lifeline audit ledger
       recordPayment({
@@ -328,6 +336,7 @@ export class LifelineSigner {
       return {
         success: true,
         screening: verdict,
+        x402,
         fundingSource: "AGENT_GATEWAY",
         amount: requestedAmountFormatted,
         borrowed: "0.00",
@@ -509,6 +518,11 @@ export class LifelineSigner {
         }
 
         const data = await paidResponse.json();
+        const x402 = this.trace({
+          method, url, paymentRequired, requirements: batchingOption, payload: fundingPaymentPayload,
+          signerRole: "lifeline", borrowedUsd: shortfallAmount, status: paidResponse.status, settleResponse,
+          contentType: paidResponse.headers.get("content-type"),
+        });
 
         // 5. Record successful payment in audit trail
         recordPayment({
@@ -537,6 +551,7 @@ export class LifelineSigner {
         return {
           success: true,
           screening: verdict,
+          x402,
           fundingSource: "LIFELINE_FACILITY",
           amount: requestedAmountFormatted,
           borrowed: shortfallAmount.toFixed(2),
@@ -558,6 +573,57 @@ export class LifelineSigner {
         releaseLedger();
       }
     }
+  }
+
+  /** The step-by-step account of an Arc x402 purchase, for people to read. */
+  private trace(p: {
+    method: string;
+    url: string;
+    paymentRequired: any;
+    requirements: any;
+    payload: any;
+    signerRole: "agent" | "lifeline";
+    borrowedUsd: number;
+    status: number;
+    settleResponse: any;
+    contentType: string | null;
+  }): X402Trace {
+    const auth = p.payload?.payload?.authorization ?? {};
+    const usd = Number(formatUnits(BigInt(p.requirements.amount), 6));
+    return {
+      rail: "arc",
+      request: { method: p.method, url: p.url },
+      challenge: { status: 402, x402Version: p.paymentRequired.x402Version ?? 2, description: p.paymentRequired.resource?.description },
+      quote: {
+        scheme: p.requirements.scheme,
+        network: p.requirements.network,
+        mechanism: `${p.requirements.extra?.name ?? "exact"} (Circle Gateway)`,
+        asset: p.requirements.asset,
+        assetLabel: String(p.requirements.asset).toLowerCase() === "0x3600000000000000000000000000000000000000" ? "USDC (Arc native)" : "unrecognised token",
+        amount: String(p.requirements.amount),
+        amountUsd: usd,
+        payTo: p.requirements.payTo,
+        maxTimeoutSeconds: p.requirements.maxTimeoutSeconds,
+      },
+      payment: {
+        signer: String(auth.from ?? ""),
+        signerRole: p.signerRole,
+        summary:
+          p.signerRole === "agent"
+            ? "The agent signed an EIP-3009 transfer authorisation from its own Circle Gateway balance to the seller. Nothing moves on chain yet: Gateway batches it."
+            : `The agent was short, so Lifeline signed the authorisation from its own Gateway balance and lent the agent $${p.borrowedUsd.toFixed(2)}. Nothing moves on chain yet: Gateway batches it.`,
+        authorization: {
+          from: String(auth.from ?? ""),
+          to: String(auth.to ?? ""),
+          value: String(auth.value ?? ""),
+          validBefore: auth.validBefore ? new Date(Number(auth.validBefore) * 1000).toISOString() : "",
+          nonce: String(auth.nonce ?? ""),
+        },
+        borrowedUsd: p.borrowedUsd,
+      },
+      settlement: { status: p.status, receipt: p.settleResponse ?? null },
+      response: { contentType: p.contentType },
+    };
   }
 
   /**
