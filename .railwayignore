@@ -1,0 +1,17 @@
+# Railway builds from a clean install, so shipping these wastes the upload and
+# risks baking a local .env or ledger into an image.
+node_modules
+**/node_modules
+.next
+web/.next
+.git
+.env
+*.env
+!deploy/.env.production.example
+web/data/*.json
+sui/data
+contracts/out
+contracts/cache
+contracts/lib
+contracts/broadcast
+sui/lifeline/build

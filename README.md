@@ -447,6 +447,7 @@ web/            Next.js: dashboard, World ID, agent APIs, both rails
 mcp/            the MCP server: Claude Code on a human's line
 premium-api/    Arc x402 resources, priced $0.01 / $1 / $5
 scripts/        operator tools: fund Gateway, read balances on both rails
+deploy/         Railway configs for web, premium and feed; preflight checks
 ```
 
 ## Setup
@@ -562,6 +563,10 @@ by a stranger in
 the idler's default recorded in
 [`Gy9Apwq5…`](https://suiscan.xyz/testnet/tx/Gy9Apwq5Qf7s9giAGNfirnoHTpGFo9VoWZR5owhAwgMt)
 with nothing moved - and `e2e:sui` passes 20/20 through the app.
+
+To host the app itself (web, the Arc seller and the Sui seller on Railway),
+see [`deploy/README.md`](deploy/README.md); `npm run preflight` checks a
+deployment once it is up.
 
 ## Security notes
 
