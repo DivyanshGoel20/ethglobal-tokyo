@@ -179,7 +179,19 @@ app's HTTP API and real transactions.
 |---|---|
 | Arc `FloatCreditFacility` | [`0xe382723bE95cB5c8801270a03Da17Bf4c27F320f`](https://testnet.arcscan.app/address/0xe382723bE95cB5c8801270a03Da17Bf4c27F320f), block 64024661 |
 | Arc USDC | `0x3600000000000000000000000000000000000000` (native, 6-decimal ERC-20 interface) |
-| Sui | `sui/deployments/<network>.json` |
+| Sui devnet package | [`0x541cb6cb…`](https://suiscan.xyz/devnet/object/0x541cb6cb5d690532c7293f946c14ed5e7ce14b1b76d7d1c3dd602586b151b8a4), tx [`62CfDEjQLj…`](https://suiscan.xyz/devnet/tx/62CfDEjQLjjE1vZxMkybk7xkFDgKvSwve1fFfkxRV1zA) |
+| Sui devnet `Facility<FUSD>` | [`0x500c4d32…`](https://suiscan.xyz/devnet/object/0x500c4d325b25d918e1ea9398eb501f88274476b1bc1198ff5ba26b08a05fbbb1), 500 FUSD liquidity |
+| Sui testnet | not yet - the faucet refused scripted requests; `SUI_NETWORK=testnet npm run sui:deploy` once the operator holds ~1 SUI |
+
+Every id is in `sui/deployments/<network>.json`. Devnet is wiped periodically;
+redeploy with `SUI_NETWORK=devnet npm run sui:deploy`.
+
+`sui:lifecycle` passes 18/18 against the devnet deployment: the earner's
+obligation collected by a stranger in
+[`F35jLABa…`](https://suiscan.xyz/devnet/tx/F35jLABacUefSHD28zE9xDoztXkxv6nVfXqAC36RAZoK),
+the idler's default recorded in
+[`BmDdKNva…`](https://suiscan.xyz/devnet/tx/BmDdKNva2i3PGGA35ZjVpPp1d7vCqu72rYzazst8GNkL)
+with nothing moved.
 
 ## Security notes
 

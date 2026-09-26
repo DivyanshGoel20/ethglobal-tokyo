@@ -1,0 +1,11 @@
+{
+  "network": "devnet",
+  "packageId": "0x541cb6cb5d690532c7293f946c14ed5e7ce14b1b76d7d1c3dd602586b151b8a4",
+  "facilityId": "0x500c4d325b25d918e1ea9398eb501f88274476b1bc1198ff5ba26b08a05fbbb1",
+  "adminCapId": "0xb6f7aeb93f4a2a74a6b9cda82d6294ed098f7ebd8d1a6c5f0f8c0e6dc1e3afe4",
+  "coinType": "0x541cb6cb5d690532c7293f946c14ed5e7ce14b1b76d7d1c3dd602586b151b8a4::fusd::FUSD",
+  "faucetId": "0xdf2043bee0425811b8bbabf85bb2dad104daf9211d53d105adfb88021644a27d",
+  "operator": "0x09d34200073a561e0c4530c1112f7eb5a5eb67d9a6d6141a9c1134e13387cf40",
+  "deployedAt": "2026-09-26T02:35:18.495Z",
+  "digest": "62CfDEjQLjjE1vZxMkybk7xkFDgKvSwve1fFfkxRV1zA"
+}
