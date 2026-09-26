@@ -18,7 +18,7 @@ export async function GET() {
     chainId: ARC_TESTNET_CHAIN_ID,
     facilityAddress: FLOAT_CREDIT_FACILITY_ADDRESS,
     method: "POST",
-    description: "Settle outstanding debt on the Float Credit Facility on Arc Testnet. Increases reputation tier upon graduation.",
+    description: "Settle outstanding debt on the the Lifeline facility on Arc Testnet. Increases reputation tier upon graduation.",
     requestSchema: {
       agentAddress: "0x... (EVM Agent Wallet Address)",
       amount: "number (USDC to repay, e.g. 5.0)",

@@ -196,7 +196,7 @@ export function setAgentPrivateKey(
       ok: false,
       error:
         `That key controls ${derived}, not ${target}. ` +
-        "Registering it would make Float sign for a different wallet than the agent.",
+        "Registering it would make Lifeline sign for a different wallet than the agent.",
     };
   }
 
@@ -206,7 +206,7 @@ export function setAgentPrivateKey(
       ok: false,
       error:
         "FLOAT_KEYSTORE_SECRET is not set, so the key cannot be stored encrypted. " +
-        "Set it (16+ characters) and try again, or leave the key blank and let Float sign.",
+        "Set it (16+ characters) and try again, or leave the key blank and let Lifeline sign.",
     };
   }
 

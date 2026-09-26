@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     // Handle test signing of message or structured challenge
     if (action === "sign_message" || message) {
-      const msgToSign = message || `Float autonomous authorization for agent ${agentAddress} at ${new Date().toISOString()}`;
+      const msgToSign = message || `Lifeline autonomous authorization for agent ${agentAddress} at ${new Date().toISOString()}`;
       const signature = await account.signMessage({ message: msgToSign });
 
       return NextResponse.json({

@@ -209,7 +209,7 @@ export async function DELETE(req: NextRequest) {
 
     if (!existing) {
       return NextResponse.json(
-        { error: "Agent not found in Float registry." },
+        { error: "Agent not found in Lifeline registry." },
         { status: 404 }
       );
     }
@@ -234,7 +234,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Agent ${existing.name} disconnected from Float credit facility.`,
+      message: `Agent ${existing.name} disconnected from Lifeline credit facility.`,
     });
   } catch (error: any) {
     console.error("[Agents-API] Delete error:", error);

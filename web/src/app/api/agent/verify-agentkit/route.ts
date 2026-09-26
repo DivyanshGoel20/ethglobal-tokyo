@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const agent = getAgentByAddress(agentAddress);
     if (!agent) {
       return NextResponse.json(
-        { error: `Agent ${agentAddress} not found in Float registry.` },
+        { error: `Agent ${agentAddress} not found in Lifeline registry.` },
         { status: 404 }
       );
     }

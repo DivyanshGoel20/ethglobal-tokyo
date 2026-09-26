@@ -230,7 +230,7 @@ export class FloatSignerTS {
         parseFloat(requestedAmountFormatted)
       );
       if (!allowed.ok) {
-        throw new Error(`Float will not sign for this agent: ${allowed.reason}`);
+        throw new Error(`Lifeline will not sign for this agent: ${allowed.reason}`);
       }
 
       const paymentPayload = await (agentClient as any).batchScheme.createPaymentPayload(
@@ -342,7 +342,7 @@ export class FloatSignerTS {
         });
 
         throw new Error(
-          `Float Credit Facility: Shortfall of $${shortfallAmount.toFixed(
+          `Lifeline: shortfall of $${shortfallAmount.toFixed(
             2
           )} USDC exceeds remaining credit limit ($${effectiveAvailable.toFixed(
             2
@@ -368,7 +368,7 @@ export class FloatSignerTS {
         humanOwner,
         amount: shortfallAmount,
         txHash: "",
-        memo: `Float Overdraft x402 Drawdown for ${url}`,
+        memo: `Lifeline Overdraft x402 Drawdown for ${url}`,
       });
 
       addPending({
@@ -435,7 +435,7 @@ export class FloatSignerTS {
         });
 
         throw new Error(
-          `Float-funded payment failed: ${
+          `Lifeline-funded payment failed: ${
             errJson.error || paidResponse.statusText
           }`
         );
@@ -466,7 +466,7 @@ export class FloatSignerTS {
         status: "SUCCESS",
         timestamp: Date.now(),
         transactionId: settleResponse?.transaction,
-        memo: `Overdraft funded via Float facility ($${shortfallAmount.toFixed(
+        memo: `Overdraft funded via the Lifeline facility ($${shortfallAmount.toFixed(
           2
         )} shortfall)`,
       });

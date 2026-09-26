@@ -53,7 +53,7 @@ const app = express();
 
 app.get("/", (_req, res) => {
   res.json({
-    service: "Float Sui Feed",
+    service: "Lifeline Sui Feed",
     rail: "sui",
     network: x402Network(),
     settlement: "x402 exact scheme, verified and submitted by the seller",
@@ -85,7 +85,7 @@ app.get("/catalogue", (_req, res) => {
 
 app.get("/.well-known/agent", (_req, res) => {
   res.json({
-    service: "Float Sui Feed",
+    service: "Lifeline Sui Feed",
     version: "1.0.0",
     payment: {
       protocol: "x402",
@@ -134,7 +134,7 @@ app.get("/risk", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Float Sui Feed  http://localhost:${PORT}`);
+  console.log(`Lifeline Sui Feed  http://localhost:${PORT}`);
   console.log(`  network  ${x402Network()}`);
   console.log(`  asset    ${deployment.coinType}`);
   console.log(`  payTo    ${PAY_TO}`);

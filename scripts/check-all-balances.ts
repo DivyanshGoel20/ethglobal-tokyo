@@ -17,7 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { GatewayClient } from "@circle-fin/x402-batching/client";
-import { deployment, facilityLiquidity, fromUnits, network, walletUnits } from "@float/sui";
+import { deployment, facilityLiquidity, fromUnits, network, walletUnits } from "@lifeline/sui";
 import { suiAddressFor } from "../web/src/lib/suiRail";
 
 const isEvm = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s);
@@ -25,7 +25,7 @@ const isSui = (s: string) => /^0x[0-9a-fA-F]{64}$/.test(s);
 
 async function suiBalance(address: string): Promise<string> {
   const d = deployment();
-  if (!d) throw new Error(`Float is not deployed on Sui ${network()}`);
+  if (!d) throw new Error(`Lifeline is not deployed on Sui ${network()}`);
   return `${fromUnits(await walletUnits(address)).toFixed(6)} ${d.coinType.split("::").pop()}`;
 }
 
@@ -83,7 +83,7 @@ async function main() {
   const d = deployment();
   console.log(`\nSui ${network()} - coins held outright\n`);
   if (!d) {
-    console.log(`  Float is not deployed on this Sui network.`);
+    console.log(`  Lifeline is not deployed on this Sui network.`);
   } else {
     const liquidity = await facilityLiquidity().catch(() => null);
     console.log(`  ${"facility liquidity".padEnd(22)} ${d.facilityId.padEnd(66)} ${liquidity === null ? "unreadable" : fromUnits(liquidity).toFixed(6)}`);

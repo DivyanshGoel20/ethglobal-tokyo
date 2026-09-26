@@ -87,7 +87,7 @@ export function requireDeployment(): Deployment {
   const d = deployment();
   if (!d) {
     throw new Error(
-      `Float is not deployed on Sui ${network()}. Run \`npm run sui:deploy\` or set SUI_PACKAGE_ID, ` +
+      `Lifeline is not deployed on Sui ${network()}. Run \`npm run sui:deploy\` or set SUI_PACKAGE_ID, ` +
         `SUI_FACILITY_ID, SUI_ADMIN_CAP_ID and SUI_COIN_TYPE.`
     );
   }

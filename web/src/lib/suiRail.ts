@@ -15,7 +15,7 @@ import {
   toUnits,
   walletUnits,
   type SuiPayResult,
-} from "@float/sui";
+} from "@lifeline/sui";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
 import { getHumanFacilityStats } from "./agentStore";
 import { computeProfileId } from "./facilityContract";
@@ -34,7 +34,7 @@ import type { Agent } from "@/types";
 /**
  * Float's Sui rail, as the web app sees it.
  *
- * Policy lives here, mechanism in @float/sui: this module decides whose line is
+ * Policy lives here, mechanism in @lifeline/sui: this module decides whose line is
  * being spent and how much of it, then hands the payer a key and a ceiling.
  * Every draw is written into railDebt against the session human, so Arc and Sui
  * net against one limit.
@@ -62,7 +62,7 @@ export async function suiStatus() {
       network: network(),
       sellerUp: false,
       resources: [],
-      reason: !d ? "Float is not deployed on this Sui network" : "SUI_PRIVATE_KEY is not set",
+      reason: !d ? "Lifeline is not deployed on this Sui network" : "SUI_PRIVATE_KEY is not set",
     };
   }
 
@@ -123,7 +123,7 @@ export async function payOnSui(args: {
   const key = getAgentPrivateKey(args.agent.address);
   if (!key) {
     throw new Error(
-      "Float holds no key for this agent, so it cannot sign on Sui. Provision a new agent, or register this one with its key."
+      "Lifeline holds no key for this agent, so it cannot sign on Sui. Provision a new agent, or register this one with its key."
     );
   }
 
@@ -137,7 +137,7 @@ export async function payOnSui(args: {
     maxCreditUsd,
     approve: (amountUsd) => {
       const allowed = authorizeAgentSpend(args.agent.address, amountUsd);
-      if (!allowed.ok) throw new Error(`Float will not sign for this agent: ${allowed.reason}`);
+      if (!allowed.ok) throw new Error(`Lifeline will not sign for this agent: ${allowed.reason}`);
     },
   });
 
@@ -220,7 +220,7 @@ export async function settleEarlyFor(human: string, obligationId: string) {
   if (!row) throw new Error("No such obligation on your line");
 
   const key = getAgentPrivateKey(row.agentAddress);
-  if (!key) throw new Error("Float holds no key for the agent that owes this");
+  if (!key) throw new Error("Lifeline holds no key for the agent that owes this");
 
   const ob = await readObligation(obligationId);
   if (ob.status === "settled" || ob.status === "closed") {
@@ -291,7 +291,7 @@ export async function payAgentForWork(agentAddress: string, usd: number) {
     throw new Error("Demo dollars exist only on a test network with the demo coin");
   }
   const to = suiAddressFor(agentAddress);
-  if (!to) throw new Error("Float holds no key for this agent, so it has no Sui address");
+  if (!to) throw new Error("Lifeline holds no key for this agent, so it has no Sui address");
   const r = await mintDemoDollars(operatorKeypair(), to, toUnits(usd));
   return { to, digest: r.digest, link: suiExplorer("tx", r.digest) };
 }

@@ -1,12 +1,13 @@
-# Float
+# Lifeline
 
-> An undercollateralised credit line for autonomous agents - on Arc and on Sui.
+> An undercollateralised credit line for autonomous agents - on Arc and on Sui -
+> where every agent's payments read like a heartbeat.
 
 An agent can hold money. Only a human can hold debt.
 
-Float extends a USDC credit line to a human, verified once by World ID, and lets
+Lifeline extends a USDC credit line to a human, verified once by World ID, and lets
 their agents spend against it. When an agent hits a paywall it cannot afford,
-Float pays on its behalf and records what is owed. The agent keeps working; the
+Lifeline pays on its behalf and records what is owed. The agent keeps working; the
 human carries the liability, which is the only way undercollateralised credit
 can work when agents are free to create.
 
@@ -18,7 +19,8 @@ can work when agents are free to create.
 is a Solidity contract; x402 payments settle through Circle Gateway.
 
 **Sui** is a Move chain. The same facility is ported to Move - and the part
-Float's Hedera rail did with scheduled transfers, a repayment parked *before*
+the Hedera rail of Float - the ETHOnline project Lifeline grew out of - did
+with scheduled transfers, a repayment parked *before*
 the money is spent, is rebuilt from Sui objects.
 
 ```
@@ -28,11 +30,11 @@ the money is spent, is rebuilt from Sui objects.
             ▼                          ▼
   ┌───────────────────┐      ┌──────────────────────────┐
   │ Arc testnet       │      │ Sui                      │
-  │ FloatCreditFacility│     │ float::facility          │
-  │ (Solidity)        │      │ float::obligation (Move) │
+  │ FloatCredit-      │      │ float::facility          │
+  │ Facility.sol      │      │ float::obligation (Move) │
   │                   │      │                          │
   │ x402 via Circle   │      │ x402 exact scheme,       │
-  │ Gateway batching  │      │ gas sponsored by Float   │
+  │ Gateway batching  │      │ gas sponsored by Lifeline│
   │                   │      │ repayment parked first,  │
   │                   │      │ collected by anyone      │
   └─────────┬─────────┘      └────────────┬─────────────┘
@@ -53,36 +55,55 @@ that signs its own repayment, on either rail.
 `sui/float` is `contracts/src/FloatCreditFacility.sol` in Move, plus what the
 Hedera rail proved on testnet, rebuilt for a chain with no scheduler.
 
-| Float on Arc / Hedera | Float on Sui |
+| Float on Arc / Hedera | Lifeline on Sui |
 |---|---|
 | `onlyOwner` | `AdminCap` - hold it to underwrite; transfer it to change owner |
 | profiles, limits, agent auth, batched drawdowns, `repayWithToken`, `markDefault`, `withdraw` | `float::facility`, same rules, same exploit tests |
 | drawdown records debt; money moves off-chain via Gateway | `obligation::draw` takes coins out of the facility **in the transaction that books the debt** |
 | HIP-423 schedule: borrower signs a dated transfer before the spend | `obligation::park`: the agent signs a dated claim on its `Purse` before it can draw |
-| consensus executes the schedule unattended | `obligation::collect` is open to anyone once due - no capability, same outcome for a stranger as for Float |
+| consensus executes the schedule unattended | `obligation::collect` is open to anyone once due - no capability, same outcome for a stranger as for Lifeline |
 | empty account at expiry: `INSUFFICIENT_TOKEN_BALANCE`, nothing moves | purse short at the due date: `RepaymentDefaulted`, nothing moves, the debt keeps consuming the line |
 | tranche: one schedule for many payments, **collects the ceiling** | one obligation for many draws, **collects what was drawn** |
 | repay early by deleting the schedule | `obligation::settle`; also cures a default |
-| Blocky402 pays fees | Float's operator sponsors every agent transaction |
+| Blocky402 pays fees | Lifeline's operator sponsors every agent transaction |
 | — | while a pledge is outstanding, the purse will not release the coins covering it |
 
-Sui runs nothing on its own, so collection needs a caller. Float's
+Sui runs nothing on its own, so collection needs a caller. Lifeline's
 reconciliation is that caller (`npm run sui:reconcile` for a cron), but the
-function needs no permission: if Float disappeared, anyone could still collect.
+function needs no permission: if Lifeline disappeared, anyone could still collect.
 
 The pledge lock covers what arrives in the purse. An agent that routes its
 earnings elsewhere can still leave its purse short - the same honest limit as a
 Hedera account that is emptied before its schedule runs, and it ends the same
 way: a default anyone can read on chain.
 
+## Reading the monitor
+
+The dashboard is an instrument, not a report. Each agent is a **lead**; each
+x402 payment it makes is a **beat**, placed when it settled, its height the
+amount on a log scale. A beat drawn in ink the agent paid for itself; a beat in
+red Lifeline lent for. Between payments the line is flat, and an agent that has
+never bought anything flatlines. A Sui repayment that fell due and collected
+nothing is drawn as **fibrillation** at its due date.
+
+The two rails are two instruments. **Arc** is the printed strip: warm chart
+paper with a millimetre grid, ink, the pen resting at "now". **Sui** is the
+bedside monitor: the same strip after dark, the trace lit, an erase bar
+sweeping it - because Sui's argument is a repayment that waits on chain for its
+date with nobody watching.
+
+Type is Newsreader for words, Martian Mono for every figure, Hanken Grotesk for
+the rest. Red is reserved for money that was lent; nothing else on the page is
+that colour.
+
 ## The payment flow
 
 1. An agent requests a metered resource and gets `402` with the requirements in
    `PAYMENT-REQUIRED`: amount, asset, `payTo`, network.
 2. Its own balance is read. Enough, and it pays for itself and owes nothing.
-3. Short, and Float checks the human's remaining headroom across both rails,
+3. Short, and Lifeline checks the human's remaining headroom across both rails,
    and any mandate cap. Over it, the request is refused before anything moves.
-4. **Arc:** the drawdown is booked (batched on chain) and Float's Gateway
+4. **Arc:** the drawdown is booked (batched on chain) and Lifeline's Gateway
    balance settles with the seller.
    **Sui:** if the agent has no open obligation with room, it parks one first.
    Then one sponsored transaction draws the shortfall, tops it up from the
@@ -95,7 +116,7 @@ way: a default anyone can read on chain.
 ```text
 contracts/      Foundry: FloatCreditFacility for Arc, tests, deploy scripts
 sui/float/      Move package: facility, obligation, fusd (demo coin), tests
-sui/src/        @float/sui: Move client, x402 on Sui, the payer, reconcile
+sui/src/        @lifeline/sui: Move client, x402 on Sui, the payer, reconcile
 sui/service/    the Sui x402 feed, metered per record
 sui/scripts/    deploy, lifecycle (both endings on chain), reconcile
 web/            Next.js: dashboard, World ID, agent APIs, both rails
@@ -117,7 +138,7 @@ already deployed for this repo or deploy your own:
 
 ```bash
 npm run deploy:arc            # writes the address to stdout
-npm run deposit               # fund Float's Circle Gateway balance
+npm run deposit               # fund Lifeline's Circle Gateway balance
 ```
 
 **Sui.** Needs the [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install)

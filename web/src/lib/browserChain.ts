@@ -62,7 +62,7 @@ export async function ensureArcNetwork(ethereum: Eip1193): Promise<void> {
   if (typeof after !== "string" || after.toLowerCase() !== ARC_CHAIN_ID_HEX) {
     throw new Error(
       `Your wallet is still on chain ${after}. Switch it to ${ARC_TESTNET_NAME} to settle — ` +
-        `sending on another chain would move real funds Float cannot see.`
+        `sending on another chain would move real funds Lifeline cannot see.`
     );
   }
 }

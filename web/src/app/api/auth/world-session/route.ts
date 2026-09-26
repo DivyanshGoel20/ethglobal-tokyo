@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         verified: false,
-        error: "This World ID session is not linked to a Float account. Sign up again from here.",
+        error: "This World ID session is not linked to a Lifeline account. Sign up again from here.",
         code: "unknown_session",
       },
       { status: 404 }

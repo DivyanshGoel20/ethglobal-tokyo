@@ -298,7 +298,7 @@ export async function verifyArcRepayment(params: {
       ok: false,
       reason:
         "That transaction is not on Arc. A wallet on another network produces a " +
-        "real hash for a transfer Float never receives.",
+        "real hash for a transfer Lifeline never receives.",
     };
   }
   if (!tx) return { ok: false, reason: "No such transaction on Arc." };
@@ -311,7 +311,7 @@ export async function verifyArcRepayment(params: {
   }
 
   if ((tx.to || "").toLowerCase() !== params.expectedTo.toLowerCase()) {
-    return { ok: false, reason: `That transaction paid ${tx.to}, not Float's treasury.` };
+    return { ok: false, reason: `That transaction paid ${tx.to}, not Lifeline's treasury.` };
   }
 
   // Native USDC on Arc is 18-decimal, which is what the wallet sent.
@@ -555,7 +555,7 @@ export async function executeOnChainRepayment(params: {
   if (agentKey) {
     const allowed = authorizeAgentSpend(params.payerAddress, params.amountUsdc);
     if (!allowed.ok) {
-      throw new Error(`Float will not move funds from this agent: ${allowed.reason}`);
+      throw new Error(`Lifeline will not move funds from this agent: ${allowed.reason}`);
     }
 
     try {

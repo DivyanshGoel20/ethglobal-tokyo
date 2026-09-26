@@ -31,7 +31,7 @@ const gateway = createGatewayMiddleware({
 
 app.get("/", (_req, res) => {
   res.json({
-    service: "Float Premium API",
+    service: "Lifeline Premium API",
     rail: "arc",
     settlement: "x402 via Circle Gateway",
     paid: ["/premium-data", "/risk-curve", "/dossier"],
@@ -121,5 +121,5 @@ app.get("/catalogue", (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Float Premium API running on http://localhost:${PORT}`);
+  console.log(`Lifeline Premium API running on http://localhost:${PORT}`);
 });

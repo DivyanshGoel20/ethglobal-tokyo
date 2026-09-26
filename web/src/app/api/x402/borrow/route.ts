@@ -18,7 +18,7 @@ export async function GET() {
     chainId: ARC_TESTNET_CHAIN_ID,
     facilityAddress: FLOAT_CREDIT_FACILITY_ADDRESS,
     method: "POST",
-    description: "Draw USDC against the Float Credit Facility on Arc Testnet. Underwritten by verified human World ID.",
+    description: "Draw USDC against the the Lifeline facility on Arc Testnet. Underwritten by verified human World ID.",
     requestSchema: {
       agentAddress: "0x... (EVM Agent Wallet Address)",
       amount: "number (USDC to draw, e.g. 5.0)",

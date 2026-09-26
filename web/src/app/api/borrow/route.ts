@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Agent ${agentAddress} is not registered with Float credit facility. Please add the agent first.`,
+          error: `Agent ${agentAddress} is not registered with Lifeline credit facility. Please add the agent first.`,
         },
         { status: 404 }
       );

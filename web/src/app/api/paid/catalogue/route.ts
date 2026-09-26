@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   return NextResponse.json({
     network: "Arc Testnet (5042002)",
-    settlement: "Circle Gateway / Float Overdraft Facility",
+    settlement: "Circle Gateway / Lifeline overdraft",
     resources: [
       {
         path: "/api/paid/signal",

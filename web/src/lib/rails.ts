@@ -19,7 +19,7 @@ export const RAIL_FACTS: Record<
     network: "Arc testnet (Chain 5042002)",
     facilitator: "Circle Gateway",
     mechanism: "batched settlement",
-    resource: "Float Premium API",
+    resource: "Lifeline Premium API",
   },
   sui: {
     network: "Sui testnet",

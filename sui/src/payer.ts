@@ -194,10 +194,10 @@ export async function paySui(
   const quote = suiRequirementsFrom(first.headers.get("payment-required"));
   if (!quote) throw new Error("The resource does not accept payment on Sui");
   if (quote.network !== `sui:${d.network}`) {
-    throw new Error(`The resource wants ${quote.network}; Float is on sui:${d.network}`);
+    throw new Error(`The resource wants ${quote.network}; Lifeline is on sui:${d.network}`);
   }
   if (quote.asset !== d.coinType) {
-    throw new Error(`The resource wants ${quote.asset}; Float's facility lends ${d.coinType}`);
+    throw new Error(`The resource wants ${quote.asset}; Lifeline's facility lends ${d.coinType}`);
   }
 
   const price = BigInt(quote.amount);
@@ -218,7 +218,7 @@ export async function paySui(
     ownUnits = own;
     if (fromUnits(drawUnits) > ctx.maxCreditUsd + 1e-9) {
       throw new Error(
-        `Float Credit Facility: shortfall of ${fromUnits(drawUnits).toFixed(6)} exceeds the ` +
+        `Lifeline: shortfall of ${fromUnits(drawUnits).toFixed(6)} exceeds the ` +
           `${ctx.maxCreditUsd.toFixed(6)} of credit available to this agent`
       );
     }

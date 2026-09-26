@@ -21,7 +21,7 @@ export function suiClient(): SuiGrpcClient {
  */
 export function operatorKeypair(): Keypair {
   const raw = process.env.SUI_PRIVATE_KEY;
-  if (!raw) throw new Error("SUI_PRIVATE_KEY is not set - Float has no operator on Sui");
+  if (!raw) throw new Error("SUI_PRIVATE_KEY is not set - Lifeline has no operator on Sui");
   return keypairFromSecret(raw);
 }
 

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Paying agent ${agentAddress} is not registered in Float registry.`,
+          error: `Paying agent ${agentAddress} is not registered in Lifeline registry.`,
         },
         { status: 404 }
       );

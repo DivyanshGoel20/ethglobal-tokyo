@@ -150,7 +150,7 @@ export function resolveSpender(
   if (!agent) {
     return {
       error: NextResponse.json(
-        { error: "No such agent in the Float registry.", code: "unknown_agent" },
+        { error: "No such agent in the Lifeline registry.", code: "unknown_agent" },
         { status: 404 }
       ),
     };
@@ -209,7 +209,7 @@ export function resolveAgentReader(
   if (!agent) {
     return {
       error: NextResponse.json(
-        { error: "No such agent in the Float registry.", code: "unknown_agent" },
+        { error: "No such agent in the Lifeline registry.", code: "unknown_agent" },
         { status: 404 }
       ),
     };

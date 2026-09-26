@@ -73,7 +73,7 @@ function compile(): { modules: string[]; dependencies: string[] } {
 
 async function main() {
   const n = network();
-  console.log(`\nDeploying Float to Sui ${n}\n`);
+  console.log(`\nDeploying Lifeline to Sui ${n}\n`);
 
   const kp = await operator();
   const owner = kp.toSuiAddress();
