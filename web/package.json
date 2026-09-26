@@ -12,7 +12,8 @@
     "e2e:sui": "tsx --env-file-if-exists=../.env test/e2e/sui.e2e.ts",
     "e2e:arc-edges": "tsx --env-file-if-exists=../.env test/e2e/arc-edges.e2e.ts",
     "e2e:intercepta": "tsx --env-file-if-exists=../.env test/e2e/intercepta.e2e.ts",
-    "e2e:card": "tsx --env-file-if-exists=../.env test/e2e/card.e2e.ts"
+    "e2e:card": "tsx --env-file-if-exists=../.env test/e2e/card.e2e.ts",
+    "e2e:world-agents": "tsx --env-file-if-exists=../.env test/e2e/world-agents.e2e.ts"
   },
   "dependencies": {
     "@circle-fin/x402-batching": "^3.5.0",
@@ -25,6 +26,7 @@
     "@worldcoin/minikit-js": "^2.0.3",
     "@worldcoin/minikit-react": "^2.0.3",
     "clsx": "^2.1.1",
+    "jose": "^6.2.12",
     "lucide-react": "^0.453.0",
     "next": "^14.2.15",
     "qrcode": "^1.5.4",

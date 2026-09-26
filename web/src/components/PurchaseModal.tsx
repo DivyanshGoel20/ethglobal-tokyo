@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Agent, Rail } from "@/types";
 import { Sheet, Field, ErrorNote } from "./Sheet";
 import { Verdict } from "./Verdict";
+import { WorldAgentApproval } from "./WorldAgentApproval";
 
 type Resource = { path: string; price: number; title: string; artifact?: string };
 
@@ -41,6 +42,8 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  // A held payment waiting on a fresh World ID approval.
+  const [worldApproval, setWorldApproval] = useState(false);
 
   // Reset on open and on a rail change only. Keyed on `agents` too, it wiped
   // the receipt the moment the dashboard refreshed after a purchase.
@@ -48,6 +51,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
     if (!isOpen) return;
     setError(null);
     setResult(null);
+    setWorldApproval(false);
     setCatalogue(null);
     fetch(rail === "arc" ? "/api/x402/catalogue" : "/api/sui/status")
       .then((r) => r.json())
@@ -140,6 +144,8 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
         onDone("Declined. Nothing was signed.");
         return onClose();
       }
+      // Releasing it takes a fresh World ID approval, not this click.
+      if (data.code === "world_id_required") return setWorldApproval(true);
       if (!data.success) {
         if (data.screening) return setResult(data);
         throw new Error(data.error || "That did not settle.");
@@ -171,27 +177,42 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
           </div>
           <Verdict verdict={result.screening} />
           {error && <ErrorNote>{error}</ErrorNote>}
-          <div className="flex justify-end gap-2">
-            {result.hold ? (
-              <>
-                <button onClick={() => answerHold("decline")} disabled={busy} className="btn btn-quiet">
-                  Decline
-                </button>
-                <button onClick={() => answerHold("approve")} disabled={busy} className="btn btn-solid">
-                  {busy ? "Settling…" : "Approve and pay"}
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => setResult(null)} className="btn btn-quiet">
-                  Back
-                </button>
-                <button onClick={onClose} className="btn btn-solid">
-                  Done
-                </button>
-              </>
-            )}
-          </div>
+          {worldApproval && result.hold ? (
+            <div className="rule-t pt-4">
+              <WorldAgentApproval
+                holdId={result.hold.holdId}
+                onDone={({ approved, message, payment }) => {
+                  setWorldApproval(false);
+                  onDone(message);
+                  if (approved && payment?.success) setResult(payment);
+                  else if (payment?.screening) setResult(payment);
+                }}
+                onCancel={() => setWorldApproval(false)}
+              />
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2">
+              {result.hold ? (
+                <>
+                  <button onClick={() => answerHold("decline")} disabled={busy} className="btn btn-quiet">
+                    Decline
+                  </button>
+                  <button onClick={() => answerHold("approve")} disabled={busy} className="btn btn-solid">
+                    {busy ? "Settling…" : "Approve and pay"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setResult(null)} className="btn btn-quiet">
+                    Back
+                  </button>
+                  <button onClick={onClose} className="btn btn-solid">
+                    Done
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       ) : result ? (
         <div className="space-y-5">

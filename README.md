@@ -222,6 +222,41 @@ flagged payer. In the dashboard, buy the Alpha signal, then the Unvetted feed.
   screened on mainnet data and the Gateway authorisation under Base's id. A
   batch address scan would also help a seller screening many payers.
 
+## World ID for Agents: a human's fresh yes before an agent's money moves
+
+IDKit decides who gets a line - one unique human, once. World ID for Agents
+decides something else: whether the human behind an agent says yes *right now*.
+Lifeline asks it at the one moment an agent cannot act alone: when Intercepta
+holds one of its payments (over the $2 auto-approve limit, a counterparty with
+warning signs, or screening that could not complete).
+
+1. **Link, once.** Signed in, the human links World ID for Agents to their
+   Lifeline account. Its pairwise `sub` is bound to them and never moved.
+2. **The agent is held and asks.** With only its mandate token, the agent calls
+   `POST /api/pay/holds/:id/approval`. Lifeline starts World's device
+   authorization and hands back a code and link for the human - never anything
+   that approves by itself. The agent cannot approve its own hold, and neither
+   can the human's twelve-hour session cookie.
+3. **The human answers in the World ID app**, with a fresh proof (device grants
+   always require one).
+4. **Lifeline's backend validates** the ID token World returns: RS256 signature
+   against World's published keys, exact issuer, our client as audience,
+   expiry, the Orb class `acr`, an `auth_time` after the request began, and a
+   `sub` equal to the account's linked World ID. Only then is the payment
+   released - screened again by Intercepta, paid once however often it is polled.
+5. **Declined** in World ID declines the hold. **Expired**, **a different World
+   ID**, a **stale** confirmation or **World ID being unavailable** leaves it
+   held. In none of them is anything paid.
+
+The dashboard and the mini app use the same approval: a QR code on a computer,
+an "Open World ID" button on a phone.
+
+Code: [`lib/worldAgents.ts`](web/src/lib/worldAgents.ts) (device grant, token
+validation, linking), [`api/pay/holds/[holdId]/approval`](web/src/app/api/pay/holds/[holdId]/approval/route.ts),
+[`api/auth/world-agents/link`](web/src/app/api/auth/world-agents/link/route.ts),
+[`WorldAgentApproval.tsx`](web/src/components/WorldAgentApproval.tsx).
+Live: `npm run e2e:world-agents` (approve) and `npm run e2e:world-agents -- --deny`.
+
 ## Repaying by Apple Pay, Google Pay or card (Arc)
 
 Arc debt can be repaid by the agent from its own wallet, or by the human in
@@ -323,6 +358,7 @@ npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
 npm run e2e:sui               # the Sui rail through the app
 npm run e2e:intercepta        # screening, live: cleared, refused, held, approved
 npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc
+npm run e2e:world-agents      # an agent's held payment approved (or --deny) in World ID for Agents
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
 
@@ -330,7 +366,7 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (58) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once) |
+| web tests (70) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release) |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |

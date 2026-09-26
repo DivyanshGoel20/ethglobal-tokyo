@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getHuman, unauthenticated } from "@/lib/session";
-import { getHold, resolveHold } from "@/lib/holdStore";
-import { getAgentPrivateKey } from "@/lib/agentKeys";
-import { getAgentByAddress } from "@/lib/agentStore";
-import { LifelineSigner } from "@/lib/lifelineSigner";
-import { invalidateTelemetryCache } from "@/lib/telemetryCache";
+import { resolveHold } from "@/lib/holdStore";
+import { holdProblem, releaseHeldPayment } from "@/lib/holdRelease";
+import { agentsConfigured } from "@/lib/worldAgents";
 
 /**
- * The human's answer to a held payment.
+ * The human's answer to a held payment, from their World session.
  *
- * Only a World session can answer - an agent's mandate token cannot approve
- * its own held payment. Approving sends the request again, screened again: if
- * Intercepta now refuses, it is refused, whatever the human said.
+ * Declining is always a click. Approving releases money an agent could not
+ * spend on its own, so where World ID for Agents is set up it takes a fresh
+ * World ID approval instead (`/approval`); a session cookie up to twelve hours
+ * old is not enough. An agent's mandate token can do neither here.
  */
 export async function POST(req: NextRequest, { params }: { params: { holdId: string } }) {
   const human = getHuman(req);
@@ -22,38 +21,31 @@ export async function POST(req: NextRequest, { params }: { params: { holdId: str
     return NextResponse.json({ success: false, error: "action must be approve or decline" }, { status: 400 });
   }
 
-  const hold = getHold(params.holdId);
-  if (!hold || hold.human.toLowerCase() !== human.toLowerCase()) {
-    return NextResponse.json({ success: false, error: "No such held payment." }, { status: 404 });
-  }
-  if (hold.status !== "held") {
-    return NextResponse.json({ success: false, error: `Already ${hold.status}.` }, { status: 409 });
-  }
-  if (hold.expiresAt < Date.now()) {
-    return NextResponse.json({ success: false, error: "That hold has expired; ask the agent to try again." }, { status: 410 });
-  }
-  const agent = getAgentByAddress(hold.agentAddress);
-  if (!agent || (agent.humanOwner || "").toLowerCase() !== human.toLowerCase()) {
-    return NextResponse.json({ success: false, error: "That agent is no longer yours." }, { status: 403 });
+  const problem = holdProblem(params.holdId, human);
+  if (problem) return NextResponse.json({ success: false, error: problem.error }, { status: problem.status });
+
+  if (action === "decline") {
+    resolveHold(params.holdId, "declined");
+    return NextResponse.json({ success: true, declined: true, holdId: params.holdId });
   }
 
-  // Resolved before paying, so a double tap cannot pay twice.
-  resolveHold(hold.holdId, action === "approve" ? "approved" : "declined");
-  if (action === "decline") return NextResponse.json({ success: true, declined: true, holdId: hold.holdId });
+  if (agentsConfigured()) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "world_id_required",
+        error: "Releasing a held payment needs a fresh World ID approval.",
+        approval: `/api/pay/holds/${params.holdId}/approval`,
+      },
+      { status: 403 }
+    );
+  }
 
   try {
-    const result = await new LifelineSigner().pay(
-      hold.url,
-      {
-        agentAddress: hold.agentAddress,
-        agentPrivateKey: getAgentPrivateKey(hold.agentAddress) || undefined,
-        humanProfileId: human,
-        humanApproved: true,
-      },
-      { method: hold.method, body: hold.body }
-    );
-    invalidateTelemetryCache(human);
-    return NextResponse.json({ ...result, holdId: hold.holdId }, { status: result.success ? 200 : result.status });
+    const released = await releaseHeldPayment(params.holdId, human);
+    if (!released.ok) return NextResponse.json({ success: false, error: released.error }, { status: released.status });
+    const { result } = released;
+    return NextResponse.json({ ...result, holdId: params.holdId }, { status: result.success ? 200 : result.status });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err?.message ?? "Payment failed" }, { status: 400 });
   }

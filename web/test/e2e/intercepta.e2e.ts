@@ -110,8 +110,13 @@ async function main() {
     `${say(heldAgain.body.screening)} · lent $${heldAgain.body.borrowed}`);
   const second = await call("POST", "/api/pay", { url: `${PREMIUM}/dossier`, agentAddress: agent });
   const approved = await call("POST", `/api/pay/holds/${second.body.hold?.holdId}`, { action: "approve" });
-  check("an approved hold is screened again, then paid on credit", approved.status === 200 && approved.body.success && approved.body.screening?.approvedByHuman === true,
-    approved.body.error ?? `lent $${approved.body.borrowed} · settled ${approved.body.circleSettlementId ?? approved.body.transactionId}`);
+  if (process.env.WORLD_AGENTS_CLIENT_ID) {
+    // Releasing it takes a fresh World ID approval (npm run e2e:world-agents).
+    check("a click cannot release a held payment; World ID must approve", approved.status === 403 && approved.body.code === "world_id_required", approved.body.error);
+  } else {
+    check("an approved hold is screened again, then paid on credit", approved.status === 200 && approved.body.success && approved.body.screening?.approvedByHuman === true,
+      approved.body.error ?? `lent $${approved.body.borrowed} · settled ${approved.body.circleSettlementId ?? approved.body.transactionId}`);
+  }
 
   const payments = await call("GET", "/api/payments");
   const statuses = (payments.body.payments ?? []).map((p: any) => p.status);

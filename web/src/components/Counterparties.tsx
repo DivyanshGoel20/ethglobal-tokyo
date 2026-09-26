@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import type { Payment } from "@/lib/useLifeline";
+import { WorldAgentApproval } from "./WorldAgentApproval";
 
 type Trait = { name: string; risk: number; txsCount: number; description: string };
 type Profile = {
@@ -50,6 +51,8 @@ export const Counterparties: React.FC<{
   const [profiles, setProfiles] = useState<Record<string, Profile | { error: string }>>({});
   const [lookup, setLookup] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // The hold waiting on a fresh World ID approval, if any.
+  const [approving, setApproving] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/pay/holds")
@@ -85,6 +88,7 @@ export const Counterparties: React.FC<{
         body: JSON.stringify({ action }),
       });
       const data = await res.json().catch(() => ({}));
+      if (data.code === "world_id_required") return setApproving(hold.holdId);
       onChanged(
         action === "decline"
           ? "Declined. Nothing was signed."
@@ -114,14 +118,26 @@ export const Counterparties: React.FC<{
             <span>${h.amountUsd.toFixed(2)} · {path(h.url)}</span>
           </div>
           <p className="text-[12.5px] ink-2 leading-snug">{h.verdict.reasons[0]}</p>
-          <div className="flex justify-end gap-2">
-            <button className="btn btn-quiet" disabled={busy === h.holdId} onClick={() => answer(h, "decline")}>
-              Decline
-            </button>
-            <button className="btn btn-solid" disabled={busy === h.holdId} onClick={() => answer(h, "approve")}>
-              {busy === h.holdId ? "Settling…" : "Approve"}
-            </button>
-          </div>
+          {approving === h.holdId ? (
+            <WorldAgentApproval
+              holdId={h.holdId}
+              onDone={({ message }) => {
+                setApproving(null);
+                setHolds((all) => all.filter((x) => x.holdId !== h.holdId));
+                onChanged(message);
+              }}
+              onCancel={() => setApproving(null)}
+            />
+          ) : (
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-quiet" disabled={busy === h.holdId} onClick={() => answer(h, "decline")}>
+                Decline
+              </button>
+              <button className="btn btn-solid" disabled={busy === h.holdId} onClick={() => answer(h, "approve")}>
+                {busy === h.holdId ? "Settling…" : "Approve"}
+              </button>
+            </div>
+          )}
         </div>
       ))}
 
