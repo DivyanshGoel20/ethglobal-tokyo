@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getHuman, unauthenticated } from "@/lib/session";
+import { unauthenticated } from "@/lib/session";
+import { resolveReader } from "@/lib/agentToken";
+import { suiStatus } from "@/lib/suiRail";
 
 /**
  * What a resource server is selling.
- * Returns the active catalogue of x402 pay-per-call services.
- * Queries external port 4402 if running, or falls back to native /api/paid endpoints.
+ * Returns the active catalogue of x402 pay-per-call services: `?rail=sui` for
+ * the Sui seller, otherwise Arc's (port 4402 if running, else /api/paid).
+ * Readable with a session or a mandate.
  */
 export async function GET(req: NextRequest) {
-  if (!getHuman(req)) return unauthenticated();
+  if (!resolveReader(req)) return unauthenticated();
 
-  const base =
-    new URL(req.url).searchParams.get("base") ||
-    process.env.NEXT_PUBLIC_X402_RESOURCE_BASE ||
-    "http://localhost:4402";
+  if (new URL(req.url).searchParams.get("rail") === "sui") {
+    try {
+      const s = await suiStatus();
+      return NextResponse.json({ rail: "sui", base: "base" in s ? s.base : null, resources: s.resources ?? [] });
+    } catch (err: any) {
+      return NextResponse.json({ rail: "sui", base: null, resources: [], reason: err?.message });
+    }
+  }
+
+  const base = process.env.NEXT_PUBLIC_X402_RESOURCE_BASE || "http://localhost:4402";
 
   try {
     const res = await fetch(`${base.replace(/\/$/, "")}/catalogue`, {
@@ -23,6 +32,7 @@ export async function GET(req: NextRequest) {
       const data = await res.json();
       if (Array.isArray(data.resources) && data.resources.length > 0) {
         return NextResponse.json({
+          rail: "arc",
           base,
           resources: data.resources,
         });
@@ -33,6 +43,7 @@ export async function GET(req: NextRequest) {
   // Native internal catalogue fallback
   const appBase = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return NextResponse.json({
+    rail: "arc",
     base: appBase,
     resources: [
       { path: "/api/paid/signal", price: 0.01, title: "Alpha Signal Intelligence", artifact: "json" },

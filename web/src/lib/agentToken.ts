@@ -29,22 +29,23 @@ export type AgentGrant = {
   /** World nullifier of the human who issued it. */
   human: string;
   /**
-   * debited for a repayment, so the party that spent is the party that owes.
+   * The one agent this token spends through, when it was issued to a specific
+   * agent. Unset for a general mandate, which may use any of the human's agents.
    */
-  
+  agentAddress?: string;
   /** Most this agent may borrow, in USDC, across the life of the token. */
   capUsd: number;
   label: string;
   expiresAt: string;
 };
 
-type Claims = { typ: string; n: string; cap: number; lbl: string; exp: number; hed?: string };
+type Claims = { typ: string; n: string; cap: number; lbl: string; exp: number; agt?: string };
 
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o), "utf8").toString("base64url");
 
 export function mintAgentToken(
   human: string,
-  opts: { capUsd: number; days: number; label: string }
+  opts: { capUsd: number; days: number; label: string; agentAddress?: string }
 ): { token: string; grant: AgentGrant } {
   const exp = Math.floor(Date.now() / 1000) + Math.round(opts.days * 86400);
   const claims: Claims = {
@@ -53,7 +54,7 @@ export function mintAgentToken(
     cap: opts.capUsd,
     lbl: opts.label.slice(0, 64),
     exp,
-    
+    ...(opts.agentAddress ? { agt: opts.agentAddress.toLowerCase() } : {}),
   };
   const payload = b64(claims);
   return {
@@ -62,7 +63,7 @@ export function mintAgentToken(
       human,
       capUsd: opts.capUsd,
       label: claims.lbl,
-      
+      ...(claims.agt ? { agentAddress: claims.agt } : {}),
       expiresAt: new Date(exp * 1000).toISOString(),
     },
   };
@@ -93,7 +94,7 @@ export function verifyAgentToken(token: string | undefined | null): AgentGrant |
       human: c.n,
       capUsd: c.cap,
       label: typeof c.lbl === "string" ? c.lbl : "",
-      
+      ...(typeof c.agt === "string" && c.agt ? { agentAddress: c.agt } : {}),
       expiresAt: new Date(c.exp * 1000).toISOString(),
     };
   } catch {
@@ -115,6 +116,8 @@ export type Spender = {
    * their facility limit applies.
    */
   capUsd?: number;
+  /** Set when the mandate was issued to one agent: the only one it may use. */
+  agentAddress?: string;
   via: "session" | "mandate";
 };
 
@@ -143,10 +146,20 @@ export function resolveSpender(
   const spender: Spender | null = sessionHuman
     ? { human: sessionHuman, via: "session" }
     : grant
-      ? { human: grant.human, capUsd: grant.capUsd, via: "mandate" }
+      ? { human: grant.human, capUsd: grant.capUsd, agentAddress: grant.agentAddress, via: "mandate" }
       : null;
 
   if (!spender) return { error: unauthenticated() };
+
+  // A token issued to one agent is that agent's card, not its human's.
+  if (spender.via === "mandate" && spender.agentAddress && spender.agentAddress !== agentAddress.toLowerCase()) {
+    return {
+      error: NextResponse.json(
+        { error: "This token was issued to a different agent.", code: "not_this_agent" },
+        { status: 403 }
+      ),
+    };
+  }
 
   const agent = getAgentByAddress(agentAddress);
   if (!agent) {
@@ -202,7 +215,7 @@ export function resolveReader(req: NextRequest): Spender | null {
   if (sessionHuman) return { human: sessionHuman, via: "session" };
 
   const grant = verifyAgentToken(bearerFrom(req.headers.get("authorization")));
-  return grant ? { human: grant.human, capUsd: grant.capUsd, via: "mandate" } : null;
+  return grant ? { human: grant.human, capUsd: grant.capUsd, agentAddress: grant.agentAddress, via: "mandate" } : null;
 }
 
 /**
@@ -218,6 +231,11 @@ export function resolveAgentReader(
 ): { spender: Spender } | { error: NextResponse } {
   const spender = resolveReader(req);
   if (!spender) return { error: unauthenticated() };
+  if (spender.via === "mandate" && spender.agentAddress && spender.agentAddress !== agentAddress.toLowerCase()) {
+    return {
+      error: NextResponse.json({ error: "This token was issued to a different agent.", code: "not_this_agent" }, { status: 403 }),
+    };
+  }
 
   const agent = getAgentByAddress(agentAddress);
   if (!agent) {

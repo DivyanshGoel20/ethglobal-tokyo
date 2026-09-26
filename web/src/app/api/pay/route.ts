@@ -4,6 +4,7 @@ import { getAgentPrivateKey } from "@/lib/agentKeys";
 import { invalidateTelemetryCache } from "@/lib/telemetryCache";
 import { resolveSpender } from "@/lib/agentToken";
 import { getAgentWalletUsdc } from "@/lib/walletBalance";
+import { resourceUrlProblem } from "@/lib/resourceUrl";
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,6 +33,9 @@ export async function POST(req: NextRequest) {
     // their own agents.
     const auth = resolveSpender(req, agentAddress, "arc");
     if ("error" in auth) return auth.error;
+
+    const bad = resourceUrlProblem(url, new URL(req.url).origin);
+    if (bad) return NextResponse.json({ success: false, error: bad, code: "bad_url" }, { status: 400 });
 
     // Server-custodied keys only. A key supplied in the request body was never
     // Lifeline's to sign with.

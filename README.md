@@ -376,6 +376,58 @@ works in Chrome with a saved card; Apple Pay needs Safari and a domain
 registered with Stripe (Settings → Payment method domains - add the ngrok
 host).
 
+## Claude Code, on your line (MCP)
+
+Open Claude Code in this repo and it has Lifeline as a set of tools
+([`.mcp.json`](.mcp.json), [`mcp/server.ts`](mcp/server.ts)). Nothing to set up
+by hand: no wallet to make, no key to paste, no token to copy.
+
+1. The agent's first Lifeline call finds it has no access, so it asks for some
+   and gets a link for you: `http://localhost:3000/connect/KGQ4P99C`.
+2. You open it signed in with World ID, and see who is asking, from where and
+   why. You pick Arc or Sui, a cap and how many days, and approve
+   ([`connect/[code]`](web/src/app/connect/[code]/page.tsx)). Lifeline makes
+   the agent a new wallet, authorises it on your line (on chain, on Arc) and
+   issues a mandate **bound to that wallet**.
+3. The agent's next call collects the mandate, once, and stores it in
+   `~/.lifeline/credentials.json` (0600). It never holds a private key:
+   Lifeline keeps the wallet's key and signs inside your limits.
+
+From then on it can browse, quote, buy and repay:
+
+| tool | what it does |
+|---|---|
+| `lifeline_status` | connected or not (and the link if not), wallet, what it owes, what it can still borrow |
+| `lifeline_connect` | ask for a line with a chosen name, rail, cap and reason |
+| `lifeline_catalogue` | what the sellers on its rail sell, with prices and URLs |
+| `lifeline_quote` | read a resource's 402 challenge without paying |
+| `lifeline_buy` | pay, on credit if short, and return what was delivered (SVGs saved to `~/.lifeline/artifacts`); `maxUsd` refuses anything dearer |
+| `lifeline_request_approval` / `lifeline_approval_status` | a payment Intercepta held goes to you in World ID; once you approve, it pays |
+| `lifeline_repay` | Arc: repay from the agent's wallet; Sui: report what is parked on chain |
+| `lifeline_disconnect` | forget the local mandate |
+
+Every payment is screened by Intercepta as any other is: refused, held for you,
+or paid. The agent is not trusted to behave. The limits are on the server:
+
+- **Bound mandate.** The token names its agent's wallet. Presented for any other
+  agent, even one of yours, it is refused (`not_this_agent`).
+- **Revocable.** Revoke the agent on the dashboard and the mandate stops
+  working. The agent says so and asks you again.
+- **One-time handoff.** The link alone gets nobody anything. The mandate goes
+  once to the process holding the request's secret, and only after you
+  approve. Declined means nothing is issued.
+- **No private network.** Lifeline fetches what an agent asks it to buy, so
+  loopback, private and metadata addresses are refused unless they are
+  Lifeline's own sellers ([`lib/resourceUrl.ts`](web/src/lib/resourceUrl.ts)).
+
+Settings are in `.mcp.json`: `LIFELINE_URL` (default `http://localhost:3000`),
+`LIFELINE_AGENT_NAME`, `LIFELINE_RAIL` (`arc` or `sui`). To use it outside this
+repo:
+
+```bash
+claude mcp add lifeline -e LIFELINE_URL=http://localhost:3000 -- npx tsx /path/to/lifeline/mcp/server.ts
+```
+
 ## Layout
 
 ```text
@@ -385,6 +437,7 @@ sui/src/        @lifeline/sui: Move client, x402 on Sui, the payer, reconcile
 sui/service/    the Sui x402 feed, metered per record
 sui/scripts/    deploy, open-facility (USDC), lifecycle (both endings on chain), reconcile
 web/            Next.js: dashboard, World ID, agent APIs, both rails
+mcp/            the MCP server: Claude Code on a human's line
 premium-api/    Arc x402 resources, priced $0.01 / $1 / $5
 scripts/        operator tools: fund Gateway, read balances on both rails
 ```
@@ -462,6 +515,7 @@ npm run e2e:sui               # the Sui rail through the app
 npm run e2e:intercepta        # screening, live: cleared, refused, held, approved
 npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc
 npm run e2e:world-agents      # an agent's held payment approved (or --deny) in World ID for Agents
+npm run e2e:mcp               # the MCP server over stdio: connect, approve, buy, revoke, on both rails
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
 
@@ -469,12 +523,13 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (84) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release), the ledger (no-key repayments refused, interest charged once, debt from loans, one change at a time), separate Arc and Sui lines, records and agents |
+| web tests (102) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release), the ledger (no-key repayments refused, interest charged once, debt from loans, one change at a time), separate Arc and Sui lines, records and agents, agent connect (link, secret, approve once, collect once, decline), bound mandates and revocation, private-network URLs refused |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
 | `e2e:intercepta` (17) | live against Intercepta and Arc testnet: a clean seller cleared and settled, a known scammer's payee refused before signing (by the address and the authorisation scans both), a $5 purchase held, declined, and held again and approved, and both sellers turning away a flagged payer |
 | `e2e:sui` (21) | credit on Sui in Circle's testnet USDC, Arc's line untouched by what Sui drew, a Sui agent refused on Arc, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
+| `e2e:mcp` (28) | an MCP client driving the server as Claude Code does: no access, then a link; the human approves; the mandate collected once and stored 0600 with no key; catalogue, quote, a price over `maxUsd`, a private-network URL and Intercepta's refusal; the mandate refused on another agent; a purchase on credit; revocation noticed; a declined request; then the same on Sui |
 | `sui:lifecycle` (18) | both endings on chain, in testnet USDC: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
 
 World ID cannot be scripted - it needs a phone - so the end-to-end harnesses

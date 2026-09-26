@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveSpender } from "@/lib/agentToken";
 import { getAgentByAddress } from "@/lib/agentStore";
 import { payOnSui } from "@/lib/suiRail";
+import { resourceUrlProblem } from "@/lib/resourceUrl";
 
 /**
  * Buy something on the Sui rail.
@@ -18,6 +19,9 @@ export async function POST(req: NextRequest) {
 
   const auth = resolveSpender(req, agentAddress, "sui");
   if ("error" in auth) return auth.error;
+
+  const bad = resourceUrlProblem(url, new URL(req.url).origin);
+  if (bad) return NextResponse.json({ success: false, error: bad, code: "bad_url" }, { status: 400 });
 
   try {
     const result = await payOnSui({

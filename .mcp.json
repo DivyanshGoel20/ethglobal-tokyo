@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lifeline": {
+      "command": "npx",
+      "args": ["tsx", "mcp/server.ts"],
+      "env": {
+        "LIFELINE_URL": "http://localhost:3000",
+        "LIFELINE_AGENT_NAME": "claude-code"
+      }
+    }
+  }
+}
