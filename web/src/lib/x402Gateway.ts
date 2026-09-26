@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
+import { privateKeyToAccount } from "viem/accounts";
 import { screenIncoming, verdictLine } from "./intercepta";
 
 /**
@@ -21,8 +22,14 @@ const BATCHING_VERSION = "1";
 // Seven days plus verification latency, as the Gateway middleware uses.
 const MAX_TIMEOUT_SECONDS = 604_900;
 
-export const SELLER_WALLET =
-  process.env.SELLER_WALLET_ADDRESS || "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf";
+/**
+ * Who the in-app sellers are paid. There is no fallback: the one this used to
+ * have was the address of private key 0x…01, which anyone can sign for, so an
+ * app started without SELLER_WALLET_ADDRESS paid money anyone could take.
+ */
+export const SELLER_WALLET: string | null =
+  process.env.SELLER_WALLET_ADDRESS ||
+  (process.env.SELLER_PRIVATE_KEY ? privateKeyToAccount(process.env.SELLER_PRIVATE_KEY as `0x${string}`).address : null);
 
 let facilitator: BatchFacilitatorClient | null = null;
 let arcKind: Promise<any> | null = null;
@@ -52,7 +59,9 @@ async function arcSupport(): Promise<any> {
 
 export const toUnits = (usd: number) => String(Math.round(usd * 1e6));
 
-async function requirements(priceUsd: number, payTo: string = SELLER_WALLET, assetOverride?: string) {
+async function requirements(priceUsd: number, payToOverride?: string, assetOverride?: string) {
+  const payTo = payToOverride ?? SELLER_WALLET;
+  if (!payTo) throw new Error("No seller wallet: set SELLER_WALLET_ADDRESS (or SELLER_PRIVATE_KEY) in .env");
   const kind = await arcSupport();
   const usdc = kind.extra?.assets?.find((a: any) => a.symbol === "USDC")?.address;
   if (!usdc) throw new Error("Circle Gateway lists no USDC on Arc testnet");

@@ -913,14 +913,7 @@ export async function fetchCompleteContractTelemetry(
   // Query authorizations for known agents
   const defaultAgentsToCheck = Array.from(
     new Set(
-      (customHumanOwner
-        ? knownAgents
-        : [
-            "0x36e271970fa654ef640ee150e3bd734e946c077d",
-            "0x5233E4253bC38e8CF517c0768dbC8aCC886F32B3",
-            ...knownAgents,
-          ]
-      ).map((a) => a.toLowerCase())
+      knownAgents.map((a) => a.toLowerCase())
     )
   );
 

@@ -1,6 +1,7 @@
 import express from "express";
 import { createGatewayMiddleware, BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
 import { formatUnits } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { riskCurveSvg, dossierSvg } from "./artifacts";
 import { screenIncoming, verdictLine, DEMO_RISKY_PAYTO, DEMO_FAKE_USDC } from "../web/src/lib/intercepta";
 
@@ -16,9 +17,15 @@ type PaidRequest = express.Request & {
 
 const app = express();
 
+// Who this seller is paid. No fallback: the old one was the address of private
+// key 0x…01, which anyone can sign for.
 const SELLER_WALLET =
   process.env.SELLER_WALLET_ADDRESS ||
-  "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf";
+  (process.env.SELLER_PRIVATE_KEY ? privateKeyToAccount(process.env.SELLER_PRIVATE_KEY as `0x${string}`).address : "");
+if (!SELLER_WALLET) {
+  console.error("No seller wallet: set SELLER_WALLET_ADDRESS (or SELLER_PRIVATE_KEY) in the root .env");
+  process.exit(1);
+}
 const FACILITATOR_URL =
   process.env.FACILITATOR_URL || "https://gateway-api-testnet.circle.com";
 // Its own variable, not PORT: the Next app already owns 3000, and a shared
