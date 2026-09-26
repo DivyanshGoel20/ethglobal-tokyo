@@ -1,26 +1,22 @@
 # Lifeline
 
-> Undercollateralised credit lines for autonomous agents - one on Arc, one on Sui -
-> where every agent's payments read like a heartbeat.
+> Credit lines for AI agents, backed by one World ID-verified human - a line on
+> Arc and a separate one on Sui.
 
 An agent can hold money. Only a human can hold debt.
 
-Lifeline extends USDC credit to a human, verified once by World ID - a line on
-Arc and a separate line on Sui - and lets their agents spend against them. When an agent hits a paywall it cannot afford,
-Lifeline pays on its behalf and records what is owed. The agent keeps working; the
-human carries the liability, which is the only way undercollateralised credit
-can work when agents are free to create.
+A human verifies once with World ID and gets a USDC credit line on each rail.
+Their agents spend on it: when an agent hits an x402 paywall it cannot afford,
+Lifeline pays the seller and the debt goes to the human. Every payment is
+screened by Intercepta first; anything risky, or past the agent's spending
+cap, waits for the human to approve it with World ID. Humans who do not repay
+are suspended, then defaulted, on chain - and other World apps can ask
+Lifeline whether someone repays.
 
----
+**Live:** [web-production-2ccec.up.railway.app](https://web-production-2ccec.up.railway.app)
+· also a World mini app, and a Claude Code MCP server.
 
-## Two rails, two lines
-
-**Arc** is an EVM chain where USDC is the native currency. The credit facility
-is a Solidity contract; x402 payments settle through Circle Gateway.
-
-**Sui** is a Move chain. The same facility, in Move - plus a repayment the
-agent parks *before* the money is spent, built from Sui objects so it can be
-collected on its date without anyone having to be trusted to do it.
+## Architecture
 
 ```
                      World ID  ─── one human, a line on each rail
@@ -40,617 +36,202 @@ collected on its date without anyone having to be trusted to do it.
      own limit, debt, record    own limit, debt, record
 ```
 
-The rails are **separate lines**. Each has its own limit, its own debt and its
-own repayment record: borrowing on Sui never touches Arc's headroom, repaying
-on Arc builds only the Arc record and raises only the Arc limit, and the
-reverse. Both start at $10. Arc's record grows on repayments, time and the fees
-paid; Sui charges no fee, so its record grows on repayments and time.
-[`getHumanFacilityStats`](web/src/lib/agentStore.ts) is Arc's line,
-[`getSuiFacilityStats`](web/src/lib/agentStore.ts) is Sui's, and the records
-are kept apart in [`reputationStore.ts`](web/src/lib/reputationStore.ts).
+The rails are separate lines: own limit, debt, repayment record and agents.
+Both start at $10 and grow as the human repays.
 
-Agents are separate too: each agent belongs to one rail. An Arc agent borrows,
-pays and repays on Arc only; a Sui agent on Sui only, and a request to use one
-on the other rail is refused (`wrong_rail`). The dashboard shows the selected
-rail's agents, and authorising an agent creates it on that rail. The agent
-that borrows is the agent that signs its own repayment.
+## How it works
 
-## Why Sui
+1. **Join.** World ID proof of human, once → one credit line per person.
+2. **Pay.** An agent gets a `402`. Enough balance, it pays itself. Short,
+   Lifeline pays and books the loan on that rail's line.
+3. **Screen.** Before anything is signed, Intercepta checks the payee, the
+   token and the signed authorization (Arc). Over the agent's cap, a held
+   payment needs the human's fresh World ID approval (both rails).
+4. **Repay.** From the agent's wallet, a connected wallet, or Apple Pay /
+   Google Pay / card via Stripe - on both rails.
+5. **Don't repay.** Past due → suspended on chain; 30 days later → marked
+   defaulted on chain, record reset to the first tier. Repaying restores the line.
+6. **Registry.** Partner World apps ask `GET /api/registry/standing?sub=` and
+   get good / delinquent / defaulted - never amounts. The human sees every lookup.
 
-Credit for agents fails at one moment: getting paid back. An agent borrows,
-spends, and moves on; the promise to repay "on the 30th" usually needs a keeper
-bot holding a hot key, or a token allowance the agent can revoke the moment the
-goods arrive. On Sui that promise is made of objects instead, and several
-properties of the chain do work that elsewhere needs trusted off-chain parts:
+Also: a World mini app (`/mini`), and Claude Code tools ([`mcp/server.ts`](mcp/server.ts)) -
+the agent asks for access with a link and terminal QR code, the human approves,
+and it buys on its own under a mandate bound to one wallet.
 
-- **Collection without a keeper or an allowance.** The repayment is an
-  `Obligation` - a shared object with its own due date, read against Sui's
-  on-chain `Clock` - holding a claim on the agent's `Purse`. Once it is due,
-  *anyone* can call `obligation::collect`; no capability, no bot, no approval
-  that can be withdrawn. If Lifeline disappeared, a stranger could still
-  collect, and would get the same outcome.
-- **The promise comes before the spending, in the same transaction.** One
-  programmable transaction parks the obligation, draws the credit out of the
-  facility, tops it up from the agent's own coins and pays the x402 seller.
-  It all happens or none of it does: there is no borrowed coin that exists
-  without a dated promise attached.
+---
+
+## World
+
+### IDKit - who gets a credit line
+
+- **The event that needs trust:** opening a credit line. Lending without
+  collateral only works if one person cannot open many lines and walk away from
+  each.
+- **Credential:** `proofOfHuman()` - World ID 4 proof of human (legacy Orb fallback),
+  verified on the server with World's v4 API
+  ([`lib/world.ts`](web/src/lib/world.ts),
+  [`api/auth/world-verify`](web/src/app/api/auth/world-verify/route.ts),
+  widget in [`WorldAuthGate.tsx`](web/src/components/WorldAuthGate.tsx)).
+- **Why it is the minimum:** we need exactly one thing - that this person has
+  no other line. Proof of human gives uniqueness without revealing who they
+  are. A device or selfie check is weaker against one person joining twice; a
+  passport would reveal more than we need and exclude people without one.
+- **Returning users** prove a World ID *session* instead
+  ([`api/auth/world-session`](web/src/app/api/auth/world-session/route.ts)),
+  each proof accepted once; in World App, MiniKit wallet sign-in
+  ([`mini/MiniGate.tsx`](web/src/components/mini/MiniGate.tsx)).
+- **Success:** new human → proof verified → session cookie → line opened.
+- **Alternative paths:** already joined (uniqueness spent) → told so and sent
+  to sign in from World App; widget closed → nothing happens, try again;
+  proof rejected by World → error shown, no account; session proof replayed →
+  refused.
+
+**IDKit debrief**
+
+- *Time to first success:* the first verified proof came quickly once the RP
+  signing context was served from our backend; most of the time went on what
+  happens *after* the first proof.
+- *Friction:* a uniqueness proof works once per person per action, and the
+  portal has no setting to raise it - so a returning user could not sign in
+  again. We had to redesign around World ID sessions.
+- *Missing docs:* how to combine a one-time uniqueness proof with sessions for
+  sign-in, and what each IDKit error code means (they arrive only as
+  `onError` codes plus a console debug report).
+- *Biggest improvement:* a documented "join once, sign in with a session"
+  recipe, with the already-verified case returned as a clear, typed result.
+
+### World ID for Agents - a human's fresh yes before an agent's money moves
+
+When a payment is held (Intercepta flagged it, or it is over the agent's cap),
+the agent cannot approve it and neither can a session cookie. Lifeline starts
+World's device flow; the human approves in World ID; Lifeline validates the ID
+token (RS256, issuer, audience, Orb `acr`, fresh `auth_time`, and the `sub`
+linked to this account) and only then releases the payment.
+
+- Code: [`lib/worldAgents.ts`](web/src/lib/worldAgents.ts),
+  [`api/pay/holds/[holdId]/approval`](web/src/app/api/pay/holds/[holdId]/approval/route.ts),
+  [`WorldAgentApproval.tsx`](web/src/components/WorldAgentApproval.tsx).
+- Alternative paths: declined → hold declined; expired, stale, or a different
+  World ID → stays held. Nothing is paid in any of them.
+- The same `sub` powers the **registry**: Lifeline publishes
+  `/.well-known/lifeline-sector.json` listing partner callbacks, so partners get
+  Lifeline's identifier for a human ([`lib/registry.ts`](web/src/lib/registry.ts)).
+
+**Debrief:** the device endpoint worked on the first call; the first full
+approval took ~15 minutes more, because the sandbox gives each browser its own
+fake identity (we linked in one browser and approved in another, and Lifeline
+correctly refused a different `sub`). The guides live behind the MCP endpoint
+rather than `/docs`. Biggest improvement: let the approval screen show *what*
+is approved ("$5 to this seller"), not just "sign in".
+
+---
+
+## Sui
+
+Money moves programmatically on Sui, with the rules in Move
+([`sui/lifeline/sources`](sui/lifeline/sources)):
+
+- **A repayment parked before the spending.** The agent signs a dated claim on
+  its own `Purse` ([`obligation::park`](sui/lifeline/sources/obligation.move)),
+  then one sponsored transaction draws credit, adds the agent's own coins and
+  pays the x402 seller ([`sui/src/payer.ts`](sui/src/payer.ts)). All or nothing.
+- **Collection without a keeper.** Once due, *anyone* can call
+  `obligation::collect`: the purse repays the facility, or the default is
+  recorded on chain. `settle` repays early or cures a default.
 - **Money moves where the debt is booked.** `obligation::draw` takes coins out
-  of the `Facility` in the call that records the debt; the ledger and the money
-  cannot disagree.
-- **Earnings are held for the debt.** While a pledge is outstanding, the purse
-  will not release the coins covering it - an object-level rule, not a policy.
-- **Defaults are public facts.** A purse short at the due date writes
-  `RepaymentDefaulted` on chain; the debt keeps consuming the line until it is
-  cured. Nobody has to take the lender's word for it.
-- **Agents need no gas.** Lifeline sponsors every agent transaction natively,
-  so an agent holds only what it earns - on testnet, Circle's USDC for Sui.
-- **Tranches, not rows.** One obligation covers many small payments up to a
-  ceiling and collects only what was drawn, which suits agents that pay a cent
-  at a time.
+  of the facility in the call that records the debt.
+- **x402 on Sui.** The seller simulates the agent's transaction, checks it pays
+  the quoted amount in USDC, submits it, and blocks replays
+  ([`sui/src/x402.ts`](sui/src/x402.ts), [`sui/service/server.ts`](sui/service/server.ts)).
+- **Agents need no gas** - Lifeline sponsors every transaction; it lends
+  Circle's testnet USDC.
+- **Automation:** held over-cap payments, card repayments that fund the purse
+  and settle, and defaults that freeze the profile on chain
+  ([`web/src/lib/suiRail.ts`](web/src/lib/suiRail.ts), [`lib/standing.ts`](web/src/lib/standing.ts)).
 
-The Sui line is independent of Arc: its own facility, limit, debt, repayment
-record and agents. It lends Circle's USDC on Sui testnet
-(`0xa1ec…7e29::usdc::USDC`); `npm run sui:open-usdc` opens a USDC facility on
-the published package and funds it from the operator's USDC.
+---
 
-## On Sui
+## Intercepta
 
-`sui/lifeline` is `contracts/src/LifelineCreditFacility.sol` in Move, plus the
-part of credit that is usually weakest: getting paid back. A promise to repay
-"on the 30th" is normally a keeper bot with a hot key, or an allowance the
-borrower can revoke the moment the goods arrive. Sui has no scheduled
-transactions, so the promise is made of objects instead.
+**Where the API is called** - live, before a payment is signed or accepted:
 
-| | Arc (Solidity) | Sui (Move) |
+| check | endpoint | file |
 |---|---|---|
-| underwriter | `onlyOwner` | `AdminCap` - hold it to underwrite; transfer it to change owner |
-| the ledger | profiles, limits, agent auth, batched drawdowns, `repayWithToken`, `markDefault`, `withdraw` | `lifeline::facility`, same rules, same exploit tests |
-| a drawdown | records debt; the money moves through Circle Gateway | `obligation::draw` takes coins out of the facility **in the transaction that books the debt** |
-| the promise to repay | - | `obligation::park`: the agent signs a dated claim on its `Purse` before it can draw |
-| collection | the operator books a repayment | `obligation::collect` is open to anyone once due - no capability, the same outcome for a stranger as for Lifeline |
-| a default | - | the purse is short at the due date: `RepaymentDefaulted`, nothing moves, the debt keeps consuming the line |
-| many payments | batched into one drawdown row | one obligation is a tranche that **collects what was drawn**, never its ceiling |
-| repaying early | `repayWithToken` | `obligation::settle`; also cures a default |
-| fees | paid by Lifeline's Gateway balance | Lifeline's operator sponsors every agent transaction |
-| earnings | - | while a pledge is outstanding, the purse will not release the coins covering it |
-
-Sui runs nothing on its own, so collection needs a caller. Lifeline's
-reconciliation is that caller (`npm run sui:reconcile` for a cron), but the
-function needs no permission: if Lifeline disappeared, anyone could still collect.
-
-The pledge lock covers what arrives in the purse. An agent that routes its
-earnings elsewhere can still leave its purse short - and it ends the way every
-default here does: in plain sight, on chain, for anyone to read.
-
-## Reading the monitor
-
-The dashboard is an instrument, not a report. Each agent is a **lead**; each
-x402 payment it makes is a **beat**, placed when it settled, its height the
-amount on a log scale. A beat drawn in ink the agent paid for itself; a beat in
-red Lifeline lent for. Between payments the line is flat, and an agent that has
-never bought anything flatlines. A Sui repayment that fell due and collected
-nothing is drawn as **fibrillation** at its due date.
-
-It is a bedside monitor drawn on chart paper: warm paper with a millimetre
-grid, ink, and on every lead a head that sweeps the trace the way a watch draws
-a heartbeat, inking each beat - red where Lifeline lent - as it passes. Both
-rails read the same way.
-
-Type is Newsreader for words, Martian Mono for every figure, Hanken Grotesk for
-the rest. Red is reserved for money that was lent; nothing else on the page is
-that colour.
-
-## In World App
-
-Lifeline also runs as a World mini app, at `/mini`: the same lines, agents and
-rails as the dashboard - one state, shared between the two - laid out the way
-World's design guidelines ask. A tab bar (Pulse, Owed, Tape, Record), sheets
-that rise from the bottom, the purchase anchored above the tabs, the user's
-World username instead of an address, and a haptic tap when money moves.
-
-Sign-in follows World's guidance that World ID is not a login:
-
-- **The wallet is the login.** MiniKit's Sign-In with Ethereum, one tap, every
-  visit, verified server-side against a nonce this server issued. A linked
-  wallet goes straight in.
-- **World ID proves uniqueness once, to join.** A World ID 4 uniqueness proof
-  can be made once per person per action - that is what makes it proof of one
-  human, and no portal setting changes it. Its nullifier becomes the human's
-  identity and their one credit line.
-- **Sessions bring them back.** In the same sitting a World ID *session* is
-  created and saved to the human. Every later sign-in proves that session - as
-  often as needed, no action, no limit - with each proof accepted once.
-
-| who | how they get in |
-|---|---|
-| new, anywhere | uniqueness proof, then a session is saved |
-| back, same browser | the browser remembers the account; prove its session |
-| back, another browser | "Sign in from World App": scan, approve on the phone |
-| joined in a browser, first time in World App | dashboard's "Open in World App" link; the phone proves the saved session and its wallet is linked |
-
-Code: [`WorldAuthGate.tsx`](web/src/components/WorldAuthGate.tsx),
-[`mini/MiniGate.tsx`](web/src/components/mini/MiniGate.tsx),
-[`api/auth/world-session`](web/src/app/api/auth/world-session/route.ts),
-[`lib/worldSessions.ts`](web/src/lib/worldSessions.ts),
-[`api/auth/pair`](web/src/app/api/auth/pair/route.ts).
-
-To try it on a phone, expose the app over HTTPS (`ngrok http 3000`), set the
-mini app URL in the World Developer Portal to `https://<tunnel>` (the root
-serves the mini app inside World App; `/mini` works too), and open
-`https://world.org/mini-app?app_id=<your app id>`. Set `NEXT_PUBLIC_MINIAPP_ID`
-if the mini app is a different Developer Portal app from the World ID one.
-
-## The payment flow
-
-1. An agent requests a metered resource and gets `402` with the requirements in
-   `PAYMENT-REQUIRED`: amount, asset, `payTo`, network.
-2. Its own balance is read. Enough, and it pays for itself and owes nothing.
-   **Arc:** either way, nothing is signed until Intercepta has screened it (below).
-3. Short, and Lifeline checks the human's remaining headroom on *that rail's*
-   line, and any mandate cap. Over it, the request is refused before anything moves.
-4. **Arc:** the drawdown is booked (batched on chain) and Lifeline's Gateway
-   balance settles with the seller.
-   **Sui:** if the agent has no open obligation with room, it parks one first.
-   Then one sponsored transaction draws the shortfall, tops it up from the
-   agent's own coins, and pays the seller. The seller simulates it, checks it
-   pays the quoted amount, submits it, and only then serves the resource.
-5. The payment is on the trail; the debt is on the human's line.
-
-## Screening with Intercepta (Arc)
-
-Every Arc payment is screened by [Intercepta](https://intercepta.io) before it
-is signed, and every payer is screened before a seller settles. Arc is not a
-chain Intercepta scores, but an EVM address is the same address on every
-chain, so payees and payers are screened against its mainnet data. Arc only;
-Sui addresses are not EVM addresses.
-
-**Paying agent** - before the agent (or Lifeline, lending to it) signs:
-
-| check | Intercepta call | where |
-|---|---|---|
-| the payee (`payTo`) | Deep Scan Address `GET /api/public/v2/extension/account/{address}/toxic-score` | [`web/src/lib/intercepta.ts`](web/src/lib/intercepta.ts) `screenOutgoing` |
-| the asset: Arc's USDC, not a lookalike | allowlist; anything else refused, with Scan Token `GET .../token-intelligence/token/{address}/risks` saying what it is - for the demo's lookalike "USD Coin", `FAKE_TOKEN`, `KNOWN_MALICIOUS`, action block | `screenToken` |
-| the authorisation itself | Scan Message `POST /api/public/v2/extension/analysis/signature`, sent the exact EIP-712 `TransferWithAuthorization` about to be signed | `screenAuthorization` |
-
-The authorisation is built, screened and signed in one place,
-[`web/src/lib/lifelineSigner.ts`](web/src/lib/lifelineSigner.ts)
-(`screenAndSign`), so what Intercepta reads is byte for byte what gets signed.
-The verdict decides what happens:
-
-| verdict | when | what happens |
-|---|---|---|
-| **pay** | no known risk, amount within `INTERCEPTA_AUTO_APPROVE_USD` ($2) | signed and settled |
-| **cap** | warning signs (mixer or sanctioned-counterparty exposure, a middling score) | paid only up to `INTERCEPTA_ELEVATED_CAP_USD` ($0.25) a payment |
-| **hold** | over the cap, or Intercepta did not answer | nothing signed; the human approves or declines ([`api/pay/holds`](web/src/app/api/pay/holds/[holdId]/route.ts)). Approving screens again, and a refusal still refuses |
-| **refuse** | sanctions, known scammer, stolen funds, phishing, a lookalike asset, a drainer authorisation | nothing signed, reason shown |
-
-No key, or no answer, is never a pass. Refusals and holds go on the payment
-trail with their reasons; the verdict is on every receipt
-([`Verdict.tsx`](web/src/components/Verdict.tsx)).
-
-**Paid service** - before settling, the payer named in the authorisation gets
-Quick Scan Address (`GET .../account/{address}/quick-scan`, the low-latency
-one). A flagged payer is refused with the reason, before Circle is asked to
-verify anything:
-[`web/src/lib/x402Gateway.ts`](web/src/lib/x402Gateway.ts) `requirePayment`
-for the app's sellers, and an `onBeforeVerify` hook in
-[`premium-api/server.ts`](premium-api/server.ts) for the Express one.
-
-**Counterparty profiles** - the dashboard's Counterparties panel
-([`Counterparties.tsx`](web/src/components/Counterparties.tsx)) lists every
-payee with its last verdict, and any payment held for you. Open one, or paste
-any address, for the full profile from
-[`api/risk/profile`](web/src/app/api/risk/profile/route.ts): deep and quick
-scores, each trait with its description, and Summarize Address
-(`GET /api/public/v1/extension/security/{address}/overview`) for who it is.
-
-**Seeing it** - `npm run e2e:intercepta`, live against the API and Arc
-testnet:
-
-- a first $1 payment to a payee none of the human's agents has paid, held;
-- a clean seller cleared and paid;
-- the "Unvetted feed", whose payee is a known scammer's wallet from
-  Intercepta's test list (score 100), refused before signing;
-- the "Discount feed", a clean payee asking to be paid in a lookalike USDC
-  (`0x7401…ECB0`), refused before signing - in Intercepta's words, a fake
-  USDC: `FAKE_TOKEN`, `KNOWN_MALICIOUS`, `SUSPICIOUS_DEPLOYER`;
-- a $5 dossier held and declined;
-- both sellers turning away a flagged payer.
-
-In the dashboard, buy the Alpha signal, then the Unvetted feed, then the
-Discount feed.
-
-**Feedback on the API**
-
-- Time to first call: minutes. One header, and the address scans answered at
-  once (the first cold call took ~5s, then 0.4-1.3s).
-- What confused us: Scan Message is documented as taking the EIP-712 data as a
-  JSON *string*. Sent that way it is not parsed and comes back `riskGroup: Low`
-  with nothing read, a silent false negative. Sent as an *object* it reads the
-  authorisation and flags the payee `KNOWN_MALICIOUS`, High. We now treat an
-  unparsed answer as no answer.
-- Also undocumented: `chainId` must be a string (`"8453"`), per-address
-  `detectors` are bare codes rather than `{code, description}`, and the scale
-  of `toxicScore` and of a trait's `risk` (they look like 0-100).
-- What was missing: Arc. Its chain id is not in any enum, so addresses are
-  screened on mainnet data and the Gateway authorisation under Base's id. A
-  batch address scan would also help a seller screening many payers.
-
-**An agent's spending cap works the same way, on both rails.** A payment that
-would take an agent past the cap its human set is held rather than refused,
-and goes through once the human approves it with World ID - for that payee
-and that price only. Past the human's whole line is still refused. Intercepta
-itself screens Arc only (its API covers EVM chains); the cap applies on Sui too.
-
-## World ID for Agents: a human's fresh yes before an agent's money moves
-
-IDKit decides who gets a line - one unique human, once. World ID for Agents
-decides something else: whether the human behind an agent says yes *right now*.
-Lifeline asks it at the one moment an agent cannot act alone: when Intercepta
-holds one of its payments (over the $2 auto-approve limit, a counterparty with
-warning signs, or screening that could not complete).
-
-1. **Link, once.** Signed in, the human links World ID for Agents to their
-   Lifeline account. Its pairwise `sub` is bound to them and never moved.
-2. **The agent is held and asks.** With only its mandate token, the agent calls
-   `POST /api/pay/holds/:id/approval`. Lifeline starts World's device
-   authorization and hands back a code and link for the human - never anything
-   that approves by itself. The agent cannot approve its own hold, and neither
-   can the human's twelve-hour session cookie.
-3. **The human answers in the World ID app**, with a fresh proof (device grants
-   always require one).
-4. **Lifeline's backend validates** the ID token World returns: RS256 signature
-   against World's published keys, exact issuer, our client as audience,
-   expiry, the Orb class `acr`, an `auth_time` after the request began, and a
-   `sub` equal to the account's linked World ID. Only then is the payment
-   released - screened again by Intercepta, paid once however often it is polled.
-5. **Declined** in World ID declines the hold. **Expired**, **a different World
-   ID**, a **stale** confirmation or **World ID being unavailable** leaves it
-   held. In none of them is anything paid.
-
-The dashboard and the mini app use the same approval: a QR code on a computer,
-an "Open World ID" button on a phone.
-
-Code: [`lib/worldAgents.ts`](web/src/lib/worldAgents.ts) (device grant, token
-validation, linking), [`api/pay/holds/[holdId]/approval`](web/src/app/api/pay/holds/[holdId]/approval/route.ts),
-[`api/auth/world-agents/link`](web/src/app/api/auth/world-agents/link/route.ts),
-[`WorldAgentApproval.tsx`](web/src/components/WorldAgentApproval.tsx).
-Live: `npm run e2e:world-agents` (approve) and `npm run e2e:world-agents -- --deny`.
-Both were run against World's sandbox: approved and released ($5 paid on
-credit), denied (declined, nothing paid), and - by accident, while learning the
-sandbox - approved by a different World identity, which was refused.
-
-**Integration debrief**
-
-- *Time to first success:* the client authenticated with the device endpoint
-  on the first call after portal registration. The first end-to-end approval
-  took about fifteen minutes more, all of it spent on the point below.
-- *Friction:* the sandbox gives each browser its own fake identity. We linked
-  in one browser and approved in another, so World returned two different
-  `sub`s and Lifeline (correctly) refused the payment twice before we saw why.
-  Nothing on the approval page says which identity you are.
-- *Missing docs:* the integration guides are only served through the MCP
-  endpoint (`get_idp_guide`); the public `/docs` page is an overview. That a
-  device-only client still needs a callback URL - and that its hostname
-  permanently fixes the pairwise sector - is easy to miss.
-- *Biggest improvement:* let the relying party show what is being approved.
-  The page reads "Authenticate with World ID for Lifeline ... approve sign-in",
-  while the human is really approving "$5 to this seller for this agent". A
-  binding message or `authorization_details` shown on the approval screen would
-  make this a true transaction approval rather than a sign-in.
-
-## When a human does not repay
-
-Every loan has a due date (7 days on Arc; a Sui parked repayment carries its
-own). Lifeline checks each human's standing whenever their dashboard loads,
-after every repayment, and on a scheduled sweep
-([`lib/standing.ts`](web/src/lib/standing.ts)):
-
-| standing | when | what happens |
-|---|---|---|
-| **good** | nothing overdue | nothing |
-| **delinquent** | an Arc loan is past due | the profile is **suspended on chain** (`setProfileStatus`), so the contract takes no new drawdowns; the agents that owe are marked delinquent; the app refuses new credit and says why |
-| **defaulted** | Arc: still unpaid 30 days after the due date. Sui: a parked repayment fell due and the purse could not cover it | **marked defaulted on chain** (`markDefault` on Arc, `set_profile_status` on Sui); the record drops to the first tier, with its repayments and time wiped |
-
-Repaying still works while suspended or in default - by the agent, from a
-wallet, or by card - and paying off what was overdue makes the profile active
-on chain again. The tier penalty stays: the record grows back from the first
-tier. World ID makes this stick: one person gets one account, so a defaulter
-cannot start over with a clean line.
-
-`GET /api/standing` answers for the signed-in human; `POST /api/standing/sweep`
-(with `LIFELINE_CRON_SECRET`) checks everyone. The grace period and loan term
-are `LIFELINE_DEFAULT_GRACE_DAYS` and `LIFELINE_LOAN_TERM_DAYS`.
-
-## A registry other World apps can ask
-
-World gives each app its own private identifier for a person, so apps cannot
-link people behind their backs. The owner of a relationship can name other
-apps to share its identifier by publishing an authorization document listing
-their exact callback URLs. Lifeline owns the relationship its humans link with
-World ID for Agents, so a partner app it lists gets Lifeline's identifier - the
-`sub` - when that human signs in to it with World, and can ask how they stand
-([`lib/registry.ts`](web/src/lib/registry.ts)).
-
-For a partner app:
-
-1. Lifeline adds you: `npm run registry:add -- --id acme --name "Acme" --callback https://acme.example/auth/world/callback`.
-   You get a key, shown once. Your callback now appears in
-   `https://<lifeline>/.well-known/lifeline-sector.json`.
-2. Your World client names that document as its sector (the sector identifier URI),
-   so World gives you the same `sub` Lifeline has for each human.
-3. A human signs in to you with World. Ask:
-   ```
-   GET https://<lifeline>/api/registry/standing?sub=<sub>
-   Authorization: Bearer <your key>
-   ```
-   ```json
-   { "found": true, "overall": "good", "standing": { "arc": "good", "sui": "good" }, "tier": { "arc": 1, "sui": 1 }, "memberSince": "…" }
-   ```
-   `overall` is `good`, `delinquent` or `defaulted` ([above](#when-a-human-does-not-repay)).
-   Someone who never linked is `{ "found": false }`.
-
-What it does not say: amounts, loans, history, or anything about the other
-apps that asked. It says how the human stands *now* - paying off a default
-clears it. Every lookup is shown to the human on their dashboard ("Who has
-looked you up"), and the join screen says the registry exists. Humans are
-listed once they link World ID, which the dashboard asks every new account to
-do. Partners are managed with `npm run registry:add` locally, or the
-`LIFELINE_REGISTRY_PARTNERS` JSON array on a deployment. `npm run
-registry:lookup -- --key … --sub …` asks as a partner would.
-
-World's documentation of the authorization document is brief; the format here
-- a JSON array of callback URLs served over HTTPS - is OpenID Connect's sector
-identifier document, which is what it describes.
-
-## Repaying by Apple Pay, Google Pay or card
-
-Arc debt can be repaid three ways, and the repay sheet offers whichever apply:
-
-- **the agent's own wallet** - when Lifeline created the agent and holds its key;
-- **your wallet** - connect MetaMask, Rabby or any browser wallet; USDC goes to
-  Lifeline's treasury on Arc, and the hash is checked on chain (right
-  recipient, enough USDC, confirmed, not used before) before the repayment is
-  booked ([`useWallet.ts`](web/src/lib/useWallet.ts), `txHash` in
-  [`api/repay`](web/src/app/api/repay/route.ts));
-- **Apple Pay, Google Pay or card**, in dollars, through Stripe.
-
-Lifeline never asks for an agent's private key. An agent registered by its
-address is repaid from a wallet you connect, or by card.
-
-1. The server creates a Stripe payment for what the human owes (never more;
-   paying it all rounds up to the cent; Stripe's floor is $0.50) -
-   [`api/repay/card`](web/src/app/api/repay/card/route.ts).
-2. Apple Pay and Google Pay appear where the device offers them (Stripe's
-   Express Checkout Element), a card form always -
-   [`CardRepay.tsx`](web/src/components/CardRepay.tsx).
-3. Once paid, the server asks Stripe - it does not take the browser's word -
-   and books the repayment on the Arc facility with `recordRepayment`, the same
-   booking any repayment gets
-   ([`lib/cardRepay.ts`](web/src/lib/cardRepay.ts),
-   [`lib/repayCore.ts`](web/src/lib/repayCore.ts)). The browser's confirmation
-   and Stripe's signed webhook
-   ([`api/repay/card/webhook`](web/src/app/api/repay/card/webhook/route.ts))
-   can both arrive; each payment is booked once.
-4. Anything paid over what is owed by then is refunded to the card.
-
-The money reaches Lifeline as dollars in its Stripe account, not as USDC on
-chain; Lifeline books the repayment, and that booking is on chain. This is how
-a lender takes card repayments. On a mainnet, an onramp (MoonPay, Coinbase,
-Stripe's) could deliver USDC straight to the facility instead - none delivers
-testnet USDC.
-
-**On Sui** the card pays off one parked repayment, whole (settling is all or
-nothing), from the Repay sheet on `/sui`. Once Stripe confirms, Lifeline's
-operator sends the agent the USDC it is short and the agent settles on chain,
-as it would from its own earnings; anything over the debt (Stripe's $0.50
-floor) is refunded. A retry only sends what is still missing, so a failed
-settle never funds twice ([`fundAndSettleSui`](web/src/lib/suiRail.ts)).
-
-Test mode: card `4242 4242 4242 4242`, any future date, any CVC. Google Pay
-works in Chrome with a saved card; Apple Pay needs Safari and a domain
-registered with Stripe (Settings → Payment method domains - add the ngrok
-host).
-
-## Claude Code, on your line (MCP)
-
-Open Claude Code in this repo and it has Lifeline as a set of tools
-([`.mcp.json`](.mcp.json), [`mcp/server.ts`](mcp/server.ts)). Nothing to set up
-by hand: no wallet to make, no key to paste, no token to copy.
-
-1. The agent's first Lifeline call finds it has no access, so it asks for some
-   and gets a link for you, with a QR code drawn right in the terminal - scan it
-   with your phone rather than typing the link.
-2. You open it signed in with World ID, and see who is asking, from where and
-   why. You pick Arc or Sui, a cap and how many days, and approve
-   ([`connect/[code]`](web/src/app/connect/[code]/page.tsx)). Lifeline makes
-   the agent a new wallet, authorises it on your line (on chain, on Arc) and
-   issues a mandate **bound to that wallet**.
-3. The agent's next call collects the mandate, once, and stores it in
-   `~/.lifeline/credentials.json` (0600). It never holds a private key:
-   Lifeline keeps the wallet's key and signs inside your limits.
-
-From then on it can browse, quote, buy and repay:
-
-| tool | what it does |
-|---|---|
-| `lifeline_status` | connected or not (and the link if not), wallet, what it owes, what it can still borrow |
-| `lifeline_connect` | ask for a line with a chosen name, rail, cap and reason |
-| `lifeline_catalogue` | what the sellers on its rail sell, with prices and URLs |
-| `lifeline_quote` | read a resource's 402 challenge without paying |
-| `lifeline_buy` | pay, on credit if short, and return what was delivered (SVGs saved to `~/.lifeline/artifacts`); `maxUsd` refuses anything dearer |
-| `lifeline_request_approval` / `lifeline_approval_status` | a payment Intercepta held goes to you in World ID; once you approve, it pays |
-| `lifeline_repay` | Arc: repay from the agent's wallet; Sui: report what is parked on chain |
-| `lifeline_disconnect` | forget the local mandate |
-
-Every payment is screened by Intercepta as any other is: refused, held for you,
-or paid. The agent is not trusted to behave. The limits are on the server:
-
-- **Bound mandate.** The token names its agent's wallet. Presented for any other
-  agent, even one of yours, it is refused (`not_this_agent`).
-- **Revocable.** Revoke the agent on the dashboard and the mandate stops
-  working. The agent says so and asks you again.
-- **One-time handoff.** The link alone gets nobody anything. The mandate goes
-  once to the process holding the request's secret, and only after you
-  approve. Declined means nothing is issued.
-- **No private network.** Lifeline fetches what an agent asks it to buy, so
-  loopback, private and metadata addresses are refused unless they are
-  Lifeline's own sellers ([`lib/resourceUrl.ts`](web/src/lib/resourceUrl.ts)).
-
-Settings are in `.mcp.json`: `LIFELINE_URL` (the deployed app; set
-`http://localhost:3000` to use a local one), `LIFELINE_AGENT_NAME`,
-`LIFELINE_RAIL` (`arc` or `sui`), and `LIFELINE_QR` - `dark` (default) or
-`light` for the terminal background the QR codes are drawn for, `off` to leave
-them out. A link to `localhost` gets no QR code, since a phone cannot open it. To use it outside this
-repo:
-
-```bash
-claude mcp add lifeline -e LIFELINE_URL=http://localhost:3000 -- npx tsx /path/to/lifeline/mcp/server.ts
-```
-
-## Layout
-
-```text
-contracts/      Foundry: LifelineCreditFacility for Arc, tests, deploy scripts
-sui/lifeline/   Move package: facility, obligation, fusd (demo coin for localnet), tests
-sui/src/        @lifeline/sui: Move client, x402 on Sui, the payer, reconcile
-sui/service/    the Sui x402 feed, metered per record
-sui/scripts/    deploy, open-facility (USDC), lifecycle (both endings on chain), reconcile
-web/            Next.js: dashboard, World ID, agent APIs, both rails
-mcp/            the MCP server: Claude Code on a human's line
-premium-api/    Arc x402 resources, priced $0.01 / $1 / $5
-scripts/        operator tools: fund Gateway, read balances on both rails
-deploy/         Railway configs for web, premium and feed; preflight checks
-```
-
-## Setup
+| payee, before signing | `GET /api/public/v2/extension/account/{addr}/toxic-score` | [`lib/intercepta.ts`](web/src/lib/intercepta.ts) `screenOutgoing` |
+| the asset (fake USDC?) | `GET .../token-intelligence/token/{addr}/risks` | same |
+| the exact EIP-712 authorization about to be signed | `POST /api/public/v2/extension/analysis/signature` | same |
+| the payer, before a seller accepts | `GET .../account/{addr}/quick-scan` | [`lib/x402Gateway.ts`](web/src/lib/x402Gateway.ts), [`premium-api/server.ts`](premium-api/server.ts) |
+| report a malicious address | `POST .../reports/address` | [`api/risk/report`](web/src/app/api/risk/report/route.ts) |
+
+The authorization is built, screened and signed in one place -
+[`lifelineSigner.ts` `screenAndSign`](web/src/lib/lifelineSigner.ts) - and the
+verdict decides what happens: **pay** (clean, up to $2), **cap** (warning
+signs, up to $0.25), **hold** (over the cap, or no answer - the human decides),
+**refuse** (scammer, sanctions, fake token, drainer). No answer is never a pass.
+Payments run on Arc testnet; addresses are screened against mainnet data.
+
+**Demo:** buy the *Alpha signal* → paid. Buy the *Unvetted feed* (payee is a
+known scammer from Intercepta's test list, score 100) or the *Discount feed*
+(pays in a fake USDC) → refused before signing, reason shown on the receipt.
+A $5 purchase → held for the human. Live: `npm run e2e:intercepta`.
+
+**Feedback**
+
+- Time to first call: minutes - one header; first cold call ~5s, then 0.4-1.3s.
+- Confusing: Scan Message documents the EIP-712 data as a JSON *string*; sent
+  that way it silently returns `Low`. Sent as an *object* it flags the payee
+  `KNOWN_MALICIOUS`. `chainId` must also be a string.
+- Undocumented: the scale of `toxicScore` and trait `risk` (looks like 0-100).
+- Missing: Arc's chain id (we screen on mainnet data), and a batch address scan
+  for sellers screening many payers.
+
+---
+
+## Run it
 
 ```bash
 npm install
-cp .env.example .env          # World, Arc, Sui, session secrets
-cd contracts && forge install foundry-rs/forge-std && cd ..
-```
-
-**Arc.** Set `PRIVATE_KEY` to a funded Arc testnet key (claim USDC at
-[faucet.circle.com](https://faucet.circle.com)), then either use the facility
-already deployed for this repo or deploy your own:
-
-```bash
-npm run deploy:arc            # writes the address to stdout
-npm run deposit               # fund Lifeline's Circle Gateway balance
-npm run withdraw:seller       # what the Arc seller earned, back to the funding wallet
-```
-
-Payments through Gateway never reach the seller's wallet: they build up as
-the seller's Gateway balance, credited when Circle settles its batch (a few
-minutes). On testnet, `withdraw:seller` then `deposit` puts that money back
-where Lifeline lends from.
-
-**Sui.** Needs the [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install)
-(`brew install sui`) to compile the package.
-
-```bash
-SUI_NETWORK=testnet npm run sui:deploy
-```
-
-This publishes the package, opens a demo-coin `Facility<FUSD>` with the operator holding
-its `AdminCap`, funds it with 500 demo dollars and writes
-`sui/deployments/testnet.json`. With no `SUI_PRIVATE_KEY` it generates one and
-prints it; on testnet the operator needs about 1 SUI for gas (from
-[faucet.sui.io](https://faucet.sui.io)). For local work, `sui start
---with-faucet --force-regenesis` and `SUI_NETWORK=localnet`.
-
-The facility is generic over its coin, and on testnet Lifeline lends Circle's
-USDC. Get testnet USDC for the operator address at
-[faucet.circle.com](https://faucet.circle.com) ("Sui Testnet" - it has a
-captcha, so a person does this step), then open a USDC facility on the
-published package and fund it:
-
-```bash
-SUI_NETWORK=testnet npm run sui:open-usdc
-```
-
-It keeps $2 of the operator's USDC back to stand in for customers paying agents
-for their work, and writes the new facility to `sui/deployments/testnet.json`
-(the previous one is kept beside it). The demo coin (`fusd`) remains for
-localnet, where there is no USDC.
-
-Then run the pieces you need:
-
-```bash
+cp .env.example .env          # World, Arc, Sui, Intercepta, Stripe keys
 npm run dev                   # app on :3000
-npm run premium               # Arc x402 resources on :4402
-npm run sui:service           # Sui x402 feed on :4031
+npm run premium               # Arc x402 seller on :4402
+npm run sui:service           # Sui x402 seller on :4031
 ```
 
-## Testing
+Arc: `npm run deploy:arc`, then `npm run deposit` to fund Circle Gateway. Sui:
+`SUI_NETWORK=testnet npm run sui:deploy`, then `npm run sui:open-usdc` (Circle
+testnet USDC from [faucet.circle.com](https://faucet.circle.com)). Deploying:
+[`deploy/README.md`](deploy/README.md).
+
+```text
+contracts/      Arc credit facility (Foundry)
+sui/lifeline/   Move package: facility, obligation
+sui/src/        Sui client, x402 on Sui, payer
+sui/service/    Sui x402 seller
+web/            Next.js app, World ID, agent APIs, both rails
+mcp/            Claude Code MCP server
+premium-api/    Arc x402 seller
+deploy/         Railway configs and preflight
+```
+
+## Tests
 
 ```bash
-npm test                      # Foundry, Move, web and Sui library suites
-npm run typecheck             # every TypeScript tree
-npm run lint
-
-npm run e2e:arc               # the Arc rail through the app, on Arc testnet
-npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
-npm run e2e:sui               # the Sui rail through the app
-npm run e2e:intercepta        # screening, live: cleared, refused, held, approved
-npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc, settled on Sui
-npm run e2e:world-agents      # an agent's held payment approved (or --deny) in World ID for Agents
-npm run e2e:mcp               # the MCP server over stdio: connect, approve, buy, revoke, on both rails
-npm run e2e:standing          # a human who does not repay: suspended, defaulted, restored - on chain, both rails
-npm run sui:lifecycle         # both endings of a parked repayment, on chain
+npm test                      # Foundry (23), Move (58), web (110), Sui library (8)
+npm run e2e:arc               # Arc rail, live on testnet
+npm run e2e:sui               # Sui rail, live
+npm run e2e:intercepta        # screening, live: paid, refused, held
+npm run e2e:world-agents      # held payment approved / --deny in World ID for Agents
+npm run e2e:card              # Stripe repayments on both rails
+npm run e2e:standing          # suspended, defaulted, restored - on chain
+npm run e2e:mcp               # Claude Code tools end to end
 ```
-
-| suite | what it proves |
-|---|---|
-| `forge test` (23) | the facility's rules, and every exploit it was hardened against |
-| `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (102) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release), the ledger (no-key repayments refused, interest charged once, debt from loans, one change at a time), separate Arc and Sui lines, records and agents, agent connect (link, secret, approve once, collect once, decline), bound mandates and revocation, private-network URLs refused |
-| Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
-| `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
-| `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
-| `e2e:intercepta` (17) | live against Intercepta and Arc testnet: a clean seller cleared and settled, a known scammer's payee refused before signing (by the address and the authorisation scans both), a $5 purchase held, declined, and held again and approved, and both sellers turning away a flagged payer |
-| `e2e:sui` (21) | credit on Sui in Circle's testnet USDC, Arc's line untouched by what Sui drew, a Sui agent refused on Arc, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
-| `e2e:mcp` (28) | an MCP client driving the server as Claude Code does: no access, then a link; the human approves; the mandate collected once and stored 0600 with no key; catalogue, quote, a price over `maxUsd`, a private-network URL and Intercepta's refusal; the mandate refused on another agent; a purchase on credit; revocation noticed; a declined request; then the same on Sui |
-| `sui:lifecycle` (18) | both endings on chain, in testnet USDC: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
-
-World ID cannot be scripted - it needs a phone - so the end-to-end harnesses
-stand in for exactly one step: they provision the human's profile as the verify
-route does and mint the same signed session cookie. Everything after that is the
-app's HTTP API and real transactions.
 
 ## Deployed
 
 | | |
 |---|---|
-| Arc `LifelineCreditFacility` | [`0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f`](https://testnet.arcscan.app/address/0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f), block 64053316 |
-| Arc USDC | `0x3600000000000000000000000000000000000000` (native, 6-decimal ERC-20 interface) |
-| Sui testnet package | [`0x14e7136b…`](https://suiscan.xyz/testnet/object/0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91), tx [`5spRKM7U37…`](https://suiscan.xyz/testnet/tx/5spRKM7U37KcxpXybiVKbWcm2RbykqYtPw1snYA6PvUL) |
-| Sui testnet `Facility<USDC>` (Circle's testnet USDC) | [`0x24d4736a…`](https://suiscan.xyz/testnet/object/0x24d4736a368e7c1e3ef1acddaa9560252e0c0ea5a08e90ab8c45bcf9481bb73e), 18 USDC liquidity, funded in [`CgmxbZGZ…`](https://suiscan.xyz/testnet/tx/CgmxbZGZV8sepFmJLQVBPe4s179WNjT8AuqH8cCV8uhx) |
-| Sui devnet | also deployed; see `sui/deployments/devnet.json` (devnet is wiped periodically) |
-
-Every id is in `sui/deployments/<network>.json`.
-
-On testnet, `sui:lifecycle` passes 18/18 - the earner's obligation collected
-by a stranger in
-[`8221agWL…`](https://suiscan.xyz/testnet/tx/8221agWL1vqYysTnWXLUqdHpbYAmRcChpprq5LyZtrL4),
-the idler's default recorded in
-[`Gy9Apwq5…`](https://suiscan.xyz/testnet/tx/Gy9Apwq5Qf7s9giAGNfirnoHTpGFo9VoWZR5owhAwgMt)
-with nothing moved - and `e2e:sui` passes 20/20 through the app.
-
-To host the app itself (web, the Arc seller and the Sui seller on Railway),
-see [`deploy/README.md`](deploy/README.md); `npm run preflight` checks a
-deployment once it is up.
-
-## Security notes
-
-- Sessions are a signed, httpOnly cookie minted only by a verified World proof.
-  Every spending route reads the human from it - never from a request body or
-  query string.
-- A mandate (`POST /api/agent-token`) is a card: it spends up to its cap and
-  cannot register agents, issue mandates, settle or reconcile.
-- x402 sellers on both rails verify against the requirements they quoted, never
-  the ones the buyer echoes back, and a payment can be used once.
-- An earlier revision of `web/src/app/api/auth/world-rp-context/route.ts`
-  shipped a World RP signing key as a fallback. It is still in git history:
-  rotate it in the World developer portal and set `WORLD_RP_SIGNING_KEY`.
+| Arc `LifelineCreditFacility` | [`0xd25Fd339…818f`](https://testnet.arcscan.app/address/0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f) |
+| Sui testnet package | [`0x14e7136b…`](https://suiscan.xyz/testnet/object/0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91) |
+| Sui `Facility<USDC>` | [`0x24d4736a…`](https://suiscan.xyz/testnet/object/0x24d4736a368e7c1e3ef1acddaa9560252e0c0ea5a08e90ab8c45bcf9481bb73e) |
+| On-chain collection by a stranger / a recorded default | [`8221agWL…`](https://suiscan.xyz/testnet/tx/8221agWL1vqYysTnWXLUqdHpbYAmRcChpprq5LyZtrL4) / [`Gy9Apwq5…`](https://suiscan.xyz/testnet/tx/Gy9Apwq5Qf7s9giAGNfirnoHTpGFo9VoWZR5owhAwgMt) |
+| App / Arc seller / Sui seller | [web](https://web-production-2ccec.up.railway.app) · [premium](https://premium-production-6e83.up.railway.app) · [feed](https://feed-production-bd25.up.railway.app) |
