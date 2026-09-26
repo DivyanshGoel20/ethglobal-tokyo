@@ -54,6 +54,8 @@ export default function MiniApp() {
   // the human is asked to match it against their screen.
   const [pairFallback, setPairFallback] = useState(false);
   const [pairStale, setPairStale] = useState(false);
+  // World App opened this app on another server than the one that made the code.
+  const [pairElsewhere, setPairElsewhere] = useState<{ made: string; here: string } | null>(null);
   const [pairing, setPairing] = useState(false);
 
   // World App can open the mini app at the path it was opened with last time
@@ -63,9 +65,26 @@ export default function MiniApp() {
     if (!L.isWorldVerified) return;
     let last: string | null = null;
     const check = async () => {
-      const code = new URLSearchParams(window.location.search).get("pair");
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("pair");
       if (!code || code === last) return;
       last = code;
+      // The code was made on another server than the one World App opened:
+      // nothing here can approve it, and no other code may stand in for it.
+      const at = params.get("at");
+      let elsewhere: string | null = null;
+      try {
+        if (at && new URL(at).origin !== window.location.origin) elsewhere = new URL(at).host;
+      } catch {
+        /* a malformed origin is treated as this one */
+      }
+      if (elsewhere) {
+        setPairCode(null);
+        setPairStale(false);
+        setPairElsewhere({ made: elsewhere, here: window.location.host });
+        window.history.replaceState(null, "", window.location.pathname);
+        return;
+      }
       try {
         const d = await fetch(`/api/auth/pair/approve?code=${encodeURIComponent(code)}`, { cache: "no-store" }).then((r) => r.json());
         if (d.waiting) {
@@ -163,6 +182,22 @@ export default function MiniApp() {
     <div className="h-[100dvh] flex flex-col">
       {/* Header. World App draws its own controls at the top right, so ours
           stay left and centre. */}
+      {pairElsewhere && (
+        <div className="fixed inset-x-0 bottom-0 z-50 sheet rise px-6 pt-5 space-y-3" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
+          <div className="lab">Sign in on a computer</div>
+          <p className="text-[14px] leading-snug">
+            That code was made on <span className="mono break-all">{pairElsewhere.made}</span>, but World App opened Lifeline
+            on <span className="mono break-all">{pairElsewhere.here}</span>, so it cannot be approved here.
+          </p>
+          <p className="text-[12.5px] ink-3 leading-snug">
+            World App is using an old address for this mini app. Check the App URL in the World Developer Portal, then close
+            World App fully and scan again.
+          </p>
+          <button className="btn btn-solid w-full justify-center h-11" onClick={() => setPairElsewhere(null)}>
+            OK
+          </button>
+        </div>
+      )}
       {pairStale && !pairCode && (
         <div className="fixed inset-x-0 bottom-0 z-50 sheet rise px-6 pt-5 space-y-3" style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom))" }}>
           <div className="lab">Sign in on a computer</div>

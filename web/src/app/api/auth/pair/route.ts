@@ -21,7 +21,10 @@ export async function POST(req: NextRequest) {
   if (!started) return NextResponse.json({ error: "Sign-in is busy. Try again in a minute." }, { status: 503 });
   const { code, claim, expiresAt } = started;
   const appId = process.env.NEXT_PUBLIC_MINIAPP_ID || process.env.NEXT_PUBLIC_WORLD_APP_ID || "app_6ad9b6ef952f1c2a9a70a58e05aa9878";
-  const url = `https://world.org/mini-app?app_id=${appId}&path=${encodeURIComponent(`/?pair=${code}`)}`;
+  // The code lives on this server only. Saying which one lets the mini app
+  // tell a code from here apart from World App having opened another server.
+  const origin = (process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin).replace(/\/$/, "");
+  const url = `https://world.org/mini-app?app_id=${appId}&path=${encodeURIComponent(`/?pair=${code}&at=${encodeURIComponent(origin)}`)}`;
   const res = NextResponse.json({ code, url, expiresAt });
   res.cookies.set(claimCookie(code), claim, {
     httpOnly: true,

@@ -2,9 +2,12 @@
   "mcpServers": {
     "lifeline": {
       "command": "npx",
-      "args": ["tsx", "mcp/server.ts"],
+      "args": [
+        "tsx",
+        "mcp/server.ts"
+      ],
       "env": {
-        "LIFELINE_URL": "http://localhost:3000",
+        "LIFELINE_URL": "https://web-production-2ccec.up.railway.app",
         "LIFELINE_AGENT_NAME": "claude-code"
       }
     }
