@@ -393,7 +393,7 @@ npm run deposit               # fund Lifeline's Circle Gateway balance
 SUI_NETWORK=testnet npm run sui:deploy
 ```
 
-This publishes the package, opens a `Facility<FUSD>` with the operator holding
+This publishes the package, opens a demo-coin `Facility<FUSD>` with the operator holding
 its `AdminCap`, funds it with 500 demo dollars and writes
 `sui/deployments/testnet.json`. With no `SUI_PRIVATE_KEY` it generates one and
 prints it; on testnet the operator needs about 1 SUI for gas (from
@@ -448,8 +448,8 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
 | `e2e:intercepta` (17) | live against Intercepta and Arc testnet: a clean seller cleared and settled, a known scammer's payee refused before signing (by the address and the authorisation scans both), a $5 purchase held, declined, and held again and approved, and both sellers turning away a flagged payer |
-| `e2e:sui` (20) | credit on Sui, Arc's line untouched by what Sui drew, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
-| `sui:lifecycle` (18) | both endings on chain: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
+| `e2e:sui` (21) | credit on Sui in Circle's testnet USDC, Arc's line untouched by what Sui drew, a Sui agent refused on Arc, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
+| `sui:lifecycle` (18) | both endings on chain, in testnet USDC: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
 
 World ID cannot be scripted - it needs a phone - so the end-to-end harnesses
 stand in for exactly one step: they provision the human's profile as the verify
@@ -463,7 +463,7 @@ app's HTTP API and real transactions.
 | Arc `LifelineCreditFacility` | [`0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f`](https://testnet.arcscan.app/address/0xd25Fd339E08aad2534dA99B3A02dEec6EC1A818f), block 64053316 |
 | Arc USDC | `0x3600000000000000000000000000000000000000` (native, 6-decimal ERC-20 interface) |
 | Sui testnet package | [`0x14e7136b…`](https://suiscan.xyz/testnet/object/0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91), tx [`5spRKM7U37…`](https://suiscan.xyz/testnet/tx/5spRKM7U37KcxpXybiVKbWcm2RbykqYtPw1snYA6PvUL) |
-| Sui testnet `Facility<FUSD>` | [`0x9ab70797…`](https://suiscan.xyz/testnet/object/0x9ab70797320978608fce71b115d088e2d67c68d4eaf2941b5cbf382ed94e5cea), 500 FUSD liquidity |
+| Sui testnet `Facility<USDC>` (Circle's testnet USDC) | [`0x24d4736a…`](https://suiscan.xyz/testnet/object/0x24d4736a368e7c1e3ef1acddaa9560252e0c0ea5a08e90ab8c45bcf9481bb73e), 18 USDC liquidity, funded in [`CgmxbZGZ…`](https://suiscan.xyz/testnet/tx/CgmxbZGZV8sepFmJLQVBPe4s179WNjT8AuqH8cCV8uhx) |
 | Sui devnet | also deployed; see `sui/deployments/devnet.json` (devnet is wiped periodically) |
 
 Every id is in `sui/deployments/<network>.json`.

@@ -1,11 +1,10 @@
 {
   "network": "testnet",
   "packageId": "0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91",
-  "facilityId": "0x9ab70797320978608fce71b115d088e2d67c68d4eaf2941b5cbf382ed94e5cea",
-  "adminCapId": "0x732f9e0c864f9e145800945a0ff559e3261bf1f4f0762c4ca7c2601eaf2b7c61",
-  "coinType": "0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91::fusd::FUSD",
-  "faucetId": "0xaf1f6015d07598803003e2dbce20bf7a8381785b68965662286d1b905c971fcb",
+  "facilityId": "0x24d4736a368e7c1e3ef1acddaa9560252e0c0ea5a08e90ab8c45bcf9481bb73e",
+  "adminCapId": "0xc391652c49497b48cdb152afac15373f9d60a92ee68a62c512cd34b9eb56690f",
+  "coinType": "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC",
   "operator": "0x09d34200073a561e0c4530c1112f7eb5a5eb67d9a6d6141a9c1134e13387cf40",
-  "deployedAt": "2026-09-26T04:52:20.874Z",
-  "digest": "5spRKM7U37KcxpXybiVKbWcm2RbykqYtPw1snYA6PvUL"
+  "deployedAt": "2026-09-26T15:46:17.043Z",
+  "digest": "DbRrCM3PDCNUzfaWCSjq3dXrtbuNA5xZShfbaWQcZMf7"
 }
