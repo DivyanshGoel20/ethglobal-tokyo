@@ -336,9 +336,18 @@ sandbox - approved by a different World identity, which was refused.
 
 ## Repaying by Apple Pay, Google Pay or card (Arc)
 
-Arc debt can be repaid by the agent from its own wallet, or by the human in
-dollars - Apple Pay, Google Pay or card, through Stripe. The repay sheet offers
-both.
+Arc debt can be repaid three ways, and the repay sheet offers whichever apply:
+
+- **the agent's own wallet** - when Lifeline created the agent and holds its key;
+- **your wallet** - connect MetaMask, Rabby or any browser wallet; USDC goes to
+  Lifeline's treasury on Arc, and the hash is checked on chain (right
+  recipient, enough USDC, confirmed, not used before) before the repayment is
+  booked ([`useWallet.ts`](web/src/lib/useWallet.ts), `txHash` in
+  [`api/repay`](web/src/app/api/repay/route.ts));
+- **Apple Pay, Google Pay or card**, in dollars, through Stripe.
+
+Lifeline never asks for an agent's private key. An agent registered by its
+address is repaid from a wallet you connect, or by card.
 
 1. The server creates a Stripe payment for what the human owes (never more;
    paying it all rounds up to the cent; Stripe's floor is $0.50) -

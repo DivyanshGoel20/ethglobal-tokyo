@@ -17,7 +17,7 @@ interface MonitorProps {
   leads: LeadData[];
   rail: Rail;
   suiNetwork?: string | null;
-  onAddAgent: (input: { name: string; address: string; privateKey: string; capUsd: number }) => Promise<void>;
+  onAddAgent: (input: { name: string; address: string; capUsd: number }) => Promise<void>;
   onRemoveAgent: (address: string) => Promise<void>;
   onPayAgent?: (address: string) => Promise<void>;
   onBuy: (agent: Agent) => void;
@@ -199,7 +199,6 @@ export const AuthorizeSheet: React.FC<{
 }> = ({ open, rail, onClose, onAddAgent }) => {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
   const [limit, setLimit] = useState("5");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -213,12 +212,10 @@ export const AuthorizeSheet: React.FC<{
       await onAddAgent({
         name: name.trim(),
         address: rail === "arc" ? address.trim() : "",
-        privateKey: rail === "arc" ? privateKey.trim() : "",
         capUsd: parseFloat(limit) || 5,
       });
       setName("");
       setAddress("");
-      setPrivateKey("");
       onClose();
     } catch (err: any) {
       setError(err.message || "Could not authorize the agent.");
@@ -243,15 +240,14 @@ export const AuthorizeSheet: React.FC<{
             <input className="field" placeholder="empty mints a new wallet" value={address} onChange={(e) => setAddress(e.target.value)} />
           </Field>
         )}
-        {rail === "arc" && address.trim() ? (
-          <Field label="Its private key" hint="optional · needed to repay from its wallet">
-            <input type="password" className="field" value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} />
-          </Field>
-        ) : (
-          <Field label="Spending cap" hint="USDC">
-            <input type="number" min="0.01" step="0.01" className="field" value={limit} onChange={(e) => setLimit(e.target.value)} />
-          </Field>
+        {rail === "arc" && address.trim() && (
+          <p className="mono text-[10.5px] ink-3 leading-relaxed">
+            Lifeline never asks for an agent&apos;s private key. Its debts are repaid from a wallet you connect, or by card.
+          </p>
         )}
+        <Field label="Spending cap" hint="USDC">
+          <input type="number" min="0.01" step="0.01" className="field" value={limit} onChange={(e) => setLimit(e.target.value)} />
+        </Field>
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn btn-quiet">

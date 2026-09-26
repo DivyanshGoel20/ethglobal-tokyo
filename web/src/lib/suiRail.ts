@@ -126,7 +126,7 @@ export async function payOnSui(args: {
   const key = getAgentPrivateKey(args.agent.address);
   if (!key) {
     throw new Error(
-      "Lifeline holds no key for this agent, so it cannot sign on Sui. Provision a new agent, or register this one with its key."
+      "Lifeline holds no key for this agent, so it cannot sign on Sui. Authorize a new Sui agent from the dashboard."
     );
   }
 

@@ -4,6 +4,10 @@ import React, { useEffect, useState } from "react";
 import { Agent, Rail } from "@/types";
 import { Sheet, Field, ErrorNote } from "./Sheet";
 import { CardRepay } from "./CardRepay";
+import { useWallet } from "@/lib/useWallet";
+
+type Method = "agent" | "wallet" | "card";
+const METHOD_NAMES: Record<Method, string> = { agent: "Agent's wallet", wallet: "Your wallet", card: "Apple Pay · Google Pay" };
 
 interface RepayModalProps {
   isOpen: boolean;
@@ -24,10 +28,12 @@ type Obligation = {
 };
 
 /**
- * Repaying differs by rail. On Arc the agent sends USDC from its wallet and the
- * operator books it on the facility. On Sui the debt is a parked obligation:
- * settling early moves the agent's coins into its purse and settles in one
- * transaction the agent signs.
+ * Repaying differs by rail. On Arc the debt can be paid three ways, whichever
+ * apply: from the agent's own wallet (when Lifeline holds its key), from any
+ * wallet the human connects - USDC to Lifeline's treasury, checked on chain -
+ * or by card. The facility books it either way. On Sui the debt is a parked
+ * obligation: settling early moves the agent's coins into its purse and
+ * settles in one transaction the agent signs.
  */
 export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, agents, onDone, onSessionExpired }) => {
   const owing = agents.filter((a) => a.outstandingDebt > 0);
@@ -36,8 +42,9 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
   const [obligations, setObligations] = useState<Obligation[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Who pays: the agent from its Arc wallet, or the human by card.
-  const [method, setMethod] = useState<"agent" | "card">("agent");
+  // Who pays: the agent from its wallet, the human from a wallet they connect, or by card.
+  const [method, setMethod] = useState<Method>("agent");
+  const wallet = useWallet();
   const [card, setCard] = useState<{ enabled: boolean; publishableKey: string | null; minimumUsd: number } | null>(null);
   const [paying, setPaying] = useState(false);
 
@@ -48,11 +55,22 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
       .catch(() => setCard(null));
   }, []);
 
+  const selected = owing.find((a) => a.address === agentAddress);
+  const methods: Method[] = [
+    ...(selected?.isAutonomous ? (["agent"] as const) : []),
+    ...(wallet.available ? (["wallet"] as const) : []),
+    ...(card?.enabled ? (["card"] as const) : []),
+  ];
+  // Keep a method that applies to the agent in hand.
+  useEffect(() => {
+    if (methods.length && !methods.includes(method)) setMethod(methods[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [methods.join(","), method]);
+
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
     setPaying(false);
-    setMethod("agent");
     if (rail === "arc") {
       const first = owing[0];
       setAgentAddress(first?.address ?? "");
@@ -83,14 +101,18 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
     const value = parseFloat(amount) || 0;
     if (!agentAddress || value <= 0) return;
     if (method === "card") return setPaying(true);
+    if (method === "wallet" && !wallet.address) return wallet.connect();
     setBusy("arc");
     setError(null);
     try {
-      const data = await post("/api/repay", { agentAddress, amount: value });
+      // From a connected wallet: USDC to the treasury first, then the hash -
+      // which the server checks on Arc before it books anything.
+      const txHash = method === "wallet" ? await wallet.payTreasury(value) : undefined;
+      const data = await post("/api/repay", { agentAddress, amount: value, ...(txHash ? { txHash } : {}) });
       onDone(`Repaid $${Number(data.amount).toFixed(2)} on Arc`);
       onClose();
     } catch (err: any) {
-      setError(err.message);
+      setError(err?.code === 4001 ? "You declined in your wallet. Nothing was sent." : err.message);
     } finally {
       setBusy(null);
     }
@@ -130,34 +152,40 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
           />
         ) : (
           <form onSubmit={repayArc} className="space-y-4">
-            {card?.enabled && (
-              <div className="grid grid-cols-2" style={{ border: "1px solid var(--rule)" }}>
-                {(
-                  [
-                    ["agent", "Agent's wallet"],
-                    ["card", "Apple Pay · Google Pay"],
-                  ] as const
-                ).map(([id, name]) => (
+            {methods.length > 1 && (
+              <div className={`grid ${methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`} style={{ border: "1px solid var(--rule)" }}>
+                {methods.map((id) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setMethod(id)}
-                    className="h-9 mono text-[10.5px] uppercase tracking-[0.06em]"
+                    className="h-9 px-1 mono text-[10px] sm:text-[10.5px] uppercase tracking-[0.04em]"
                     style={{
                       background: method === id ? "var(--solid-bg)" : "transparent",
                       color: method === id ? "var(--solid-fg)" : "var(--ink-2)",
                     }}
                   >
-                    {name}
+                    {METHOD_NAMES[id]}
                   </button>
                 ))}
               </div>
             )}
-            <p className="text-[13px] ink-2 leading-relaxed">
-              {method === "agent"
-                ? "The agent pays from its own Arc wallet; the facility books it."
-                : `You pay by Apple Pay, Google Pay or card, in dollars. Once Stripe confirms it, the repayment is booked on the Arc facility. From $${(card?.minimumUsd ?? 0.5).toFixed(2)}.`}
-            </p>
+            {methods.length === 0 ? (
+              <p className="text-[13px] ink-2 leading-relaxed">
+                Lifeline does not hold this agent&apos;s key. Open Lifeline in a browser with a wallet to repay from it, or
+                set up card payments.
+              </p>
+            ) : (
+              <p className="text-[13px] ink-2 leading-relaxed">
+                {method === "agent"
+                  ? "The agent pays from its own Arc wallet; the facility books it."
+                  : method === "wallet"
+                    ? wallet.address
+                      ? `From ${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}: USDC goes to Lifeline's treasury on Arc, and once the chain confirms it the facility books the repayment.`
+                      : "Pay from any wallet you hold - MetaMask, Rabby, Coinbase Wallet. USDC goes to Lifeline's treasury on Arc, checked on chain, then booked."
+                    : `You pay by Apple Pay, Google Pay or card, in dollars. Once Stripe confirms it, the repayment is booked on the Arc facility. From $${(card?.minimumUsd ?? 0.5).toFixed(2)}.`}
+              </p>
+            )}
             <Field label={method === "agent" ? "Paying agent" : "Debt of"}>
               <select
                 className="field"
@@ -175,16 +203,26 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
                 ))}
               </select>
             </Field>
-            <Field label="Amount" hint={method === "agent" ? "USDC" : "USD"}>
+            <Field label="Amount" hint={method === "card" ? "USD" : "USDC"}>
               <input type="number" step="0.01" min="0.01" className="field" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
-            {error && <ErrorNote>{error}</ErrorNote>}
+            {(error || wallet.error) && <ErrorNote>{error || wallet.error}</ErrorNote>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="btn btn-quiet">
                 Cancel
               </button>
-              <button type="submit" disabled={!!busy} className="btn btn-solid">
-                {busy ? "Settling on Arc…" : method === "card" ? "Continue to pay" : "Repay"}
+              <button type="submit" disabled={!!busy || wallet.connecting || methods.length === 0} className="btn btn-solid">
+                {busy
+                  ? method === "wallet"
+                    ? "Confirm in your wallet…"
+                    : "Settling on Arc…"
+                  : method === "card"
+                    ? "Continue to pay"
+                    : method === "wallet" && !wallet.address
+                      ? wallet.connecting
+                        ? "Connecting…"
+                        : "Connect wallet"
+                      : "Repay"}
               </button>
             </div>
           </form>

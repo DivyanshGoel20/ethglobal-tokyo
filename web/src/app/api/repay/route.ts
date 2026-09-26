@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
           success: false,
           code: "no_agent_key",
           error:
-            "Lifeline does not hold this agent's key, so it cannot pay from the agent's wallet. Repay by card, or send USDC from the agent's wallet yourself and submit the transaction.",
+            "Lifeline does not hold this agent's key, so it cannot pay from the agent's wallet. Repay from a wallet you connect, or by card.",
         },
         { status: 400 }
       );

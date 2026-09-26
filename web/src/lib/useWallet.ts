@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ARC_CHAIN_ID_HEX, ensureArcNetwork } from "./browserChain";
+import { ARC_CHAIN_ID_HEX, ARC_TREASURY, ensureArcNetwork } from "./browserChain";
 
 /**
  * The browser wallet, connected only when someone asks for it.
@@ -38,6 +38,11 @@ export type Wallet = {
   error: string | null;
   connect: () => Promise<void>;
   switchToArc: () => Promise<void>;
+  /**
+   * Send `amountUsd` of Arc's native USDC to Lifeline's treasury and return
+   * the transaction hash - the receipt the repay route checks on chain.
+   */
+  payTreasury: (amountUsd: number) => Promise<`0x${string}`>;
 };
 
 export function useWallet(): Wallet {
@@ -120,6 +125,23 @@ export function useWallet(): Wallet {
     }
   }, []);
 
+  const payTreasury = useCallback(
+    async (amountUsd: number) => {
+      const eth = provider();
+      if (!eth || !address) throw new Error("Connect a wallet first.");
+      // Never send on the wrong chain: the transfer would be real, and invisible to Lifeline.
+      await ensureArcNetwork(eth);
+      // Native USDC on Arc has 18 decimals; rounded up to the micro-dollar.
+      const micros = BigInt(Math.ceil(amountUsd * 1e6 - 1e-9));
+      const value = `0x${(micros * 10n ** 12n).toString(16)}`;
+      return (await eth.request({
+        method: "eth_sendTransaction",
+        params: [{ from: address, to: ARC_TREASURY, value }],
+      })) as `0x${string}`;
+    },
+    [address]
+  );
+
   return {
     available: Boolean(provider()),
     address,
@@ -129,5 +151,6 @@ export function useWallet(): Wallet {
     error,
     connect,
     switchToArc,
+    payTreasury,
   };
 }

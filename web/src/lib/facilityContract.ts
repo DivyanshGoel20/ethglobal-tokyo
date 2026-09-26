@@ -564,7 +564,7 @@ export async function executeOnChainRepayment(params: {
   // debt for free for any agent registered by address alone.
   if (!params.alreadyTransferred && !params.fundedOffChain && !agentKey) {
     throw new Error(
-      "Lifeline does not hold this agent's key, so it cannot pay from the agent's wallet. Repay by card, or send USDC from the agent's wallet yourself and submit the transaction."
+      "Lifeline does not hold this agent's key, so it cannot pay from the agent's wallet. Repay from a wallet you connect, or by card."
     );
   }
 

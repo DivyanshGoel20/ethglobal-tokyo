@@ -233,9 +233,9 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
     return data;
   };
 
-  const handleAddAgent = async (input: { name: string; address: string; privateKey: string; capUsd: number }) => {
+  const handleAddAgent = async (input: { name: string; address: string; capUsd: number }) => {
     if (input.address) {
-      await post("/api/agents", { action: "add", name: input.name, walletAddress: input.address, privateKey: input.privateKey || undefined });
+      await post("/api/agents", { action: "add", name: input.name, walletAddress: input.address, capUsd: input.capUsd });
     } else {
       const data = await post("/api/agent/provision", { label: input.name, capUsd: input.capUsd, rail });
       if (data.authorizedOnChain === false) showToast(`Agent created, but Arc authorization failed: ${data.authorizationError}`);

@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getHuman, unauthenticated } from "@/lib/session";
 import { getAgentWalletUsdc } from "@/lib/walletBalance";
 import { Agent } from "@/types";
-import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore, agentRail } from "@/lib/agentStore";
+import { getAllAgents, addAgentToStore, getAgentsByOwner, removeAgentFromStore, agentRail, getHumanFacilityStats } from "@/lib/agentStore";
 import { validateArcAgentWallet } from "@/lib/arc";
 import { LifelineSigner } from "@/lib/lifelineSigner";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
-import { hasAgentPrivateKey, setAgentPrivateKey } from "@/lib/agentKeys";
+import { hasAgentPrivateKey } from "@/lib/agentKeys";
 import { withSuiState } from "@/lib/suiRail";
 
 function sanitizeAgentForClient(agent: Agent): Agent {
@@ -83,7 +83,9 @@ export async function POST(req: NextRequest) {
     if (!human) return unauthenticated();
 
     const body = await req.json();
-    const { name, walletAddress, privateKey } = body;
+    // No private key: Lifeline never takes one for a wallet it did not create.
+    // Such an agent's debts are repaid from a wallet the human connects, or by card.
+    const { name, walletAddress, capUsd } = body;
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
@@ -110,15 +112,6 @@ export async function POST(req: NextRequest) {
 
     const formattedAddress = walletAddress.trim().toLowerCase() as `0x${string}`;
 
-    // A key that does not belong to this agent is a hard failure, not a
-    // silently-ignored field: registering it would point Lifeline at a wallet the
-    // operator did not name.
-    if (privateKey && typeof privateKey === "string" && privateKey.trim()) {
-      const stored = setAgentPrivateKey(formattedAddress, privateKey.trim());
-      if (!stored.ok) {
-        return NextResponse.json({ error: stored.error, code: "bad_signing_key" }, { status: 400 });
-      }
-    }
 
     const newAgent: Agent = {
       agentId: `agent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -129,7 +122,11 @@ export async function POST(req: NextRequest) {
       // provisioned, so Lifeline holds the key that signs on Sui.
       rail: "arc",
       network: "Arc Testnet (5042002)",
-      creditLimit: 10,
+      // The cap asked for, held to the Arc line's headroom.
+      creditLimit: Math.min(
+        Math.max(Number.isFinite(Number(capUsd)) ? Number(capUsd) : 10, 0),
+        getHumanFacilityStats(human).totalAvailableCredit
+      ),
       outstandingDebt: 0,
       totalBorrowed: 0,
       totalRepaid: 0,
