@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { writeJsonAtomic } from "./atomicWrite";
+import { deployment } from "@lifeline/sui";
 
 /**
  * Debt drawn on Sui, counted against the same line as Arc.
@@ -23,6 +24,13 @@ export interface RailDebt {
   amountUsd: number;
   /** The parked repayment that collects this debt. */
   obligationId: string;
+  /**
+   * The Sui facility it was drawn from. An obligation only exists on the
+   * network it was parked on, so a debt from another deployment - a localnet
+   * that has since been wiped, a devnet that was reset - is not something this
+   * one can collect or count.
+   */
+  facilityId?: string;
   resource: string;
   digest?: string;
   createdAt: number;
@@ -48,7 +56,8 @@ function filePath(): string {
   return path.resolve(process.cwd(), "data", "rail-debt.json");
 }
 
-function readAll(): RailDebt[] {
+/** Every row, from every deployment - only what writes back needs this. */
+function readEverything(): RailDebt[] {
   try {
     const p = filePath();
     if (!fs.existsSync(p)) return [];
@@ -59,12 +68,30 @@ function readAll(): RailDebt[] {
   }
 }
 
-const writeAll = (rows: RailDebt[]) => writeJsonAtomic(filePath(), rows);
+const current = () => deployment()?.facilityId ?? null;
+
+/** The rows this deployment can see: drawn from the facility it points at. */
+function readAll(): RailDebt[] {
+  const facility = current();
+  return readEverything().filter((r) => !!facility && r.facilityId === facility);
+}
+
+/**
+ * Writes rows back without losing the other deployments' rows. Rows are
+ * mutated in place by the callers, so `rows` is the current deployment's
+ * slice with its changes.
+ */
+function writeAll(rows: RailDebt[]) {
+  const facility = current();
+  const others = readEverything().filter((r) => r.facilityId !== facility);
+  writeJsonAtomic(filePath(), [...others, ...rows]);
+}
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 export function openRailDebt(entry: Omit<RailDebt, "id" | "createdAt" | "status">): RailDebt {
   const row: RailDebt = {
     ...entry,
+    facilityId: entry.facilityId ?? current() ?? undefined,
     id: `rd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     createdAt: Date.now(),
     status: "open",

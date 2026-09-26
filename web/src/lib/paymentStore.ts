@@ -14,6 +14,8 @@ export interface PaymentRecord {
   fundingSource: "AGENT_GATEWAY" | "AGENT_WALLET" | "FLOAT_FACILITY";
   /** Arc when absent: every payment before Sui was an Arc payment. */
   rail?: "arc" | "sui";
+  /** For Sui payments: which network, so the tape links the right explorer. */
+  network?: string;
   drawdownId: string | null;
   status: "SUCCESS" | "FAILED" | "REJECTED_CREDIT";
   timestamp: number;

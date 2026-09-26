@@ -25,6 +25,7 @@ type Payment = {
   timestamp: number;
   transactionId?: string;
   rail?: Rail;
+  network?: string;
 };
 
 type Obligation = { obligationId: string; agentAddress: string; status: string; dueMs: number | null };
@@ -180,8 +181,16 @@ export default function Home() {
   const nameOf = (address: string) => agents.find((a) => same(a.address, address))?.name ?? `${address.slice(0, 8)}…`;
 
   const railPayments = useMemo(
-    () => payments.filter((p) => p.status === "SUCCESS" && (p.rail ?? "arc") === rail),
-    [payments, rail]
+    () =>
+      payments.filter(
+        (p) =>
+          p.status === "SUCCESS" &&
+          (p.rail ?? "arc") === rail &&
+          // Sui payments from another network (a wiped localnet, a reset
+          // devnet) are not this deployment's history.
+          (rail === "arc" || !sui.network || p.network === sui.network)
+      ),
+    [payments, rail, sui.network]
   );
 
   const leads: LeadData[] = useMemo(
@@ -214,8 +223,8 @@ export default function Home() {
     txHash: p.transactionId ?? "",
     txLink:
       (p.rail ?? "arc") === "sui"
-        ? sui.network && sui.network !== "localnet" && p.transactionId
-          ? `https://suiscan.xyz/${sui.network}/tx/${p.transactionId}`
+        ? p.network && p.network !== "localnet" && p.transactionId
+          ? `https://suiscan.xyz/${p.network}/tx/${p.transactionId}`
           : null
         : ARC_TX(p.transactionId),
     endpoint: (() => {

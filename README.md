@@ -200,19 +200,18 @@ app's HTTP API and real transactions.
 |---|---|
 | Arc `FloatCreditFacility` | [`0xe382723bE95cB5c8801270a03Da17Bf4c27F320f`](https://testnet.arcscan.app/address/0xe382723bE95cB5c8801270a03Da17Bf4c27F320f), block 64024661 |
 | Arc USDC | `0x3600000000000000000000000000000000000000` (native, 6-decimal ERC-20 interface) |
-| Sui devnet package | [`0x541cb6cb…`](https://suiscan.xyz/devnet/object/0x541cb6cb5d690532c7293f946c14ed5e7ce14b1b76d7d1c3dd602586b151b8a4), tx [`62CfDEjQLj…`](https://suiscan.xyz/devnet/tx/62CfDEjQLjjE1vZxMkybk7xkFDgKvSwve1fFfkxRV1zA) |
-| Sui devnet `Facility<FUSD>` | [`0x500c4d32…`](https://suiscan.xyz/devnet/object/0x500c4d325b25d918e1ea9398eb501f88274476b1bc1198ff5ba26b08a05fbbb1), 500 FUSD liquidity |
-| Sui testnet | not yet - the faucet refused scripted requests; `SUI_NETWORK=testnet npm run sui:deploy` once the operator holds ~1 SUI |
+| Sui testnet package | [`0x14e7136b…`](https://suiscan.xyz/testnet/object/0x14e7136be665fbf7b839cde7fbb7ef2d3d46fafe35aac957aa01dbc707188e91), tx [`5spRKM7U37…`](https://suiscan.xyz/testnet/tx/5spRKM7U37KcxpXybiVKbWcm2RbykqYtPw1snYA6PvUL) |
+| Sui testnet `Facility<FUSD>` | [`0x9ab70797…`](https://suiscan.xyz/testnet/object/0x9ab70797320978608fce71b115d088e2d67c68d4eaf2941b5cbf382ed94e5cea), 500 FUSD liquidity |
+| Sui devnet | also deployed; see `sui/deployments/devnet.json` (devnet is wiped periodically) |
 
-Every id is in `sui/deployments/<network>.json`. Devnet is wiped periodically;
-redeploy with `SUI_NETWORK=devnet npm run sui:deploy`.
+Every id is in `sui/deployments/<network>.json`.
 
-`sui:lifecycle` passes 18/18 against the devnet deployment: the earner's
-obligation collected by a stranger in
-[`F35jLABa…`](https://suiscan.xyz/devnet/tx/F35jLABacUefSHD28zE9xDoztXkxv6nVfXqAC36RAZoK),
+On testnet, `sui:lifecycle` passes 18/18 - the earner's obligation collected
+by a stranger in
+[`8221agWL…`](https://suiscan.xyz/testnet/tx/8221agWL1vqYysTnWXLUqdHpbYAmRcChpprq5LyZtrL4),
 the idler's default recorded in
-[`BmDdKNva…`](https://suiscan.xyz/devnet/tx/BmDdKNva2i3PGGA35ZjVpPp1d7vCqu72rYzazst8GNkL)
-with nothing moved.
+[`Gy9Apwq5…`](https://suiscan.xyz/testnet/tx/Gy9Apwq5Qf7s9giAGNfirnoHTpGFo9VoWZR5owhAwgMt)
+with nothing moved - and `e2e:sui` passes 20/20 through the app.
 
 ## Security notes
 

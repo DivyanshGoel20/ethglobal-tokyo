@@ -170,6 +170,7 @@ export async function payOnSui(args: {
       timestamp: Date.now(),
       transactionId: result.digest,
       rail: "sui",
+      network: network(),
       memo:
         result.fundingSource === "FLOAT_CREDIT"
           ? `Drew ${result.borrowed} against obligation ${result.obligationId}, due ${new Date(result.dueMs!).toISOString()}`
