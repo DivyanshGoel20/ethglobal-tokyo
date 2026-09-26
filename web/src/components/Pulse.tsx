@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { buildTrace, TRACE_H, TRACE_W, type Beat } from "@/lib/ecg";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { buildTrace, TRACE_H, type Beat } from "@/lib/ecg";
 import type { Instrument } from "@/types";
 
 /** The mark: one complex, drawn once. */
@@ -21,74 +21,136 @@ export const LifelineMark: React.FC<{ size?: number; className?: string }> = ({ 
 interface LeadProps {
   beats: Beat[];
   defaults?: number[];
-  from: number;
-  to: number;
   instrument: Instrument;
   /** Flatline, rendered with a note, when the agent has never paid for anything. */
   idle?: boolean;
   height?: number;
 }
 
+/** Measured in real pixels, so the head stays round and on the line. */
+function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
+
+// Tail lengths, as a share of the trace, and how bright each is. Stacked, they
+// make a comet: brightest at the head, fading behind it.
+const TAIL = [
+  { len: 3, opacity: 1 },
+  { len: 8, opacity: 0.55 },
+  { len: 16, opacity: 0.22 },
+];
+
 /**
  * One agent's lead.
  *
- * On the printed strip the paper has stopped at "now" and the pen rests there.
- * On the monitor the trace is lit and a scan head crosses it, as a bedside
- * screen redraws.
+ * On the strip the paper has stopped and the pen rests at the right, where
+ * the next beat will be drawn. On the monitor a lit head sweeps the trace the
+ * way a watch or a bedside screen draws it: the whole line stays faintly
+ * visible, and a bright tail lights each beat - red where Lifeline lent - as
+ * the head passes. Either way a new payment feeds the trace one slot left.
  */
-export const Lead: React.FC<LeadProps> = ({ beats, defaults, from, to, instrument, idle, height = TRACE_H }) => {
-  const trace = useMemo(() => buildTrace(beats, { from, to, defaults }), [beats, from, to, defaults]);
+export const Lead: React.FC<LeadProps> = ({ beats, defaults, instrument, idle, height = TRACE_H }) => {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const trace = useMemo(
+    () => (width > 0 ? buildTrace(beats, width, { defaults, height }) : null),
+    [beats, defaults, width, height]
+  );
   const [hover, setHover] = useState<number | null>(null);
-  const base = TRACE_H * 0.64;
+  const uid = useId().replace(/:/g, "");
+
+  // Feed the strip when a new event arrives - not on first paint.
+  const newest = Math.max(0, ...beats.map((b) => b.t), ...(defaults ?? []));
+  const seen = useRef(newest);
+  const [feedKey, setFeedKey] = useState(0);
+  useEffect(() => {
+    if (newest > seen.current) {
+      seen.current = newest;
+      setFeedKey((k) => k + 1);
+    }
+  }, [newest]);
+
+  const monitor = instrument === "monitor";
+  const dur = `${Math.max(3.2, width / 230).toFixed(2)}s`;
+
+  const drawing = trace && (
+    <>
+      <path d={trace.line} className="trace" />
+      {trace.alarms.map((d, i) => (
+        <path key={`a${i}`} d={d} className="trace trace-alarm" />
+      ))}
+      {trace.arrhythmias.map((d, i) => (
+        <path key={`f${i}`} d={d} className="trace trace-alarm" />
+      ))}
+    </>
+  );
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ height }} onMouseLeave={() => setHover(null)}>
-      <svg
-        viewBox={`0 0 ${TRACE_W} ${TRACE_H}`}
-        preserveAspectRatio="none"
-        className="absolute inset-0 w-full h-full"
-        aria-label={`${beats.length} payments`}
-      >
-        <path d={trace.line} className="trace" vectorEffect="non-scaling-stroke" />
-        {trace.alarms.map((d, i) => (
-          <path key={i} d={d} className="trace trace-alarm" vectorEffect="non-scaling-stroke" />
-        ))}
-        {trace.arrhythmias.map((d, i) => (
-          <path key={`f${i}`} d={d} className="trace trace-alarm" vectorEffect="non-scaling-stroke" />
-        ))}
-        {trace.marks.map((m, i) => (
-          <rect
-            key={`h${i}`}
-            x={m.x - 12}
-            y={0}
-            width={24}
-            height={TRACE_H}
-            fill="transparent"
-            onMouseEnter={() => setHover(i)}
-          />
-        ))}
-      </svg>
+    <div ref={ref} className="relative w-full" style={{ height }} onMouseLeave={() => setHover(null)}>
+      {trace && (
+        <svg width={width} height={height} className="absolute inset-0 overflow-visible" aria-label={`${beats.length} payments`}>
+          <g key={feedKey} className={feedKey ? "feed" : undefined}>
+            {monitor ? (
+              <>
+                <defs>
+                  {/* The comet: the trace's own path, dashed so only a short
+                      run near the head shows, moving the length of the line. */}
+                  <mask id={`m${uid}`} maskUnits="userSpaceOnUse" x={-10} y={-10} width={width + 20} height={height + 20}>
+                    {TAIL.map((t) => (
+                      <path
+                        key={t.len}
+                        d={trace.line}
+                        pathLength={100}
+                        fill="none"
+                        stroke="#fff"
+                        strokeOpacity={t.opacity}
+                        strokeWidth={10}
+                        strokeDasharray={`${t.len} 200`}
+                      >
+                        <animate attributeName="stroke-dashoffset" from={t.len} to={t.len - 100} dur={dur} repeatCount="indefinite" />
+                      </path>
+                    ))}
+                  </mask>
+                </defs>
 
-      {/* "Now": the pen on paper, a lit dot on the monitor. */}
-      <div
-        className="absolute top-0 bottom-0 right-3 flex items-start"
-        style={{ paddingTop: `${(base / TRACE_H) * 100}%` }}
-      >
+                {/* Always visible, faintly: nothing is lost between sweeps. */}
+                <g style={{ opacity: 0.36 }}>{drawing}</g>
+
+                {/* Lit where the head has just been. */}
+                <g mask={`url(#m${uid})`} className="lit">
+                  {drawing}
+                </g>
+
+                {/* The head. */}
+                <circle r={2.6} className="head">
+                  <animateMotion dur={dur} repeatCount="indefinite" path={trace.line} />
+                </circle>
+              </>
+            ) : (
+              drawing
+            )}
+          </g>
+
+          {trace.marks.map((m, i) => (
+            <rect key={`h${i}`} x={m.x - 12} y={0} width={24} height={height} fill="transparent" onMouseEnter={() => setHover(i)} />
+          ))}
+        </svg>
+      )}
+
+      {/* The pen, on paper: where the next beat will be drawn. */}
+      {!monitor && trace && (
         <span
-          className={instrument === "monitor" ? "pulse-dot" : ""}
-          style={{
-            width: 5,
-            height: 5,
-            marginTop: -2.5,
-            background: instrument === "monitor" ? "var(--trace)" : "var(--ink)",
-            boxShadow: instrument === "monitor" ? "0 0 8px var(--trace-glow)" : "none",
-            borderRadius: instrument === "monitor" ? 999 : 0,
-            display: "block",
-          }}
+          className="absolute"
+          style={{ left: width - 18, top: trace.baseline - 2.5, width: 5, height: 5, background: "var(--ink)" }}
         />
-      </div>
-
-      {instrument === "monitor" && <span className="scan-head" aria-hidden />}
+      )}
 
       {idle && (
         <span className="lab absolute left-1 top-1" style={{ opacity: 0.8 }}>
@@ -96,18 +158,18 @@ export const Lead: React.FC<LeadProps> = ({ beats, defaults, from, to, instrumen
         </span>
       )}
 
-      {hover !== null && trace.marks[hover] && (
+      {hover !== null && trace?.marks[hover] && (
         <div
-          className="absolute top-1 mono text-[10px] px-1.5 py-0.5 pointer-events-none"
+          className="absolute top-1 mono text-[10px] px-1.5 py-0.5 pointer-events-none whitespace-nowrap"
           style={{
-            left: `min(calc(${(trace.marks[hover].x / TRACE_W) * 100}% + 8px), calc(100% - 150px))`,
+            left: Math.min(trace.marks[hover].x + 10, Math.max(0, width - 170)),
             background: "var(--ground)",
             border: "1px solid var(--rule)",
             color: trace.marks[hover].beat.borrowed ? "var(--alarm)" : "var(--ink)",
           }}
         >
           ${trace.marks[hover].beat.amountUsd.toFixed(3)} {trace.marks[hover].beat.borrowed ? "on credit" : "self-paid"} ·{" "}
-          {new Date(trace.marks[hover].beat.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {new Date(trace.marks[hover].beat.t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
         </div>
       )}
     </div>

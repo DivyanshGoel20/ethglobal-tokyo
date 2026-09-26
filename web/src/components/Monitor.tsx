@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Agent, Instrument, Rail } from "@/types";
 import { Lead } from "./Pulse";
 import { Sheet, Field, ErrorNote } from "./Sheet";
-import { describeSpan, rate, type Beat } from "@/lib/ecg";
+import { ago, type Beat } from "@/lib/ecg";
 
 export type LeadData = {
   agent: Agent;
@@ -17,7 +17,6 @@ interface MonitorProps {
   leads: LeadData[];
   rail: Rail;
   instrument: Instrument;
-  window: { from: number; to: number; span: number };
   suiNetwork?: string | null;
   onAddAgent: (input: { name: string; address: string; privateKey: string; capUsd: number }) => Promise<void>;
   onRemoveAgent: (address: string) => Promise<void>;
@@ -39,7 +38,6 @@ export const Monitor: React.FC<MonitorProps> = ({
   leads,
   rail,
   instrument,
-  window: win,
   suiNetwork,
   onAddAgent,
   onRemoveAgent,
@@ -68,7 +66,7 @@ export const Monitor: React.FC<MonitorProps> = ({
         <div className="flex items-baseline gap-4">
           <h2 className="serif text-[30px] leading-none">Leads</h2>
           <span className="lab">
-            {leads.length} agent{leads.length === 1 ? "" : "s"} · last {describeSpan(win.span)} ·{" "}
+            {leads.length} agent{leads.length === 1 ? "" : "s"} · newest beat on the right ·{" "}
             <span style={{ color: "var(--ink)" }}>ink</span> self-paid ·{" "}
             <span style={{ color: "var(--alarm)" }}>red</span> on credit
           </span>
@@ -87,7 +85,7 @@ export const Monitor: React.FC<MonitorProps> = ({
       {leads.length === 0 ? (
         <div className="py-16 grid place-items-center text-center">
           <div className="w-full max-w-[520px] mb-6">
-            <Lead beats={[]} from={win.from} to={win.to} instrument={instrument} height={56} />
+            <Lead beats={[]} instrument={instrument} height={56} />
           </div>
           <p className="serif text-[22px] leading-snug max-w-[30ch]">
             No agents on this line yet. <em className="ink-3">Authorize one and it can start spending.</em>
@@ -103,7 +101,7 @@ export const Monitor: React.FC<MonitorProps> = ({
           const holds = rail === "arc" ? Number(a.gatewayBalanceUSDC ?? a.currentBalance ?? 0) : a.suiWalletUsd;
           const addr = rail === "arc" ? a.address : a.suiAddress;
           const c = condition(owed, lead);
-          const bph = rate(lead.beats.length, win.span);
+          const last = lead.beats.length ? Math.max(...lead.beats.map((b) => b.t)) : null;
 
           return (
             <div key={a.address} className="lead-row py-5 hair-b">
@@ -127,7 +125,12 @@ export const Monitor: React.FC<MonitorProps> = ({
                 </div>
                 <div className="lab mt-2" style={{ color: c.tone === "alarm" ? "var(--alarm)" : undefined }}>
                   {c.label}
-                  {lead.beats.length > 0 && ` · ${bph < 10 ? bph.toFixed(1) : Math.round(bph)}/h`}
+                  {last !== null && (
+                    <span className="ink-3">
+                      {" "}
+                      · {lead.beats.length} beat{lead.beats.length === 1 ? "" : "s"} · {ago(last)}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -135,8 +138,6 @@ export const Monitor: React.FC<MonitorProps> = ({
                 <Lead
                   beats={lead.beats}
                   defaults={lead.defaults}
-                  from={win.from}
-                  to={win.to}
                   instrument={instrument}
                   idle={lead.beats.length === 0}
                 />

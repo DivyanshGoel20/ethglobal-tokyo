@@ -13,7 +13,6 @@ import { ParkedRepayments } from "@/components/ParkedRepayments";
 import { PurchaseModal } from "@/components/PurchaseModal";
 import { RepayModal } from "@/components/RepayModal";
 import { LifelineMark } from "@/components/Pulse";
-import { traceWindow } from "@/lib/ecg";
 
 type Payment = {
   paymentId: string;
@@ -185,8 +184,6 @@ export default function Home() {
     [payments, rail]
   );
 
-  const win = useMemo(() => traceWindow(railPayments.map((p) => p.timestamp), now), [railPayments, now]);
-
   const leads: LeadData[] = useMemo(
     () =>
       agents.map((agent) => ({
@@ -327,7 +324,6 @@ export default function Home() {
           leads={leads}
           rail={rail}
           instrument={instrument}
-          window={win}
           suiNetwork={sui.network}
           onAddAgent={handleAddAgent}
           onRemoveAgent={handleRemoveAgent}

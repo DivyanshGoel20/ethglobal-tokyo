@@ -287,7 +287,7 @@ select.field {
   stroke-linecap: round;
 }
 [data-instrument="monitor"] .trace {
-  filter: drop-shadow(0 0 3px var(--trace-glow));
+  filter: drop-shadow(0 0 2px var(--trace-glow));
 }
 .trace-alarm {
   stroke: var(--alarm);
@@ -296,27 +296,30 @@ select.field {
   filter: drop-shadow(0 0 3px rgba(255, 91, 77, 0.6));
 }
 
-/* The monitor's scan head: a lit line crossing the trace, and the dot at
-   "now". It lights the line as it passes rather than cutting a gap in it - a
-   dark erase bar read as a black break in the trace. */
-@keyframes sweep {
+/* The monitor's head: the lit point drawing the trace, as on a watch. */
+.head {
+  fill: var(--trace);
+  filter: drop-shadow(0 0 4px var(--trace)) drop-shadow(0 0 10px var(--trace-glow));
+}
+[data-instrument="monitor"] .lit .trace {
+  stroke-width: 1.9;
+  filter: drop-shadow(0 0 4px var(--trace-glow));
+}
+[data-instrument="monitor"] .lit .trace-alarm {
+  filter: drop-shadow(0 0 4px rgba(255, 91, 77, 0.75));
+}
+
+/* A new payment feeds the trace one slot to the left. */
+@keyframes feed {
   from {
-    left: 0%;
+    transform: translateX(50px);
   }
   to {
-    left: 100%;
+    transform: none;
   }
 }
-.scan-head {
-  position: absolute;
-  top: 8%;
-  bottom: 8%;
-  width: 1px;
-  background: var(--trace);
-  opacity: 0.55;
-  box-shadow: 0 0 10px 3px var(--trace-glow);
-  animation: sweep 6s linear infinite;
-  pointer-events: none;
+.feed {
+  animation: feed 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 @keyframes pulse-dot {
@@ -364,7 +367,7 @@ select.field {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scan-head,
+  .feed,
   .pulse-dot,
   .draw,
   .rise {
