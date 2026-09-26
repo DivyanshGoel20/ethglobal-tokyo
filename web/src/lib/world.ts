@@ -6,8 +6,8 @@ export async function verifyWorldSelfieProof(
   proof: any,
   signal?: string
 ): Promise<{ success: boolean; error?: string; code?: string; nullifier?: string }> {
-  const rpId = process.env.NEXT_PUBLIC_WORLD_RP_ID || "rp_c1e0eb1e9616e85c";
-  const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "float-human-verify";
+  const rpId = process.env.NEXT_PUBLIC_WORLD_RP_ID || "rp_62d19ed87590c550";
+  const action = process.env.NEXT_PUBLIC_WORLD_ACTION || "tokyo-human-verify";
 
   if (!rpId) {
     return {

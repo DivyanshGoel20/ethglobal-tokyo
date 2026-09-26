@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@circle-fin/x402-batching": "^3.5.0",

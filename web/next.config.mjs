@@ -5,20 +5,28 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Read parent root .env if it exists
-const parentEnvPath = path.resolve(__dirname, "../.env");
-const customEnv = {};
-if (fs.existsSync(parentEnvPath)) {
-  const content = fs.readFileSync(parentEnvPath, "utf-8");
-  for (const line of content.split("\n")) {
+/**
+ * One .env for the whole repo.
+ *
+ * The web app, the premium API and the Sui scripts all read the root .env, so
+ * it is loaded into process.env here - never into `env:`, which inlines every
+ * value into the build output and would ship PRIVATE_KEY inside .next. A value
+ * already set in the environment wins, so a deploy can override the file.
+ */
+const rootEnvPath = path.resolve(__dirname, "../.env");
+if (fs.existsSync(rootEnvPath)) {
+  for (const line of fs.readFileSync(rootEnvPath, "utf-8").split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx > 0) {
-      const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim();
-      customEnv[key] = val;
-    }
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (/^(["']).*\1$/.test(value)) value = value.slice(1, -1);
+    else value = value.replace(/\s+#.*$/, "");
+
+    if (process.env[key] === undefined) process.env[key] = value;
   }
 }
 
@@ -26,9 +34,6 @@ if (fs.existsSync(parentEnvPath)) {
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@worldcoin/idkit", "@worldcoin/idkit-core"],
-  env: {
-    ...customEnv,
-  },
 };
 
 export default nextConfig;

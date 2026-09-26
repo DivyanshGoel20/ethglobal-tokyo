@@ -47,7 +47,7 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/auth/world-rp-context?action=${encodeURIComponent(action)}`);
+      const res = await fetch("/api/auth/world-rp-context");
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Could not initialize World ID session signature.");

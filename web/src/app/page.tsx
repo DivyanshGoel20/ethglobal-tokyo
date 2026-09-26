@@ -34,25 +34,18 @@ export default function Home() {
     document.documentElement.setAttribute("data-rail", rail);
   }, [rail]);
 
+  // The session cookie is httpOnly, so who we are is a question for the server.
+  // A nullifier kept in localStorage was an identity anyone could type in.
   useEffect(() => {
-    const savedNullifier = localStorage.getItem("world_nullifier");
-    
-
-    if (savedNullifier) {
-      setNullifierHash(savedNullifier);
-      setIsWorldVerified(true);
-    } else {
-      fetch("/api/auth/session")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.authenticated && data?.nullifierHash) {
-            setNullifierHash(data.nullifierHash);
-            
-            setIsWorldVerified(true);
-          }
-        })
-        .catch(() => {});
-    }
+    fetch("/api/auth/session")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.authenticated && data?.nullifierHash) {
+          setNullifierHash(data.nullifierHash);
+          setIsWorldVerified(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const currentDebt = rail === "arc" ? arcDebt : suiDebt;
@@ -63,13 +56,11 @@ export default function Home() {
   const handleSignIn = (verifiedNullifier?: string) => {
     if (verifiedNullifier) {
       setNullifierHash(verifiedNullifier);
-      localStorage.setItem("world_nullifier", verifiedNullifier);
     }
     setIsWorldVerified(true);
   };
 
   const handleSignOut = () => {
-    localStorage.removeItem("world_nullifier");
     fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
     setIsWorldVerified(false);
   };

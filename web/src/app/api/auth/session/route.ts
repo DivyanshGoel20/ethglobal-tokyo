@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clearSession, getHuman } from "@/lib/session";
 
+/**
+ * Who is driving this browser.
+ *
+ * The session cookie is httpOnly, so the page cannot read the nullifier it was
+ * issued. This hands back only what the signed cookie already proves, so the
+ * dashboard never has to keep its own copy of the human's identity.
+ */
 export async function GET(req: NextRequest) {
-  const session = req.cookies.get("world_session")?.value;
-  if (session) {
-    return NextResponse.json({
-      authenticated: true,
-      nullifierHash: session,
-    });
-  }
-  return NextResponse.json({ authenticated: false });
+  const human = getHuman(req);
+  if (!human) return NextResponse.json({ authenticated: false }, { status: 401 });
+
+  return NextResponse.json({ authenticated: true, nullifierHash: human, human });
 }
 
+/** Sign out. The cookie is what authorises spending, so the server voids it. */
 export async function DELETE() {
-  const res = NextResponse.json({ success: true });
-  res.cookies.set("world_session", "", {
-    httpOnly: true,
-    expires: new Date(0),
-    path: "/",
-  });
-  return res;
+  return clearSession(NextResponse.json({ success: true, signedOut: true }));
 }
