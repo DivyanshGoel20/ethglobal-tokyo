@@ -1,19 +1,19 @@
 # Lifeline
 
-> An undercollateralised credit line for autonomous agents - on Arc and on Sui -
+> Undercollateralised credit lines for autonomous agents - one on Arc, one on Sui -
 > where every agent's payments read like a heartbeat.
 
 An agent can hold money. Only a human can hold debt.
 
-Lifeline extends a USDC credit line to a human, verified once by World ID, and lets
-their agents spend against it. When an agent hits a paywall it cannot afford,
+Lifeline extends USDC credit to a human, verified once by World ID - a line on
+Arc and a separate line on Sui - and lets their agents spend against them. When an agent hits a paywall it cannot afford,
 Lifeline pays on its behalf and records what is owed. The agent keeps working; the
 human carries the liability, which is the only way undercollateralised credit
 can work when agents are free to create.
 
 ---
 
-## One line, two rails
+## Two rails, two lines
 
 **Arc** is an EVM chain where USDC is the native currency. The credit facility
 is a Solidity contract; x402 payments settle through Circle Gateway.
@@ -23,7 +23,7 @@ agent parks *before* the money is spent, built from Sui objects so it can be
 collected on its date without anyone having to be trusted to do it.
 
 ```
-                     World ID  ─── one human, one credit line
+                     World ID  ─── one human, a line on each rail
                          │
             ┌────────────┴─────────────┐
             ▼                          ▼
@@ -37,13 +37,17 @@ collected on its date without anyone having to be trusted to do it.
   │                   │      │ repayment parked first,  │
   │                   │      │ collected by anyone      │
   └─────────┬─────────┘      └────────────┬─────────────┘
-            └──────────── one limit ──────┘
+     own limit, debt, record    own limit, debt, record
 ```
 
-Both rails spend the **same** limit. A Sui draw is recorded against the human
-in `railDebt` and counted by the same headroom check Arc uses, so the line
-cannot be drawn twice - Arc refuses to lend what Sui already drew, and the
-reverse.
+The rails are **separate lines**. Each has its own limit, its own debt and its
+own repayment record: borrowing on Sui never touches Arc's headroom, repaying
+on Arc builds only the Arc record and raises only the Arc limit, and the
+reverse. Both start at $10. Arc's record grows on repayments, time and the fees
+paid; Sui charges no fee, so its record grows on repayments and time.
+[`getHumanFacilityStats`](web/src/lib/agentStore.ts) is Arc's line,
+[`getSuiFacilityStats`](web/src/lib/agentStore.ts) is Sui's, and the records
+are kept apart in [`reputationStore.ts`](web/src/lib/reputationStore.ts).
 
 One key is one agent on both rails: an agent's secp256k1 key is its Arc
 address and, unchanged, its Sui address. The agent that borrows is the agent
@@ -98,7 +102,7 @@ that colour.
 
 ## In World App
 
-Lifeline also runs as a World mini app, at `/mini`: the same line, agents and
+Lifeline also runs as a World mini app, at `/mini`: the same lines, agents and
 rails as the dashboard - one state, shared between the two - laid out the way
 World's design guidelines ask. A tab bar (Pulse, Owed, Tape, Record), sheets
 that rise from the bottom, the purchase anchored above the tabs, the user's
@@ -142,8 +146,8 @@ if the mini app is a different Developer Portal app from the World ID one.
    `PAYMENT-REQUIRED`: amount, asset, `payTo`, network.
 2. Its own balance is read. Enough, and it pays for itself and owes nothing.
    **Arc:** either way, nothing is signed until Intercepta has screened it (below).
-3. Short, and Lifeline checks the human's remaining headroom across both rails,
-   and any mandate cap. Over it, the request is refused before anything moves.
+3. Short, and Lifeline checks the human's remaining headroom on *that rail's*
+   line, and any mandate cap. Over it, the request is refused before anything moves.
 4. **Arc:** the drawdown is booked (batched on chain) and Lifeline's Gateway
    balance settles with the seller.
    **Sui:** if the agent has no open obligation with room, it parks one first.
@@ -388,12 +392,12 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (70) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release) |
+| web tests (81) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once), World ID for Agents (linking, token validation - forged, wrong audience, wrong class, stale, wrong person - denial, expiry, pacing, one release), the ledger (no-key repayments refused, interest charged once, debt from loans, one change at a time), separate Arc and Sui lines and records |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |
 | `e2e:intercepta` (17) | live against Intercepta and Arc testnet: a clean seller cleared and settled, a known scammer's payee refused before signing (by the address and the authorisation scans both), a $5 purchase held, declined, and held again and approved, and both sellers turning away a flagged payer |
-| `e2e:sui` (20) | credit on Sui, Arc refusing what Sui drew, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
+| `e2e:sui` (20) | credit on Sui, Arc's line untouched by what Sui drew, mandate caps, isolation between humans, early settlement, self-pay, reconcile |
 | `sui:lifecycle` (18) | both endings on chain: an earner repaid and an idler defaulted by a stranger's `collect`, then the default cured; replay, underpayment and forgery refused |
 
 World ID cannot be scripted - it needs a phone - so the end-to-end harnesses

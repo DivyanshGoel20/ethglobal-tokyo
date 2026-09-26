@@ -37,7 +37,7 @@ function haptic(kind: "success" | "error") {
 /**
  * Lifeline, inside World App.
  *
- * The same line, agents and rails as the browser dashboard - one state, from
+ * The same lines, agents and rails as the browser dashboard - one state, from
  * useLifeline - laid out the way World's guidelines ask for: a tab bar, not a
  * footer; sheets that rise from the bottom; the action anchored above the
  * tabs; 24px gutters; the user's World username, not a hex address.
@@ -163,7 +163,7 @@ export default function MiniApp() {
           {tab === "tape" && <EventTape activities={L.activities} rail={L.rail} />}
           {tab === "record" && (
             <div className="space-y-8">
-              <Underwriting humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} onTier={L.setCreditLimit} />
+              <Underwriting humanOwner={L.nullifierHash} rail={L.rail} refreshTrigger={L.refreshTrigger} onTier={L.setCreditLimit} />
               {L.rail === "arc" ? (
                 <>
                   <FacilityRecord humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} />
@@ -226,7 +226,7 @@ export default function MiniApp() {
 
       <Sheet open={account} onClose={() => setAccount(false)} kicker="Signed in" title={username ? `@${username}` : "World ID"}>
         <p className="text-[13px] ink-2 leading-relaxed mb-5">
-          Your World App wallet signs you in; World ID proved once that you are one human, and this is your one line.
+          Your World App wallet signs you in; World ID proved once that you are one human; each rail gives you a line of its own.
         </p>
         <div className="mono text-[10.5px] ink-3 break-all mb-6">{L.nullifierHash}</div>
         <button
@@ -297,7 +297,7 @@ function PulseTab({ L, onBuy, onAdd }: { L: ReturnType<typeof useLifeline>; onBu
 
       <div className="grid grid-cols-2 mt-6 rule-t">
         {[
-          { lab: "Headroom", val: usd(L.headroom), note: "both rails" },
+          { lab: "Headroom", val: usd(L.headroom), note: `${L.rail === "arc" ? "Arc" : "Sui"} line` },
           { lab: `Drawn · ${L.rail === "arc" ? "Arc" : "Sui"}`, val: usd(here), note: `${usd(L.rail === "arc" ? L.suiDebt : L.arcDebt)} on ${L.rail === "arc" ? "Sui" : "Arc"}`, alarm: here > 0 },
           { lab: "Line", val: usd(L.creditLimit), note: "grows as you repay" },
           { lab: "Beats · 24h", val: String(L.beats24h.length), note: credit ? `${credit} on credit` : "all self-paid" },

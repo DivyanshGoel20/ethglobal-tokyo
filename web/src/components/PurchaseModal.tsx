@@ -316,7 +316,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
               </div>
             </div>
           </div>
-          <div className="mono text-[10.5px] ink-3">${headroom.toFixed(2)} of headroom left across both rails</div>
+          <div className="mono text-[10.5px] ink-3">${headroom.toFixed(2)} of headroom left on the {rail === "arc" ? "Arc" : "Sui"} line</div>
 
           {error && <ErrorNote>{error}</ErrorNote>}
 

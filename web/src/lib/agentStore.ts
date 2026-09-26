@@ -107,6 +107,11 @@ export function getAgentByAddress(address: string): Agent | null {
   );
 }
 
+/**
+ * The human's Arc line. Arc and Sui are separate lines - separate limits,
+ * separate debt, separate repayment records - so what is drawn on Sui never
+ * touches Arc's headroom, and the other way round (see getSuiFacilityStats).
+ */
 export function getHumanFacilityStats(
   humanOwner: string,
   agentBookHumanId?: string
@@ -116,22 +121,16 @@ export function getHumanFacilityStats(
   totalCreditLimit: number;
   totalOutstandingDebt: number;
   arcOutstandingDebt: number;
-  suiOutstandingDebt: number;
   totalAvailableCredit: number;
   totalBorrowed: number;
   totalRepaid: number;
 } {
   const humanAgents = getAgentsByOwner(humanOwner, agentBookHumanId);
-  const tier = getHumanCreditTier(humanOwner);
+  const tier = getHumanCreditTier(humanOwner, "arc");
   const totalCreditLimit = tier.creditLimit;
   const arcOutstandingDebt = Math.round(
     humanAgents.reduce((sum, a) => sum + (a.outstandingDebt || 0), 0) * 10000
   ) / 10000;
-  // Debt drawn on Sui counts against the same limit. Without it a human could
-  // exhaust the line on Arc and borrow it again on Sui, because headroom was
-  // computed only from Arc agents.
-  const suiOutstandingDebt = railDebtTotal(humanOwner);
-  const totalOutstandingDebt = Math.round((arcOutstandingDebt + suiOutstandingDebt) * 10000) / 10000;
   const totalBorrowed = Math.round(
     humanAgents.reduce((sum, a) => sum + (a.totalBorrowed || 0), 0) * 10000
   ) / 10000;
@@ -140,19 +139,35 @@ export function getHumanFacilityStats(
   ) / 10000;
   const totalAvailableCredit = Math.max(
     0,
-    Math.round((totalCreditLimit - totalOutstandingDebt) * 100) / 100
+    Math.round((totalCreditLimit - arcOutstandingDebt) * 100) / 100
   );
 
   return {
     humanOwner,
     agentCount: humanAgents.length,
     totalCreditLimit,
-    totalOutstandingDebt,
+    totalOutstandingDebt: arcOutstandingDebt,
     arcOutstandingDebt,
-    suiOutstandingDebt,
     totalAvailableCredit,
     totalBorrowed,
     totalRepaid,
+  };
+}
+
+/** The human's Sui line: its own limit, from its own record, and its own debt. */
+export function getSuiFacilityStats(humanOwner: string): {
+  creditLimit: number;
+  outstandingDebt: number;
+  availableCredit: number;
+} {
+  const creditLimit = getHumanCreditTier(humanOwner, "sui").creditLimit;
+  // Defaulted debt still counts (railDebtTotal): freeing the headroom would
+  // make failing to pay the cheapest way to borrow again.
+  const outstandingDebt = railDebtTotal(humanOwner);
+  return {
+    creditLimit,
+    outstandingDebt,
+    availableCredit: Math.max(0, Math.round((creditLimit - outstandingDebt) * 100) / 100),
   };
 }
 

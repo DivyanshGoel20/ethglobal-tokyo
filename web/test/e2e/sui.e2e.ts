@@ -68,11 +68,10 @@ async function main() {
   const mine = agents.body.agents?.find((a: any) => a.address.toLowerCase() === agent.toLowerCase());
   check("the dashboard sees the agent's Sui debt", mine?.suiDebt === 0.02, `suiDebt ${mine?.suiDebt}`);
 
-  // One line across both rails: Arc has to see what Sui drew.
+  // Separate lines: what Sui drew is Sui's alone, and Arc's line is whole.
   const credit = await call("GET", `/api/agent/credit?agentAddress=${agent}`);
-  const available = credit.body.facility?.totalAvailableCredit ?? credit.body.totalAvailableCredit;
-  const tooMuch = await call("POST", "/api/borrow", { agentAddress: agent, amount: 9.99 });
-  check("Arc refuses to lend what Sui already drew", tooMuch.status >= 400, tooMuch.body.error ?? `available ${available}`);
+  const available = credit.body.humanFacility?.totalAvailableCredit;
+  check("Arc's line is untouched by what Sui drew", available === 10, `Arc available ${available}`);
 
   const obligations = await call("GET", "/api/sui/obligations");
   const ob = obligations.body.obligations?.[0];

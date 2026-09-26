@@ -96,7 +96,7 @@ function Dashboard() {
         <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr] pb-20">
           <EventTape activities={L.activities} rail={L.rail} />
           <div className="space-y-12">
-            <Underwriting humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} onTier={L.setCreditLimit} />
+            <Underwriting humanOwner={L.nullifierHash} rail={L.rail} refreshTrigger={L.refreshTrigger} onTier={L.setCreditLimit} />
             {L.rail === "arc" && <FacilityRecord humanOwner={L.nullifierHash} refreshTrigger={L.refreshTrigger} />}
             {L.rail === "arc" && (
               <Counterparties payments={L.payments} refreshTrigger={L.refreshTrigger} agentName={L.nameOf} onChanged={L.done} />

@@ -4,6 +4,15 @@ import path from "path";
 import { CREDIT_TIERS, CreditTier } from "./reputationEngine";
 import { updateOnChainCreditLimit } from "./facilityContract";
 
+/**
+ * Arc and Sui are separate lines, each with its own record: repaying on one
+ * builds that rail's record and raises that rail's limit, and nothing else.
+ * Arc records keep the key they always had; Sui's is suffixed.
+ */
+export type RecordRail = "arc" | "sui";
+const recordKey = (humanOwner: string, rail: RecordRail) =>
+  rail === "arc" ? humanOwner.toLowerCase() : `${humanOwner.toLowerCase()}:sui`;
+
 export interface HumanReputationData {
   humanOwner: string;
   totalInterestPaid: number;
@@ -59,9 +68,9 @@ export function saveAllReputationRecords(data: Record<string, HumanReputationDat
   }
 }
 
-export function getHumanReputationRecord(humanOwner: string): HumanReputationData {
+export function getHumanReputationRecord(humanOwner: string, rail: RecordRail = "arc"): HumanReputationData {
   const all = getAllReputationRecords();
-  const key = humanOwner.toLowerCase();
+  const key = recordKey(humanOwner, rail);
   if (all[key]) {
     return all[key];
   }
@@ -79,8 +88,8 @@ export function getHumanReputationRecord(humanOwner: string): HumanReputationDat
   return initial;
 }
 
-export function getHumanCreditTier(humanOwner: string): CreditTier {
-  const record = getHumanReputationRecord(humanOwner);
+export function getHumanCreditTier(humanOwner: string, rail: RecordRail = "arc"): CreditTier {
+  const record = getHumanReputationRecord(humanOwner, rail);
   const tier = CREDIT_TIERS.find((t) => t.tierNumber === record.currentTierNumber);
   return tier || CREDIT_TIERS[0];
 }
@@ -92,14 +101,16 @@ export async function recordRepaymentInReputation(params: {
   humanOwner: string;
   interestPaid: number;
   loanDurationDays: number;
+  rail?: RecordRail;
 }): Promise<{
   upgraded: boolean;
   previousTier: CreditTier;
   currentTier: CreditTier;
   onChainTxHash?: string | null;
 }> {
+  const rail = params.rail ?? "arc";
   const all = getAllReputationRecords();
-  const key = params.humanOwner.toLowerCase();
+  const key = recordKey(params.humanOwner, rail);
   const record = all[key] || {
     humanOwner: params.humanOwner,
     totalInterestPaid: 0,
@@ -124,7 +135,8 @@ export async function recordRepaymentInReputation(params: {
   for (let i = CREDIT_TIERS.length - 1; i >= 0; i--) {
     const t = CREDIT_TIERS[i];
     if (
-      record.totalInterestPaid >= t.requiredInterestPaid &&
+      // Sui draws carry no fee, so its line grows on repayments and time.
+      (rail === "sui" || record.totalInterestPaid >= t.requiredInterestPaid) &&
       record.totalActiveDurationDays >= t.requiredActiveDurationDays &&
       record.repaymentsCount >= t.requiredRepaymentsCount
     ) {
@@ -144,8 +156,9 @@ export async function recordRepaymentInReputation(params: {
     record.tierGraduatedAt = Date.now();
     upgraded = true;
 
-    // Synchronize the higher credit limit on-chain on Arc Testnet
-    try {
+    // The Arc contract holds the Arc limit. Sui's is carried to its facility
+    // with each draw (see suiRail), so there is nothing to write here for it.
+    if (rail === "arc") try {
       onChainTxHash = await updateOnChainCreditLimit(
         params.humanOwner,
         eligibleTier.creditLimit

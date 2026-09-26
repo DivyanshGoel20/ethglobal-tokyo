@@ -18,8 +18,8 @@ interface VitalsProps {
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
 /**
- * The human's vitals. One line spent on two rails, so headroom is net of both
- * - a dollar drawn on Sui is a dollar Arc will not lend again.
+ * The human's vitals on the selected rail. Arc and Sui are separate lines -
+ * separate limits, debt and records - so everything here is this rail's alone.
  */
 export const Vitals: React.FC<VitalsProps> = ({
   creditLimit,
@@ -31,17 +31,17 @@ export const Vitals: React.FC<VitalsProps> = ({
   onPurchase,
   onRepay,
 }) => {
-  const drawn = arcDebt + suiDebt;
-  const headroom = Math.max(0, creditLimit - drawn);
+  const name = rail === "arc" ? "Arc" : "Sui";
   const here = rail === "arc" ? arcDebt : suiDebt;
-  const there = rail === "arc" ? suiDebt : arcDebt;
+  const drawn = here;
+  const headroom = Math.max(0, creditLimit - here);
   const pct = (n: number) => (creditLimit > 0 ? Math.min(100, (n / creditLimit) * 100) : 0);
 
   return (
     <section className="pt-12 pb-10 rise">
       <div className="flex flex-wrap items-end justify-between gap-6 mb-9">
         <div>
-          <div className="lab mb-3">One line · underwritten by one human</div>
+          <div className="lab mb-3">{name} line · underwritten by one human</div>
           <h1 className="serif text-[44px] sm:text-[56px] leading-[0.95] tracking-tight max-w-[16ch]">
             {drawn === 0 ? (
               <>
@@ -66,14 +66,9 @@ export const Vitals: React.FC<VitalsProps> = ({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 rule-t">
         {[
-          { lab: "Headroom", val: usd(headroom), note: "shared by both rails" },
-          {
-            lab: `Drawn on ${rail === "arc" ? "Arc" : "Sui"}`,
-            val: usd(here),
-            note: `${usd(there)} on ${rail === "arc" ? "Sui" : "Arc"}`,
-            alarm: here > 0,
-          },
-          { lab: "Line", val: usd(creditLimit), note: "set by your repayment record" },
+          { lab: "Headroom", val: usd(headroom), note: `on the ${name} line` },
+          { lab: `Drawn on ${name}`, val: usd(here), note: here > 0 ? "owed on this line" : "nothing owed", alarm: here > 0 },
+          { lab: "Line", val: usd(creditLimit), note: `set by your ${name} repayment record` },
           {
             lab: "Beats · 24 h",
             val: String(beats24h),
@@ -90,20 +85,16 @@ export const Vitals: React.FC<VitalsProps> = ({
         ))}
       </div>
 
-      {/* The line itself: how much of it each rail is using. */}
+      {/* The line itself: how much of it is drawn. */}
       <div className="mt-7">
         <div className="relative h-[6px]" style={{ background: "var(--hair)" }}>
-          <div className="absolute inset-y-0 left-0" style={{ width: `${pct(arcDebt)}%`, background: rail === "arc" ? "var(--alarm)" : "var(--ink-3)" }} />
-          <div
-            className="absolute inset-y-0"
-            style={{ left: `${pct(arcDebt)}%`, width: `${pct(suiDebt)}%`, background: rail === "sui" ? "var(--alarm)" : "var(--ink-3)" }}
-          />
+          <div className="absolute inset-y-0 left-0" style={{ width: `${pct(here)}%`, background: "var(--alarm)" }} />
         </div>
         <div className="flex justify-between mt-2 mono text-[10px] ink-3">
           <span>
-            Arc {usd(arcDebt)} · Sui {usd(suiDebt)}
+            {name} {usd(here)} of {usd(creditLimit)}
           </span>
-          <span>{pct(drawn).toFixed(1)}% of the line</span>
+          <span>{pct(drawn).toFixed(1)}% of the {name} line</span>
         </div>
       </div>
     </section>

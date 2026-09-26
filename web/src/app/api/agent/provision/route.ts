@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getHuman, unauthenticated } from "@/lib/session";
 import { mintAgentToken } from "@/lib/agentToken";
-import { getHumanFacilityStats, addAgentToStore } from "@/lib/agentStore";
+import { getHumanFacilityStats, getSuiFacilityStats, addAgentToStore } from "@/lib/agentStore";
 import { provisionArcAgentWallet } from "@/lib/arc";
 import { setAgentPrivateKey } from "@/lib/agentKeys";
 import { syncAgentToContractOnChain } from "@/lib/facilityContract";
@@ -20,9 +20,12 @@ export async function POST(req: NextRequest) {
   const label = typeof body.label === "string" && body.label.trim() ? body.label.trim() : "arc-agent";
   const days = Number.isFinite(body.days) ? Math.min(Math.max(Number(body.days), 1), 90) : 7;
 
+  // The agent can spend on either rail, and each rail enforces its own line
+  // on every payment. Its cap can be at most the larger line's headroom.
   const facility = getHumanFacilityStats(human);
-  const asked = Number.isFinite(body.capUsd) ? Number(body.capUsd) : facility.totalAvailableCredit;
-  const capUsd = Math.min(Math.max(asked, 0), facility.totalAvailableCredit);
+  const available = Math.max(facility.totalAvailableCredit, getSuiFacilityStats(human).availableCredit);
+  const asked = Number.isFinite(body.capUsd) ? Number(body.capUsd) : available;
+  const capUsd = Math.min(Math.max(asked, 0), available);
 
   if (!(capUsd > 0)) {
     return NextResponse.json(

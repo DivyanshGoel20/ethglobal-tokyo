@@ -20,20 +20,22 @@ const left = (hours: number) => {
 };
 
 /**
- * The human's record. The line grows by repaying on time, never by asking, so
- * this is what a larger limit is waiting on.
+ * The human's record on one rail. The line grows by repaying on time, never by
+ * asking, so this is what a larger limit is waiting on. Arc and Sui are
+ * separate lines with separate records.
  */
-export const Underwriting: React.FC<{ humanOwner: string; refreshTrigger?: number; onTier?: (limit: number) => void }> = ({
-  humanOwner,
-  refreshTrigger,
-  onTier,
-}) => {
+export const Underwriting: React.FC<{
+  humanOwner: string;
+  rail?: "arc" | "sui";
+  refreshTrigger?: number;
+  onTier?: (limit: number) => void;
+}> = ({ humanOwner, rail = "arc", refreshTrigger, onTier }) => {
   const [data, setData] = useState<Summary | null>(null);
 
   useEffect(() => {
     if (!humanOwner) return;
     let cancelled = false;
-    fetch("/api/reputation")
+    fetch(`/api/reputation?rail=${rail}`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled || !json.success || !json.summary) return;
@@ -44,7 +46,7 @@ export const Underwriting: React.FC<{ humanOwner: string; refreshTrigger?: numbe
     return () => {
       cancelled = true;
     };
-  }, [humanOwner, refreshTrigger, onTier]);
+  }, [humanOwner, rail, refreshTrigger, onTier]);
 
   const tier = data?.currentTier;
   const next = data?.nextTier;
@@ -55,13 +57,13 @@ export const Underwriting: React.FC<{ humanOwner: string; refreshTrigger?: numbe
         { lab: "repayments", have: data!.repaymentsCount, need: next.requiredRepaymentsCount, fmt: (n: number) => String(n) },
         { lab: "days active", have: data!.totalActiveDurationDays, need: next.requiredActiveDurationDays, fmt: (n: number) => String(n) },
         { lab: "interest paid", have: data!.totalInterestPaid, need: next.requiredInterestPaid, fmt: (n: number) => `$${n.toFixed(2)}` },
-      ]
+      ].filter((s) => s.need > 0 || s.lab !== "interest paid") // Sui charges no fee
     : [];
 
   return (
     <section>
       <div className="flex items-baseline justify-between pb-3 rule-b">
-        <h3 className="serif text-[22px] leading-none">Record</h3>
+        <h3 className="serif text-[22px] leading-none">Record <span className="ink-3">· {rail === "arc" ? "Arc" : "Sui"}</span></h3>
         <span className="lab">score {data?.reputationScore ?? "-"} / 100</span>
       </div>
 

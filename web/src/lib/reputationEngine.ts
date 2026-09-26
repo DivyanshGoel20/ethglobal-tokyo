@@ -49,6 +49,9 @@ export const CREDIT_TIERS: CreditTier[] = [
   },
 ];
 
+/** Sui draws carry no fee: its line grows on repayments and time alone. */
+export const SUI_TIERS: CreditTier[] = CREDIT_TIERS.map((t) => ({ ...t, requiredInterestPaid: 0 }));
+
 // Maximum loan term is strictly 7 days (168 hours)
 export const MAX_LOAN_TERM_DAYS = 7;
 export const MAX_LOAN_TERM_MS = MAX_LOAN_TERM_DAYS * 24 * 60 * 60 * 1000;
@@ -154,7 +157,9 @@ export function computeHumanReputation(
   loans: Loan[],
   repaymentsCount: number,
   totalInterestPaid = 0,
-  asOfTimestamp = Date.now()
+  asOfTimestamp = Date.now(),
+  /** The tier table to read against - Sui's drops the fee requirement. */
+  tiers: CreditTier[] = CREDIT_TIERS
 ): ReputationSummary {
   const humanLoans = loans.filter(
     (l) => l.humanOwner.toLowerCase() === humanOwner.toLowerCase()
@@ -173,9 +178,9 @@ export function computeHumanReputation(
   const totalActiveDurationDays = Math.round((totalActiveMs / (24 * 60 * 60 * 1000)) * 10) / 10;
 
   // Evaluate Tier Eligibility
-  let currentTier = CREDIT_TIERS[0];
-  for (let i = CREDIT_TIERS.length - 1; i >= 0; i--) {
-    const tier = CREDIT_TIERS[i];
+  let currentTier = tiers[0];
+  for (let i = tiers.length - 1; i >= 0; i--) {
+    const tier = tiers[i];
     if (
       totalInterestPaid >= tier.requiredInterestPaid &&
       totalActiveDurationDays >= tier.requiredActiveDurationDays &&
@@ -186,10 +191,10 @@ export function computeHumanReputation(
     }
   }
 
-  const nextTierIndex = CREDIT_TIERS.findIndex(
+  const nextTierIndex = tiers.findIndex(
     (t) => t.tierNumber === currentTier.tierNumber + 1
   );
-  const nextTier = nextTierIndex !== -1 ? CREDIT_TIERS[nextTierIndex] : null;
+  const nextTier = nextTierIndex !== -1 ? tiers[nextTierIndex] : null;
 
   // Next Tier Progress Metrics
   let interestProgressPct = 100;

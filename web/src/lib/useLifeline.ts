@@ -45,7 +45,8 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
   // either, and the choice is remembered per rail.
   const [sui, setSui] = useState<{ ready: boolean; network: string | null }>({ ready: false, network: null });
 
-  const [creditLimit, setCreditLimit] = useState(10.0);
+  // Arc and Sui are separate lines, each with its own limit.
+  const [limits, setLimits] = useState<Record<Rail, number>>({ arc: 10, sui: 10 });
   const [agents, setAgents] = useState<Agent[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [obligations, setObligations] = useState<Obligation[]>([]);
@@ -72,10 +73,12 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
 
   const load = useCallback(async () => {
     try {
-      const [a, p, o] = await Promise.all([
+      const [a, p, o, ra, rs] = await Promise.all([
         fetch("/api/agents"),
         fetch("/api/payments"),
         fetch("/api/sui/obligations").catch(() => null),
+        fetch("/api/reputation?rail=arc").catch(() => null),
+        fetch("/api/reputation?rail=sui").catch(() => null),
       ]);
       if (a.status === 401) return endSession();
       const agentData = await a.json();
@@ -84,6 +87,11 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
       if (Array.isArray(agentData.agents)) setAgents(agentData.agents);
       if (Array.isArray(paymentData.payments)) setPayments(paymentData.payments);
       if (Array.isArray(obligationData.obligations)) setObligations(obligationData.obligations);
+      const [arcRecord, suiRecord] = await Promise.all([ra?.json().catch(() => null), rs?.json().catch(() => null)]);
+      setLimits((cur) => ({
+        arc: arcRecord?.summary?.currentTier?.creditLimit ?? cur.arc,
+        sui: suiRecord?.summary?.currentTier?.creditLimit ?? cur.sui,
+      }));
       setNow(Date.now());
     } catch (err) {
       console.error("[Lifeline] Could not load:", err);
@@ -146,7 +154,10 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
 
   const arcDebt = agents.reduce((n, a) => n + (a.outstandingDebt || 0), 0);
   const suiDebt = agents.reduce((n, a) => n + (a.suiDebt || 0), 0);
-  const headroom = Math.max(0, creditLimit - arcDebt - suiDebt);
+  // The selected rail's line only: nothing owed on the other rail touches it.
+  const creditLimit = limits[rail];
+  const headroom = Math.max(0, creditLimit - (rail === "arc" ? arcDebt : suiDebt));
+  const setCreditLimit = useCallback((limit: number) => setLimits((cur) => ({ ...cur, [rail]: limit })), [rail]);
 
   const nameOf = (address: string) => agents.find((a) => same(a.address, address))?.name ?? `${address.slice(0, 8)}…`;
 

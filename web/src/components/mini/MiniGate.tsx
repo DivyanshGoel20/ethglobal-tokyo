@@ -17,7 +17,7 @@ const IDKitRequestWidget = dynamic(() => import("@worldcoin/idkit").then((m) => 
  * visit - World's own guidance is not to use World ID as a login. World ID
  * does the one thing only it can: the first time a wallet is seen, it proves
  * which unique human is holding it, and the wallet is linked to them for good.
- * That is the same human, with the same line, whether they signed up here or
+ * That is the same human, with the same lines, whether they signed up here or
  * in a browser. Inside World App the proof is native; there is no QR code.
  *
  * World ID proves uniqueness once per person, ever. So a person who joined in
@@ -168,7 +168,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
             <em className="ink-3">Only a human can hold debt.</em>
           </h1>
           <p className="text-[14px] ink-2 leading-relaxed mt-5">
-            One human, one credit line, spent by your agents on Arc and Sui. Every payment is a beat on their line.
+            One human, a credit line on Arc and another on Sui, spent by your agents. Every payment is a beat on their line.
           </p>
         </div>
       </div>
@@ -183,7 +183,7 @@ export const MiniGate: React.FC<{ onSignedIn: (human: string) => void; haptic: (
         {step === "prove" ? (
           <>
             <p className="text-[13px] ink-2 leading-relaxed mb-4">
-              First time in World App. World ID confirms you are you - one human, one line - and this wallet is linked to it.
+              First time in World App. World ID confirms you are you - one human, one account - and this wallet is linked to it.
             </p>
             <button onClick={() => setStep("proving")} className="btn btn-solid w-full justify-center h-12">
               Verify with World ID

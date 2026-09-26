@@ -3,7 +3,9 @@ import { getHumanReputationRecord } from "@/lib/reputationStore";
 import { resolveReader } from "@/lib/agentToken";
 import { unauthenticated } from "@/lib/session";
 import { getAllLoans } from "@/lib/loanStore";
-import { computeHumanReputation } from "@/lib/reputationEngine";
+import { computeHumanReputation, SUI_TIERS } from "@/lib/reputationEngine";
+import { railDebtsFor } from "@/lib/railDebt";
+import type { Loan } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,17 +15,44 @@ export async function GET(req: NextRequest) {
     if (!reader) return unauthenticated();
     const humanOwner = reader.human;
 
-    const record = getHumanReputationRecord(humanOwner);
-    const loans = getAllLoans().filter(
-      (l) => l.humanOwner.toLowerCase() === humanOwner.toLowerCase()
-    );
+    // Each rail is its own line with its own record.
+    const rail = new URL(req.url).searchParams.get("rail") === "sui" ? "sui" : "arc";
+    const record = getHumanReputationRecord(humanOwner, rail);
 
-    const summary = computeHumanReputation(
-      humanOwner,
-      loans,
-      record.repaymentsCount,
-      record.totalInterestPaid
-    );
+    const summary =
+      rail === "arc"
+        ? computeHumanReputation(
+            humanOwner,
+            getAllLoans().filter((l) => l.humanOwner.toLowerCase() === humanOwner.toLowerCase()),
+            record.repaymentsCount,
+            record.totalInterestPaid
+          )
+        : computeHumanReputation(
+            humanOwner,
+            // Sui's debts, read as loans: one per draw, owed until its
+            // obligation is collected.
+            railDebtsFor(humanOwner).map(
+              (d): Loan => ({
+                loanId: `${d.obligationId}:${d.createdAt}`,
+                agentAddress: d.agentAddress,
+                agentName: "",
+                humanOwner: d.humanOwner,
+                amount: d.amountUsd,
+                originationFee: 0,
+                outstandingAmount: d.status === "settled" ? 0 : d.amountUsd,
+                totalRepaid: d.status === "settled" ? d.amountUsd : 0,
+                status: d.status === "settled" ? "SETTLED" : d.status === "defaulted" ? "DEFAULTED" : "ACTIVE",
+                borrowedAt: d.createdAt,
+                settledAt: d.settledAt,
+                borrowTxHash: d.digest ?? "",
+                repayTxHashes: [],
+              })
+            ),
+            record.repaymentsCount,
+            0,
+            Date.now(),
+            SUI_TIERS
+          );
 
     return NextResponse.json({
       success: true,

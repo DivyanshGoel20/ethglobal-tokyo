@@ -23,7 +23,7 @@ interface WorldAuthGateProps {
  * Sign in with World ID.
  *
  * Joining takes World ID's uniqueness proof - once per person, ever. Its
- * nullifier is the human's identity and the key to their one credit line. In
+ * nullifier is the human's identity and the key to their credit lines. In
  * the same sitting a World ID session is created for them, and every later
  * sign-in proves that session instead, as often as they like.
  *
@@ -181,9 +181,9 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
 
           <div className="rise" style={{ animationDelay: "0.15s" }}>
             <p className="text-[15px] ink-2 leading-relaxed mb-7 max-w-[44ch]">
-              Lifeline gives one World ID-verified human one credit line, and lets their agents spend it on Arc and
-              Sui. When an agent is short at a paywall, Lifeline pays and the human owes. Every payment is a beat on
-              the agent&apos;s line.
+              Lifeline gives one World ID-verified human a credit line on Arc and a separate one on Sui, and lets
+              their agents spend them. When an agent is short at a paywall, Lifeline pays and the human owes. Every
+              payment is a beat on the agent&apos;s line.
             </p>
 
             <button
@@ -202,7 +202,7 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
             <div className="mt-4 mono text-[10.5px] ink-3 leading-relaxed max-w-[48ch]">
               {returning
                 ? "Welcome back. World ID confirms it is you - no new verification."
-                : "Scan with World App. The same World ID is the same line here and in Lifeline's World App version."}
+                : "Scan with World App. The same World ID is the same account here and in Lifeline's World App version."}
             </div>
             {!pairing && (
               <button onClick={() => setPairing(true)} className="mt-2 mono text-[10.5px] ink-3 underline underline-offset-2">
@@ -221,7 +221,7 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
       </main>
 
       <footer className="max-w-[1180px] w-full mx-auto px-6 sm:px-10 py-5 rule-t flex flex-wrap justify-between gap-2 lab">
-        <span>One human · one line · two rails</span>
+        <span>One human · a line on each rail</span>
         <span>Proof of human by World ID</span>
       </footer>
 

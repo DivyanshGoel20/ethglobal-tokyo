@@ -17,7 +17,8 @@ import {
   type SuiPayResult,
 } from "@lifeline/sui";
 import { getAgentPrivateKey, authorizeAgentSpend } from "./agentKeys";
-import { getHumanFacilityStats } from "./agentStore";
+import { getSuiFacilityStats } from "./agentStore";
+import { recordRepaymentInReputation } from "./reputationStore";
 import { computeProfileId } from "./facilityContract";
 import { recordPayment } from "./paymentStore";
 import {
@@ -127,13 +128,14 @@ export async function payOnSui(args: {
     );
   }
 
-  const facility = getHumanFacilityStats(args.human);
-  const maxCreditUsd = Math.min(facility.totalAvailableCredit, args.capUsd ?? Number.POSITIVE_INFINITY);
+  // Sui's own line: its limit and its debt. Nothing drawn on Arc counts here.
+  const facility = getSuiFacilityStats(args.human);
+  const maxCreditUsd = Math.min(facility.availableCredit, args.capUsd ?? Number.POSITIVE_INFINITY);
 
   const result = await paySui(args.url, {
     agentKey: key,
     profileId: computeProfileId(args.human),
-    creditLimitUsd: facility.totalCreditLimit,
+    creditLimitUsd: facility.creditLimit,
     maxCreditUsd,
     approve: (amountUsd) => {
       const allowed = authorizeAgentSpend(args.agent.address, amountUsd);
@@ -225,7 +227,7 @@ export async function settleEarlyFor(human: string, obligationId: string) {
 
   const ob = await readObligation(obligationId);
   if (ob.status === "settled" || ob.status === "closed") {
-    settleObligation(obligationId);
+    creditSuiRecord(settleObligation(obligationId));
     return { alreadySettled: true, obligationId };
   }
 
@@ -245,6 +247,7 @@ export async function settleEarlyFor(human: string, obligationId: string) {
 
   const r = await settleEarly(agent, operatorKeypair(), { purseId: ob.purseId, obligationId, depositUnits: deposit });
   const closed = settleObligation(obligationId);
+  creditSuiRecord(closed);
   invalidateTelemetryCache(human);
   return {
     obligationId,
@@ -252,6 +255,19 @@ export async function settleEarlyFor(human: string, obligationId: string) {
     link: suiExplorer("tx", r.digest),
     settledUsd: closed.reduce((n, c) => n + c.amountUsd, 0),
   };
+}
+
+/**
+ * A settled obligation counts on the human's Sui record, and only there: the
+ * rails are separate lines. Once per obligation, however many draws it covered.
+ */
+function creditSuiRecord(closed: { humanOwner: string; createdAt: number; settledAt?: number }[]) {
+  if (!closed.length) return;
+  const first = Math.min(...closed.map((c) => c.createdAt));
+  const days = Math.max(0, (closed[0].settledAt ?? Date.now()) - first) / 86_400_000;
+  void recordRepaymentInReputation({ humanOwner: closed[0].humanOwner, interestPaid: 0, loanDurationDays: days, rail: "sui" }).catch(
+    (err) => console.warn("[suiRail] Sui record update failed:", err?.message ?? err)
+  );
 }
 
 /**
@@ -266,7 +282,7 @@ export async function reconcileSui(human?: string) {
   for (const id of ids) {
     const o = await resolveObligation(id, { collectIfDue: true });
     if (o.state === "settled") {
-      settleObligation(id);
+      creditSuiRecord(settleObligation(id));
       out.settled.push(id);
     } else if (o.state === "defaulted") {
       if (defaultObligation(id, o.reason).length) out.defaulted.push(id);
