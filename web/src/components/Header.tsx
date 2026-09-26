@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { Rail } from "@/types";
 import { LifelineMark } from "./Pulse";
 
 interface HeaderProps {
   rail: Rail;
-  setRail: (rail: Rail) => void;
   nullifierHash: string;
   onSignOut: () => void;
   /** Offer Sui only when it is deployed and configured here. */
@@ -18,40 +18,26 @@ const RAILS: { id: Rail; name: string }[] = [
   { id: "sui", name: "Sui" },
 ];
 
-/** A square two-way switch, as used for the rail. */
-function Switch<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: T;
-  options: { id: T; name: string }[];
-  onChange: (v: T) => void;
-  disabled?: (v: T) => string | undefined;
-}) {
+/** The rails, each at its own URL, as a square two-way switch. */
+function RailLinks({ value, suiReady }: { value: Rail; suiReady: boolean }) {
   return (
-    <nav className="flex items-stretch h-8" style={{ border: "1px solid var(--rule)" }} aria-label={label}>
-      {options.map((o) => {
+    <nav className="flex items-stretch h-8" style={{ border: "1px solid var(--rule)" }} aria-label="Rail">
+      {RAILS.map((o) => {
         const active = value === o.id;
-        const why = disabled?.(o.id);
-        return (
-          <button
-            key={o.id}
-            onClick={() => onChange(o.id)}
-            disabled={!!why}
-            title={why}
-            aria-pressed={active}
-            className="px-3.5 flex items-center mono text-[10.5px] tracking-[0.08em] uppercase transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
-            style={{
-              background: active ? "var(--solid-bg)" : "transparent",
-              color: active ? "var(--solid-fg)" : "var(--ink-2)",
-            }}
-          >
+        const off = o.id === "sui" && !suiReady;
+        const style = {
+          background: active ? "var(--solid-bg)" : "transparent",
+          color: active ? "var(--solid-fg)" : "var(--ink-2)",
+        };
+        const cls = "px-3.5 flex items-center mono text-[10.5px] tracking-[0.08em] uppercase transition-colors";
+        return off ? (
+          <span key={o.id} title="Lifeline is not deployed on Sui here" className={`${cls} opacity-35 cursor-not-allowed`} style={style}>
             {o.name}
-          </button>
+          </span>
+        ) : (
+          <Link key={o.id} href={`/${o.id}`} aria-current={active ? "page" : undefined} className={cls} style={style}>
+            {o.name}
+          </Link>
         );
       })}
     </nav>
@@ -60,7 +46,6 @@ function Switch<T extends string>({
 
 export const Header: React.FC<HeaderProps> = ({
   rail,
-  setRail,
   nullifierHash,
   onSignOut,
   suiReady = true,
@@ -78,13 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <Switch
-              label="Rail"
-              value={rail}
-              options={RAILS}
-              onChange={setRail}
-              disabled={(r) => (r === "sui" && !suiReady ? "Lifeline is not deployed on Sui here" : undefined)}
-            />
+<RailLinks value={rail} suiReady={suiReady} />
           </div>
         </div>
 

@@ -35,15 +35,21 @@ type Obligation = { obligationId: string; agentAddress: string; status: string; 
 const ARC_TX = (hash?: string) => (hash && /^0x[0-9a-f]{64}$/i.test(hash) ? `https://testnet.arcscan.app/tx/${hash}` : null);
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void } = {}) {
+export function useLifeline(
+  opts: {
+    haptic?: (kind: "success" | "error") => void;
+    /** The rail this page is for (/arc, /sui). Unset, the rail is chosen in-page and remembered. */
+    rail?: Rail;
+  } = {}
+) {
   const [isWorldVerified, setIsWorldVerified] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [nullifierHash, setNullifierHash] = useState("");
 
-  const [rail, setRail] = useState<Rail>("arc");
-  // Arc opens on the strip and Sui on the monitor; either can be read on
-  // either, and the choice is remembered per rail.
-  const [sui, setSui] = useState<{ ready: boolean; network: string | null }>({ ready: false, network: null });
+  const [chosenRail, setRail] = useState<Rail>("arc");
+  const rail = opts.rail ?? chosenRail;
+  // `checked` once the status has come back, so a page can tell "not yet" from "no".
+  const [sui, setSui] = useState<{ ready: boolean; network: string | null; checked?: boolean }>({ ready: false, network: null });
 
   // Arc and Sui are separate lines, each with its own limit.
   const [limits, setLimits] = useState<Record<Rail, number>>({ arc: 10, sui: 10 });
@@ -126,7 +132,8 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
       .then((r) => r.json())
       .then((d) => {
         const ready = !!d.configured;
-        setSui({ ready, network: d.network ?? null });
+        setSui({ ready, network: d.network ?? null, checked: true });
+        if (opts.rail) return;
         if (!ready) setRail("arc");
         else {
           try {
@@ -136,12 +143,12 @@ export function useLifeline(opts: { haptic?: (kind: "success" | "error") => void
           }
         }
       })
-      .catch(() => setSui({ ready: false, network: null }));
+      .catch(() => setSui({ ready: false, network: null, checked: true }));
 
     // The trace moves: re-read every half minute so the strip keeps feeding.
     const tick = setInterval(() => void load(), 30_000);
     return () => clearInterval(tick);
-  }, [isWorldVerified, load]);
+  }, [isWorldVerified, load, opts.rail]);
 
   const chooseRail = (next: Rail) => {
     setRail(next);

@@ -114,7 +114,7 @@ export default function ConnectPage({ params }: { params: { code: string } }) {
                 <ErrorNote>The on-chain authorisation did not finish; the agent can retry once the facility is reachable.</ErrorNote>
               )}
               <p className="text-[13px] ink-3">You can close this tab. The agent picks its access up by itself; revoke it any time from the dashboard.</p>
-              <a href="/" className="btn btn-quiet inline-flex">Open the dashboard</a>
+              <a href={`/${rail}`} className="btn btn-quiet inline-flex">Open the dashboard</a>
             </section>
           ) : (
             <section className="space-y-3">
