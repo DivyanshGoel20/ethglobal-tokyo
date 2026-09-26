@@ -27,7 +27,8 @@
     "e2e:sui": "npm --workspace=web run e2e:sui",
     "sui:reconcile": "tsx --env-file-if-exists=.env --tsconfig web/tsconfig.json sui/scripts/reconcile.ts",
     "e2e:arc-edges": "npm --workspace=web run e2e:arc-edges",
-    "e2e:intercepta": "npm --workspace=web run e2e:intercepta"
+    "e2e:intercepta": "npm --workspace=web run e2e:intercepta",
+    "e2e:card": "npm --workspace=web run e2e:card"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

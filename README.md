@@ -224,6 +224,39 @@ flagged payer. In the dashboard, buy the Alpha signal, then the Unvetted feed.
   screened on mainnet data and the Gateway authorisation under Base's id. A
   batch address scan would also help a seller screening many payers.
 
+## Repaying by Apple Pay, Google Pay or card (Arc)
+
+Arc debt can be repaid by the agent from its own wallet, or by the human in
+dollars - Apple Pay, Google Pay or card, through Stripe. The repay sheet offers
+both.
+
+1. The server creates a Stripe payment for what the human owes (never more;
+   paying it all rounds up to the cent; Stripe's floor is $0.50) -
+   [`api/repay/card`](web/src/app/api/repay/card/route.ts).
+2. Apple Pay and Google Pay appear where the device offers them (Stripe's
+   Express Checkout Element), a card form always -
+   [`CardRepay.tsx`](web/src/components/CardRepay.tsx).
+3. Once paid, the server asks Stripe - it does not take the browser's word -
+   and books the repayment on the Arc facility with `recordRepayment`, the same
+   booking any repayment gets
+   ([`lib/cardRepay.ts`](web/src/lib/cardRepay.ts),
+   [`lib/repayCore.ts`](web/src/lib/repayCore.ts)). The browser's confirmation
+   and Stripe's signed webhook
+   ([`api/repay/card/webhook`](web/src/app/api/repay/card/webhook/route.ts))
+   can both arrive; each payment is booked once.
+4. Anything paid over what is owed by then is refunded to the card.
+
+The money reaches Lifeline as dollars in its Stripe account, not as USDC on
+chain; Lifeline books the repayment, and that booking is on chain. This is how
+a lender takes card repayments. On a mainnet, an onramp (MoonPay, Coinbase,
+Stripe's) could deliver USDC straight to the facility instead - none delivers
+testnet USDC.
+
+Test mode: card `4242 4242 4242 4242`, any future date, any CVC. Google Pay
+works in Chrome with a saved card; Apple Pay needs Safari and a domain
+registered with Stripe (Settings → Payment method domains - add the ngrok
+host).
+
 ## Layout
 
 ```text
@@ -291,6 +324,7 @@ npm run e2e:arc               # the Arc rail through the app, on Arc testnet
 npm run e2e:arc-edges         # every way Arc money can go wrong, on Arc testnet
 npm run e2e:sui               # the Sui rail through the app
 npm run e2e:intercepta        # screening, live: cleared, refused, held, approved
+npm run e2e:card              # repaying by card, live: Stripe test mode, booked on Arc
 npm run sui:lifecycle         # both endings of a parked repayment, on chain
 ```
 
@@ -298,7 +332,7 @@ npm run sui:lifecycle         # both endings of a parked repayment, on chain
 |---|---|
 | `forge test` (23) | the facility's rules, and every exploit it was hardened against |
 | `sui move test` (58) | the same suite in Move, plus parking, tranches, collection, default, cure, the pledge lock, and no double collection |
-| web tests (51) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing) |
+| web tests (58) | signed sessions, forged and expired cookies, query-string identity refused, single-use repayment receipts, Sui debt scoped to its deployment, wallet sign-in and linking, Intercepta's verdict policy (pay, cap, hold, refuse, fail closed) and holds, World ID session sign-in (binding, replay, links, browser pairing), card repayment (who can pay, amounts, refunds, booked once) |
 | Sui library (8) | x402 header handling, network selection, one key on both rails, the settler refusing junk offline |
 | `e2e:arc` (19) | provision, direct draw, over-limit refusal, three x402 purchases (self-paid and on credit), forged and unsigned payments refused, repayment booked on chain |
 | `e2e:arc-edges` (49) | no balance, some balance and enough; agent, mandate and line caps on purchases and draws; repaying with too little, in part, too much; receipts that are real, reused, misdirected, short or made up; a sibling's pending debt settled before a repayment; the app's ledger checked against the contract after every movement |

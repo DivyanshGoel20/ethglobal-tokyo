@@ -2,18 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { unauthenticated } from "@/lib/session";
 import { ARC_TREASURY } from "@/lib/browserChain";
 import { hasCredential, resolveSpender } from "@/lib/agentToken";
-import { invalidateTelemetryCache } from "@/lib/telemetryCache";
-import { flushAgent } from "@/lib/ledgerFlush";
+import { prepareArcRepayment, commitArcRepayment } from "@/lib/repayCore";
 import { RepayRequest, RepayResponse } from "@/types";
-import {
-  getAgentByAddress,
-  updateAgentInStore,
-  getHumanFacilityStats,
-  getAgentsByOwner,
-} from "@/lib/agentStore";
-import { processRepayment, getLoansByAgent } from "@/lib/loanStore";
+import { getAgentByAddress, getHumanFacilityStats } from "@/lib/agentStore";
 import { ARC_TESTNET_CHAIN_ID, ARC_TESTNET_NAME, LIFELINE_CREDIT_FACILITY_ADDRESS } from "@/lib/arc";
-import { executeOnChainRepayment, verifyArcRepayment } from "@/lib/facilityContract";
+import { verifyArcRepayment } from "@/lib/facilityContract";
 import { claimReceipt, releaseReceipt } from "@/lib/receiptStore";
 
 export async function POST(req: NextRequest) {
@@ -96,40 +89,12 @@ export async function POST(req: NextRequest) {
       beneficiaryAddress = targetAgent.address;
     }
 
-    // 3. Check if there is any debt to repay
-    // Settle any accumulated nanopayments before repaying. The contract
-    // subtracts from the debt it can see, and un-flushed drawdowns are not
-    // part of that yet - repaying the full off-chain balance against a
-    // smaller on-chain one would be refused.
-    //
-    // Every agent of this human, not only the one paying: the repayment below
-    // clears the human's oldest loans first, whichever agent drew them. Flushing
-    // only the payer left a sibling's pending payments off chain, so the
-    // contract clamped the repayment to less than the app applied, and the
-    // sibling's debt reached the chain later with nothing left to clear it.
-    for (const sibling of getAgentsByOwner(payingAgent.humanOwner)) {
-      await flushAgent(payingAgent.humanOwner, sibling.address, { force: true });
+    // 3. Settle pending debt, and how much of the request can be repaid.
+    const prepared = await prepareArcRepayment(payingAgent.humanOwner, repayAmount);
+    if (!prepared.ok) {
+      return NextResponse.json({ success: false, error: prepared.error }, { status: 400 });
     }
-
-    const humanFacility = getHumanFacilityStats(payingAgent.humanOwner);
-    // Arc debt only: what is owed on Sui is repaid on Sui, by the obligation
-    // that collects it, and must not be cleared by an Arc transfer.
-    if (humanFacility.arcOutstandingDebt <= 0.0001) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "No outstanding debt exists on this agent or human credit facility to repay.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Floating-point safety: Clamp repayAmount to total debt with epsilon tolerance
-    const effectiveRepayAmount = Math.min(
-      repayAmount,
-      Math.round((humanFacility.arcOutstandingDebt + 0.0001) * 10000) / 10000
-    );
+    const effectiveRepayAmount = prepared.amount;
 
     // 4. Real On-Chain Arc Testnet Settlement
     let arcTxHash = txHash;
@@ -163,59 +128,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 5-6. Booked on the facility and the loan ledger, agents synchronised.
+    let result;
     try {
-      const onChainRepay = await executeOnChainRepayment({
+      const committed = await commitArcRepayment({
         humanOwner: payingAgent.humanOwner,
-        payerAddress: payingAgent.address,
-        agentAddress: beneficiaryAddress,
-        amountUsdc: effectiveRepayAmount,
-        alreadyTransferred: arcTxHash as `0x${string}` | undefined,
+        payingAgent,
+        beneficiaryAddress,
+        amount: effectiveRepayAmount,
+        targetLoanId,
+        funding: txHash ? { kind: "receipt", txHash: txHash as `0x${string}` } : { kind: "agent" },
       });
-      transferTxHash = onChainRepay.transferTxHash;
-      arcTxHash = onChainRepay.txHash;
+      result = committed.result;
+      transferTxHash = committed.transferTxHash;
+      arcTxHash = committed.txHash;
     } catch (err) {
       // The receipt was not spent after all; let it be presented again.
       if (txHash) releaseReceipt(txHash);
       throw err;
     }
-
-    // 5. Process Repayment against Loan Ledger (FIFO: oldest loan first, interest then principal)
-    const result = processRepayment({
-      payingAgentAddress: payingAgent.address,
-      amount: effectiveRepayAmount,
-      targetAgentAddress: beneficiaryAddress,
-      targetLoanId,
-      humanOwner: payingAgent.humanOwner,
-      txHash: arcTxHash,
-    });
-
-    // 6. Synchronize all affected Agents under this Human Facility
-    const humanAgents = getAgentsByOwner(payingAgent.humanOwner);
-    for (const a of humanAgents) {
-      const activeLoans = getLoansByAgent(a.address).filter(
-        (l) => l.status === "ACTIVE" && (l.outstandingAmount || 0) > 0.0001
-      );
-      const remainingDebt = Math.round(
-        activeLoans.reduce((sum, l) => sum + l.outstandingAmount, 0) * 10000
-      ) / 10000;
-      const isPayer =
-        a.address.toLowerCase() === payingAgent.address.toLowerCase();
-
-      updateAgentInStore(a.address, {
-        outstandingDebt: remainingDebt,
-        currentBalance: isPayer
-          ? Math.max(0, Math.round((a.currentBalance - result.amountRepaid) * 10000) / 10000)
-          : a.currentBalance,
-        totalRepaid: isPayer
-          ? Math.round((a.totalRepaid + result.amountRepaid) * 10000) / 10000
-          : a.totalRepaid,
-        status: remainingDebt === 0 ? "Healthy" : "Active",
-      });
-    }
-
-    // Borrow and pay both do this; without it a settlement stayed invisible
-    // on the tape until the cache window lapsed.
-    invalidateTelemetryCache(payingAgent.humanOwner);
 
     const updatedFacility = getHumanFacilityStats(payingAgent.humanOwner);
     const updatedBeneficiary = getAgentByAddress(beneficiaryAddress);

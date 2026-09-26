@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Agent, Rail } from "@/types";
 import { Sheet, Field, ErrorNote } from "./Sheet";
+import { CardRepay } from "./CardRepay";
 
 interface RepayModalProps {
   isOpen: boolean;
@@ -35,10 +36,23 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
   const [obligations, setObligations] = useState<Obligation[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Who pays: the agent from its Arc wallet, or the human by card.
+  const [method, setMethod] = useState<"agent" | "card">("agent");
+  const [card, setCard] = useState<{ enabled: boolean; publishableKey: string | null; minimumUsd: number } | null>(null);
+  const [paying, setPaying] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/repay/card")
+      .then((r) => r.json())
+      .then(setCard)
+      .catch(() => setCard(null));
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
+    setPaying(false);
+    setMethod("agent");
     if (rail === "arc") {
       const first = owing[0];
       setAgentAddress(first?.address ?? "");
@@ -68,6 +82,7 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
     e.preventDefault();
     const value = parseFloat(amount) || 0;
     if (!agentAddress || value <= 0) return;
+    if (method === "card") return setPaying(true);
     setBusy("arc");
     setError(null);
     try {
@@ -102,10 +117,48 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
       {rail === "arc" ? (
         owing.length === 0 ? (
           <p className="serif text-[18px]">Nothing is owed on Arc.</p>
+        ) : paying && card?.publishableKey ? (
+          <CardRepay
+            publishableKey={card.publishableKey}
+            agentAddress={agentAddress}
+            amountUsd={parseFloat(amount) || 0}
+            onBooked={(m) => {
+              onDone(m);
+              onClose();
+            }}
+            onCancel={() => setPaying(false)}
+          />
         ) : (
           <form onSubmit={repayArc} className="space-y-4">
-            <p className="text-[13px] ink-2 leading-relaxed">The agent pays from its own Arc wallet; the facility books it.</p>
-            <Field label="Paying agent">
+            {card?.enabled && (
+              <div className="grid grid-cols-2" style={{ border: "1px solid var(--rule)" }}>
+                {(
+                  [
+                    ["agent", "Agent's wallet"],
+                    ["card", "Apple Pay · Google Pay"],
+                  ] as const
+                ).map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMethod(id)}
+                    className="h-9 mono text-[10.5px] uppercase tracking-[0.06em]"
+                    style={{
+                      background: method === id ? "var(--solid-bg)" : "transparent",
+                      color: method === id ? "var(--solid-fg)" : "var(--ink-2)",
+                    }}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-[13px] ink-2 leading-relaxed">
+              {method === "agent"
+                ? "The agent pays from its own Arc wallet; the facility books it."
+                : `You pay by Apple Pay, Google Pay or card, in dollars. Once Stripe confirms it, the repayment is booked on the Arc facility. From $${(card?.minimumUsd ?? 0.5).toFixed(2)}.`}
+            </p>
+            <Field label={method === "agent" ? "Paying agent" : "Debt of"}>
               <select
                 className="field"
                 value={agentAddress}
@@ -122,7 +175,7 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
                 ))}
               </select>
             </Field>
-            <Field label="Amount" hint="USDC">
+            <Field label="Amount" hint={method === "agent" ? "USDC" : "USD"}>
               <input type="number" step="0.01" min="0.01" className="field" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
             {error && <ErrorNote>{error}</ErrorNote>}
@@ -131,7 +184,7 @@ export const RepayModal: React.FC<RepayModalProps> = ({ isOpen, onClose, rail, a
                 Cancel
               </button>
               <button type="submit" disabled={!!busy} className="btn btn-solid">
-                {busy ? "Settling on Arc…" : "Repay"}
+                {busy ? "Settling on Arc…" : method === "card" ? "Continue to pay" : "Repay"}
               </button>
             </div>
           </form>

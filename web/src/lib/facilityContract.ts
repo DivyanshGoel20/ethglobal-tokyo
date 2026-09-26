@@ -547,10 +547,16 @@ export async function executeOnChainRepayment(params: {
    * while the facility went on reporting it.
    */
   alreadyTransferred?: `0x${string}`;
+  /**
+   * Paid outside the chain - a card payment through Stripe, whose id this is.
+   * Nothing moves from the agent; only the booking is written.
+   */
+  fundedOffChain?: string;
 }): Promise<{ txHash: `0x${string}`; transferTxHash?: string; blockNumber: number }> {
   // 1. If payer is an autonomous agent with a stored private key, transfer real USDC on Arc Testnet
   let transferTxHash: string | undefined = params.alreadyTransferred;
-  const agentKey = params.alreadyTransferred ? null : getAgentPrivateKey(params.payerAddress);
+  const agentKey =
+    params.alreadyTransferred || params.fundedOffChain ? null : getAgentPrivateKey(params.payerAddress);
 
   if (agentKey) {
     const allowed = authorizeAgentSpend(params.payerAddress, params.amountUsdc);
