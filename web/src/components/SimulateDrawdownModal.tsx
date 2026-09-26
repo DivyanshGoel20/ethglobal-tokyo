@@ -49,7 +49,7 @@ export const SimulateDrawdownModal: React.FC<SimulateDrawdownModalProps> = ({
 
         <h4 className="text-sm font-semibold text-white mb-1">Simulate 402 Drawdown</h4>
         <p className="text-xs text-[#94a3b8] mb-4">
-          Simulate an agent hitting an x402 paywall on {rail === "base" ? "Base" : "Sui"}.
+          Simulate an agent hitting an x402 paywall on {rail === "arc" ? "Arc" : "Sui"}.
         </p>
 
         {agents.length === 0 ? (

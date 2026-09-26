@@ -1,13 +1,14 @@
 /**
- * Float settlement rail: Arc Testnet.
+ * Float settlement rails: Arc and Sui.
  *
- * Arc is the debt ledger: credit profiles, limits, drawdowns, and nanopayments
- * live and settle directly on Arc Testnet (Chain ID 5042002) using native USDC.
+ * Arc is the primary debt ledger and credit facility on EVM (Chain ID 5042002).
+ * Sui is the non-EVM Move credit execution rail.
  */
-export type Rail = "arc";
+export type Rail = "arc" | "sui";
 
 export const RAIL_LABELS: Record<Rail, string> = {
   arc: "Arc",
+  sui: "Sui",
 };
 
 export const RAIL_FACTS: Record<
@@ -15,9 +16,15 @@ export const RAIL_FACTS: Record<
   { network: string; facilitator: string; mechanism: string; resource: string }
 > = {
   arc: {
-    network: "Arc testnet",
+    network: "Arc testnet (Chain 5042002)",
     facilitator: "Circle Gateway",
     mechanism: "batched settlement",
     resource: "Float Premium API",
+  },
+  sui: {
+    network: "Sui testnet",
+    facilitator: "Sui Gateway",
+    mechanism: "Move credit package",
+    resource: "Sui Move Stream",
   },
 };

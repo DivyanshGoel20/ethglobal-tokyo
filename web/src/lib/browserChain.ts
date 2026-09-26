@@ -3,7 +3,7 @@
  *
  * A wallet sends on whatever chain it happens to be showing. The repay flow
  * asked for accounts and then sent, with nothing in between, so a wallet parked
- * on Base signed a Base transaction to Float's treasury address - an address
+ * on the wrong chain signed an unsupported transaction to Float's treasury address - an address
  * that exists on every EVM chain, so there is no bounce and no error. Real
  * funds left, on a chain nothing in Float is watching, and the repayment was
  * recorded anyway because the send had returned a hash.

@@ -15,14 +15,14 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities, rail }) 
         <div>
           <h3 className="text-base font-semibold text-white">Activity Log</h3>
           <p className="text-xs text-[#94a3b8] mt-0.5">
-            x402 drawdowns and repayments on {rail === "base" ? "Base" : "Sui"}.
+            x402 drawdowns and repayments on {rail === "arc" ? "Arc" : "Sui"}.
           </p>
         </div>
       </div>
 
       {activities.length === 0 ? (
         <div className="py-10 text-center text-xs text-[#64748b] font-mono">
-          No activity recorded on {rail === "base" ? "Base" : "Sui"}.
+          No activity recorded on {rail === "arc" ? "Arc" : "Sui"}.
         </div>
       ) : (
         <div className="divide-y divide-[#1c202a]">

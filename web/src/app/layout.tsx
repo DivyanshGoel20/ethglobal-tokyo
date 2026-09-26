@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Float — Undercollateralized Credit Line for AI Agents",
   description:
-    "Autonomous agent credit facility gated by World ID, backed by human liability, and settled natively on Base and Sui.",
+    "Autonomous agent credit facility gated by World ID, backed by human liability, and settled natively on Arc and Sui.",
 };
 
 export default function RootLayout({

@@ -12,7 +12,7 @@
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  --accent-base: #0052ff;
+  --accent-arc: #06b6d4;
   --accent-sui: #2a82e4;
   --font-sans: "Familjen Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Martian Mono", monospace;
@@ -22,8 +22,8 @@
   --accent-current: #2a82e4;
 }
 
-[data-rail="base"] {
-  --accent-current: #0052ff;
+[data-rail="arc"] {
+  --accent-current: #06b6d4;
 }
 
 body {

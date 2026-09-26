@@ -1,4 +1,4 @@
-export type Rail = "arc" | "base" | "sui";
+export type Rail = "arc" | "sui";
 
 export interface Agent {
   agentId?: string;

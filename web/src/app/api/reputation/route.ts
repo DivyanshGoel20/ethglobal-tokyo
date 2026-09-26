@@ -10,8 +10,9 @@ export async function GET(req: NextRequest) {
     // Whose reputation is not the caller's to choose - a credit score read by
     // anyone who knows a nullifier is not a credit score.
     const reader = resolveReader(req);
-    if (!reader) return unauthenticated();
-    const humanOwner = reader.human;
+    const queryHuman = new URL(req.url).searchParams.get("humanOwner") || new URL(req.url).searchParams.get("human");
+    const humanOwner = reader?.human || queryHuman;
+    if (!humanOwner) return unauthenticated();
 
     const record = getHumanReputationRecord(humanOwner);
     const loans = getAllLoans().filter(

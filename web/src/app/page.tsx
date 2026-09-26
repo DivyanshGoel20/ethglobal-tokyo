@@ -5,6 +5,7 @@ import { Rail, Agent, ActivityItem } from "@/types";
 import { WorldAuthGate } from "@/components/WorldAuthGate";
 import { Header } from "@/components/Header";
 import { CreditOverview } from "@/components/CreditOverview";
+import { ReputationTierCard } from "@/components/ReputationTierCard";
 import { AgentList } from "@/components/AgentList";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { SimulateDrawdownModal } from "@/components/SimulateDrawdownModal";
@@ -14,13 +15,13 @@ export default function Home() {
   const [isWorldVerified, setIsWorldVerified] = useState(false);
   const [nullifierHash, setNullifierHash] = useState("");
   
-  const [rail, setRail] = useState<Rail>("base");
+  const [rail, setRail] = useState<Rail>("arc");
 
   // Real, clean states without hardcoded fake data
-  const [creditLimit] = useState(100.0);
-  const [baseDebt, setBaseDebt] = useState(0.0);
+  const [creditLimit, setCreditLimit] = useState(10.0);
+  const [arcDebt, setArcDebt] = useState(0.0);
   const [suiDebt, setSuiDebt] = useState(0.0);
-  const [baseAgents, setBaseAgents] = useState<Agent[]>([]);
+  const [arcAgents, setArcAgents] = useState<Agent[]>([]);
   const [suiAgents, setSuiAgents] = useState<Agent[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
 
@@ -53,8 +54,8 @@ export default function Home() {
     }
   }, []);
 
-  const currentDebt = rail === "base" ? baseDebt : suiDebt;
-  const currentAgents = rail === "base" ? baseAgents : suiAgents;
+  const currentDebt = rail === "arc" ? arcDebt : suiDebt;
+  const currentAgents = rail === "arc" ? arcAgents : suiAgents;
   const currentActivities = activities.filter((a) => a.rail === rail);
   const headroom = Math.max(0, creditLimit - currentDebt);
 
@@ -75,7 +76,7 @@ export default function Home() {
   // Add agent
   const handleAddAgent = (name: string, address: string, limit: number) => {
     const fallbackAddr =
-      rail === "base"
+      rail === "arc"
         ? `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`
         : `0x${Math.random().toString(16).slice(2, 8)}...${Math.random().toString(16).slice(2, 6)}`;
 
@@ -96,8 +97,8 @@ export default function Home() {
       status: "active",
     };
 
-    if (rail === "base") {
-      setBaseAgents((prev) => [newAgent, ...prev]);
+    if (rail === "arc") {
+      setArcAgents((prev) => [newAgent, ...prev]);
     } else {
       setSuiAgents((prev) => [newAgent, ...prev]);
     }
@@ -122,8 +123,8 @@ export default function Home() {
         a.id === id ? { ...a, status: a.status === "active" ? ("paused" as const) : ("active" as const) } : a
       );
 
-    if (rail === "base") {
-      setBaseAgents(update(baseAgents));
+    if (rail === "arc") {
+      setArcAgents(update(arcAgents));
     } else {
       setSuiAgents(update(suiAgents));
     }
@@ -131,8 +132,8 @@ export default function Home() {
 
   // Remove agent
   const handleRemoveAgent = (id: string) => {
-    if (rail === "base") {
-      setBaseAgents((prev) => prev.filter((a) => a.id !== id));
+    if (rail === "arc") {
+      setArcAgents((prev) => prev.filter((a) => a.id !== id));
     } else {
       setSuiAgents((prev) => prev.filter((a) => a.id !== id));
     }
@@ -140,9 +141,9 @@ export default function Home() {
 
   // Confirm simulated drawdown
   const handleConfirmDrawdown = (agentId: string, amount: number, endpoint: string) => {
-    if (rail === "base") {
-      setBaseDebt((prev) => prev + amount);
-      setBaseAgents((prev) =>
+    if (rail === "arc") {
+      setArcDebt((prev) => prev + amount);
+      setArcAgents((prev) =>
         prev.map((a) => (a.id === agentId ? { ...a, spent: (a.spent ?? 0) + amount } : a))
       );
     } else {
@@ -171,8 +172,8 @@ export default function Home() {
 
   // Confirm repayment
   const handleConfirmRepay = (amount: number) => {
-    if (rail === "base") {
-      setBaseDebt((prev) => Math.max(0, prev - amount));
+    if (rail === "arc") {
+      setArcDebt((prev) => Math.max(0, prev - amount));
     } else {
       setSuiDebt((prev) => Math.max(0, prev - amount));
     }
@@ -210,6 +211,12 @@ export default function Home() {
           rail={rail}
           onOpenDrawdown={() => setIsDrawdownOpen(true)}
           onOpenRepay={() => setIsRepayOpen(true)}
+        />
+
+        <ReputationTierCard
+          humanOwner={nullifierHash}
+          refreshTrigger={currentDebt}
+          onTier={setCreditLimit}
         />
 
         <AgentList

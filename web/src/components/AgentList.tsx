@@ -39,7 +39,7 @@ export const AgentList: React.FC<AgentListProps> = ({
         <div>
           <h3 className="text-base font-semibold text-white">Authorized Agents</h3>
           <p className="text-xs text-[#94a3b8] mt-0.5">
-            Autonomous software authorized to draw from this credit line on {rail === "base" ? "Base" : "Sui"}.
+            Autonomous software authorized to draw from this credit line on {rail === "arc" ? "Arc" : "Sui"}.
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export const AgentList: React.FC<AgentListProps> = ({
 
       {agents.length === 0 ? (
         <div className="py-12 text-center text-xs text-[#64748b] font-mono">
-          No agents authorized on {rail === "base" ? "Base" : "Sui"}. Click "Authorize Agent" to grant spending rights.
+          No agents authorized on {rail === "arc" ? "Arc" : "Sui"}. Click "Authorize Agent" to grant spending rights.
         </div>
       ) : (
         <div className="overflow-x-auto mt-2">
@@ -125,7 +125,7 @@ export const AgentList: React.FC<AgentListProps> = ({
 
             <h4 className="text-sm font-semibold text-white mb-1">Authorize Agent</h4>
             <p className="text-xs text-[#94a3b8] mb-4">
-              Add an authorized agent to spend against your facility on {rail === "base" ? "Base" : "Sui"}.
+              Add an authorized agent to spend against your facility on {rail === "arc" ? "Arc" : "Sui"}.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-3.5 text-xs font-mono">
@@ -143,12 +143,12 @@ export const AgentList: React.FC<AgentListProps> = ({
 
               <div>
                 <label className="text-[#94a3b8] block mb-1">
-                  Agent Address ({rail === "base" ? "0x... EVM" : "0x... Sui"})
+                  Agent Address ({rail === "arc" ? "0x... Arc EVM" : "0x... Sui"})
                 </label>
                 <input
                   type="text"
                   placeholder={
-                    rail === "base" ? "0x742d35Cc6634C0532925a3b844Bc454e4438f44e" : "0x5c428a9b1820...4e21"
+                    rail === "arc" ? "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf" : "0x5c428a9b1820...4e21"
                   }
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}

@@ -48,14 +48,14 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Rail Segmented Toggle */}
           <div className="flex items-center p-0.5 rounded-md bg-[#181b22] border border-[#232732] text-xs font-mono">
             <button
-              onClick={() => setRail("base")}
+              onClick={() => setRail("arc")}
               className={`px-3 py-1 rounded transition-colors cursor-pointer ${
-                rail === "base"
-                  ? "bg-[#0052ff] text-white font-medium"
+                rail === "arc"
+                  ? "bg-cyan-600 text-white font-medium"
                   : "text-[#94a3b8] hover:text-white"
               }`}
             >
-              Base (EVM)
+              Arc (EVM)
             </button>
             <button
               onClick={() => setRail("sui")}

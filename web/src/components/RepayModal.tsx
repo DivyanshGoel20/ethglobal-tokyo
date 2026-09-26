@@ -44,7 +44,7 @@ export const RepayModal: React.FC<RepayModalProps> = ({
 
         <h4 className="text-sm font-semibold text-white mb-1">Repay Facility Debt</h4>
         <p className="text-xs text-[#94a3b8] mb-4">
-          Settle drawn debt on {rail === "base" ? "Base" : "Sui"}.
+          Settle drawn debt on {rail === "arc" ? "Arc" : "Sui"}.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs font-mono">

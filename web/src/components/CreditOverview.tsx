@@ -27,7 +27,7 @@ export const CreditOverview: React.FC<CreditOverviewProps> = ({
         <div>
           <h2 className="text-base font-semibold text-white">Facility Overview</h2>
           <p className="text-xs text-[#94a3b8] mt-0.5">
-            Credit headroom on {rail === "base" ? "Base (EVM)" : "Sui (Move)"} underwritten by your World ID nullifier.
+            Credit headroom on Arc Testnet (Chain ID 5042002) underwritten by your World ID nullifier.
           </p>
         </div>
 
@@ -88,9 +88,7 @@ export const CreditOverview: React.FC<CreditOverviewProps> = ({
         </div>
         <div className="h-1.5 w-full bg-[#181b22] rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all duration-300 ${
-              rail === "base" ? "bg-[#0052ff]" : "bg-[#2a82e4]"
-            }`}
+            className="h-full transition-all duration-300 bg-gradient-to-r from-emerald-500 to-cyan-400"
             style={{ width: `${Math.min(100, utilizationPct)}%` }}
           />
         </div>

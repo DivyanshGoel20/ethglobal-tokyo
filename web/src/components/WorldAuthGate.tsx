@@ -159,7 +159,7 @@ export const WorldAuthGate: React.FC<WorldAuthGateProps> = ({ onVerified, onSign
         </h1>
 
         <p className="text-xs text-[#94a3b8] leading-relaxed mb-6">
-          Undercollateralized credit line for autonomous agents on Base and Sui, underwritten by World ID Proof of Human.
+          Undercollateralized credit line for autonomous agents on Arc and Sui, underwritten by World ID Proof of Human.
         </p>
 
         {/* Real Sign In Button */}
